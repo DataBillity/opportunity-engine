@@ -4,22 +4,57 @@ import { useState, useRef, useEffect } from "react";
 import type { ViewId } from "@/app/page";
 import type { Organization, Pursuit } from "@/lib/mock-data";
 import { Modal, FormField, TextInput, TextArea, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
+import { AddPursuitForm } from "@/components/pursuit/add-pursuit-form";
+import { createPursuitFromForm, recLabel } from "@/lib/create-pursuit";
 import { useToast } from "@/components/ui/toast";
 import { navItems } from "@/components/layout/nav-items";
+import { BrandMark } from "@/components/brand-mark";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { cn } from "@/lib/cn";
+
+function displayNameFromEmail(email: string) {
+  const local = email.split("@")[0] ?? email;
+  return local.charAt(0).toUpperCase() + local.slice(1);
+}
+
+function initialsFromEmail(email: string) {
+  const local = (email.split("@")[0] ?? email).replace(/[^a-zA-Z]/g, "");
+  return (local.slice(0, 2) || "OE").toUpperCase();
+}
 
 function UserMenu() {
   const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/session")
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (!cancelled && data?.email) setEmail(data.email as string);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!open) return;
     function onClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
     document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   const items = [
@@ -27,38 +62,43 @@ function UserMenu() {
     { label: "Notification Preferences", icon: "🔔", action: () => toast("Notification preferences coming soon", "info") },
     { label: "Team Management", icon: "👥", action: () => toast("Team management coming soon", "info") },
     { label: "API & Integrations", icon: "🔗", action: () => toast("API settings coming soon", "info") },
-    { label: "divider", icon: "", action: () => {} },
-    { label: "Sign Out", icon: "🚪", action: () => toast("Sign out — not implemented in demo mode", "warning") },
   ];
 
   return (
     <div className="relative" ref={ref}>
       <button
+        type="button"
         onClick={() => setOpen(!open)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Account menu"
         className="w-8 h-8 rounded-full bg-white/15 text-white flex items-center justify-center text-[12px] font-semibold ring-2 ring-white/10 cursor-pointer hover:ring-white/30 transition-all"
       >
-        JT
+        {email ? initialsFromEmail(email) : "OE"}
       </button>
       {open && (
-        <div className="absolute right-0 top-11 w-56 max-w-[calc(100vw-1.5rem)] bg-card rounded-xl border shadow-xl z-50 py-1.5 overflow-hidden">
+        <div role="menu" className="absolute right-0 top-11 w-56 max-w-[calc(100vw-1.5rem)] bg-card rounded-xl border shadow-xl z-50 py-1.5 overflow-hidden">
           <div className="px-4 py-2.5 border-b border-border">
-            <div className="text-xs font-semibold text-foreground">J. Tran</div>
-            <div className="text-[11px] text-muted-foreground">Bid Manager · DEMO POV</div>
+            <div className="text-xs font-semibold text-foreground">{email ? displayNameFromEmail(email) : "Operator"}</div>
+            <div className="text-[11px] text-muted-foreground truncate">{email ?? "Databillity"}</div>
           </div>
-          {items.map((item, i) =>
-            item.label === "divider" ? (
-              <div key={i} className="border-t border-border my-1" />
-            ) : (
-              <button
-                key={item.label}
-                onClick={() => { item.action(); setOpen(false); }}
-                className="w-full text-left px-4 py-2 text-xs text-foreground hover:bg-muted/40 cursor-pointer transition-all flex items-center gap-2.5"
-              >
-                <span className="text-sm">{item.icon}</span>
-                {item.label}
-              </button>
-            )
-          )}
+          {items.map(item => (
+            <button
+              key={item.label}
+              role="menuitem"
+              onClick={() => { item.action(); setOpen(false); }}
+              className="w-full text-left px-4 py-2 text-xs text-foreground hover:bg-muted/40 cursor-pointer transition-all flex items-center gap-2.5"
+            >
+              <span className="text-sm">{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+          <div className="border-t border-border my-1" />
+          <SignOutButton
+            role="menuitem"
+            idleLabel="Sign out"
+            className="w-full text-left px-4 py-2 text-xs font-semibold text-destructive hover:bg-[hsl(var(--status-nogo-soft))] flex items-center gap-2.5"
+          />
         </div>
       )}
     </div>
@@ -96,9 +136,6 @@ export function TopBar({
   const [showNewPursuit, setShowNewPursuit] = useState(false);
   const [showNewLead, setShowNewLead] = useState(false);
   const [npOrg, setNpOrg] = useState(orgs[0]?.id ?? "");
-  const [npName, setNpName] = useState("");
-  const [npType, setNpType] = useState<"B" | "C">("B");
-  const [npRef, setNpRef] = useState("");
   const [leadName, setLeadName] = useState("");
   const [leadIndustry, setLeadIndustry] = useState("");
   const [leadChannel, setLeadChannel] = useState("Direct inquiry");
@@ -123,43 +160,27 @@ export function TopBar({
     };
   }, [newMenuOpen]);
 
-  function handleCreatePursuit() {
-    if (!npName.trim()) return;
-    const id = `OPP-${Date.now().toString().slice(-4)}`;
-    const pursuit: Pursuit = {
-      id,
-      orgId: npOrg,
-      name: npName.trim(),
-      typeLabel: npType === "B" ? "Government RFP" : "Private SOW",
-      solicitationRef: npRef.trim() || (npType === "B" ? `RFP-${id.slice(-4)}` : "Direct SOW"),
-      lane: npType,
-      score: 50,
-      status: "New — awaiting triage",
-      rec: "pending",
-      confidence: 0,
-      closed: false,
-      dueDate: null,
-      documents: [],
-      docSummary: { objective: [], services: [], deliverables: [] },
-      rationale: ["Awaiting initial triage and scoring."],
-      reqmap: [],
-      gaps: [],
-      rfund: { lane: npType, tier: "pending", score: 0, note: "Not yet assessed." },
-      decisionRecord: {
-        id: `DEC-${Date.now().toString().slice(-5)}`,
-        type: "D4 — Go/No-Go triage",
-        subject: `Pursuit ${id}`,
-        model: "triage-v3 / prompt v1.9 / graph v213",
-        reviewer: "— not yet assigned",
-        action: "Awaiting triage",
-        retention: "3 years minimum",
-      },
-    };
+  async function handleCreatePursuit(values: { name: string; lane: "B" | "C"; solicitationRef: string; files: File[] }) {
+    const org = orgs.find(item => item.id === npOrg);
+    if (!org) throw new Error("Select an organization first.");
+    const { pursuit, ingested, warning } = await createPursuitFromForm({
+      org,
+      name: values.name,
+      lane: values.lane,
+      solicitationRef: values.solicitationRef,
+      files: values.files,
+    });
     onAddPursuit(pursuit);
-    toast(`Created pursuit "${npName.trim()}" (${id})`, "success");
+    if (ingested) {
+      toast(
+        `"${pursuit.name}" scored ${pursuit.score} — ${recLabel(pursuit.rec)}. Confirm Go/No-Go on the opportunity.`,
+        pursuit.rec === "nogo" ? "warning" : "success",
+      );
+    } else {
+      toast(`Added project "${pursuit.name}" (${pursuit.id})`, "success");
+    }
+    if (warning) toast(warning, "warning");
     setShowNewPursuit(false);
-    setNpName("");
-    setNpRef("");
   }
 
   function handleCreateLead() {
@@ -217,11 +238,7 @@ export function TopBar({
 
         {/* Brand */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 min-w-0">
-          <div className="w-7 h-7 rounded-lg bg-[var(--billity-bright)] flex items-center justify-center shrink-0">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-            </svg>
-          </div>
+          <BrandMark size={28} />
           <span className="font-bold tracking-tight text-[14px] sm:text-[15px] truncate">
             <span className="xs:hidden">OE</span>
             <span className="hidden xs:inline">Opportunity Engine</span>
@@ -300,7 +317,7 @@ export function TopBar({
                   }}
                   className="w-full text-left px-4 py-2.5 text-xs text-foreground hover:bg-muted/40 cursor-pointer transition-all"
                 >
-                  <div className="font-semibold">Pursuit</div>
+                  <div className="font-semibold">Project</div>
                   <div className="text-[11px] text-muted-foreground mt-0.5">RFP or SOW against an account</div>
                 </button>
                 <button
@@ -324,47 +341,23 @@ export function TopBar({
         </div>
       </header>
 
-      {/* New Pursuit Modal */}
-      <Modal open={showNewPursuit} onClose={() => setShowNewPursuit(false)} title="Create Pursuit">
-        <div className="space-y-4">
-          <FormField label="Organization">
-            <SelectInput
-              value={npOrg}
-              onChange={setNpOrg}
-              options={orgs.map(o => ({ value: o.id, label: o.name }))}
-            />
-          </FormField>
-          <FormField label="Pursuit name">
-            <TextInput
-              value={npName}
-              onChange={setNpName}
-              placeholder="e.g. Claims Platform Modernization"
-            />
-          </FormField>
-          <FormField label="Type">
-            <SelectInput
-              value={npType}
-              onChange={v => setNpType(v as "B" | "C")}
-              options={[
-                { value: "B", label: "Government RFP" },
-                { value: "C", label: "Private SOW" },
-              ]}
-            />
-          </FormField>
-          <FormField label="Solicitation reference (optional)">
-            <TextInput
-              value={npRef}
-              onChange={setNpRef}
-              placeholder="e.g. RFP 24-118 or Direct SOW"
-            />
-          </FormField>
-          <div className="flex justify-end gap-2 pt-2">
-            <SecondaryButton onClick={() => setShowNewPursuit(false)}>Cancel</SecondaryButton>
-            <PrimaryButton onClick={handleCreatePursuit} disabled={!npName.trim()}>
-              Create Pursuit
-            </PrimaryButton>
-          </div>
-        </div>
+      {/* New Project Modal */}
+      <Modal open={showNewPursuit} onClose={() => setShowNewPursuit(false)} title="Add Project" wide>
+        <AddPursuitForm
+          open={showNewPursuit}
+          extraFields={
+            <FormField label="Organization">
+              <SelectInput
+                value={npOrg}
+                onChange={setNpOrg}
+                options={orgs.map(o => ({ value: o.id, label: o.name }))}
+              />
+            </FormField>
+          }
+          submitLabel="Add Project"
+          onCancel={() => setShowNewPursuit(false)}
+          onSubmit={handleCreatePursuit}
+        />
       </Modal>
 
       {/* New Sales Lead Modal */}

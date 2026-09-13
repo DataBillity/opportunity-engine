@@ -5,6 +5,9 @@ import type { Pursuit, Organization } from "@/lib/mock-data";
 import { getPartner } from "@/lib/mock-data";
 import { Modal, FormField, TextArea, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { OutreachComposer } from "@/components/outreach/outreach-composer";
+import { DocumentDropzone } from "@/components/pursuit/document-dropzone";
+import { applyIngestToPursuit, ingestPursuitDocuments, recLabel } from "@/lib/create-pursuit";
 import { cn } from "@/lib/cn";
 
 function RecBig({ rec, closed }: { rec: string; closed?: boolean }) {
@@ -34,35 +37,59 @@ function StatusBadge({ status, label }: { status: string; label: string }) {
 }
 
 export function OpportunityView({
-  pursuit, org, onBack, onDraft, onConfirmDecision,
+  pursuit, org, onBack, onDraft, onConfirmDecision, onUpdatePursuit,
 }: {
   pursuit: Pursuit; org: Organization;
   onBack: () => void; onDraft: () => void;
   onConfirmDecision: (pursuitId: string, decision: "go" | "nogo") => void;
+  onUpdatePursuit: (pursuitId: string, updates: Partial<Pursuit>) => void;
 }) {
   const { toast } = useToast();
   const [confirmOpen, setConfirmOpen] = useState<"go" | "nogo" | null>(null);
   const [confirmReason, setConfirmReason] = useState("");
   const [docUploadOpen, setDocUploadOpen] = useState(false);
-  const [uploadedDocs, setUploadedDocs] = useState<string[]>([]);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [outreachOpen, setOutreachOpen] = useState(false);
 
   function handleConfirm() {
     if (!confirmOpen) return;
     onConfirmDecision(pursuit.id, confirmOpen);
     toast(
       confirmOpen === "go"
-        ? `Pursuit "${pursuit.name}" confirmed GO — ready for response drafting`
-        : `Pursuit "${pursuit.name}" confirmed NO-GO — pursuit closed`,
+        ? `Project "${pursuit.name}" confirmed GO — ready for response drafting`
+        : `Project "${pursuit.name}" confirmed NO-GO — project closed`,
       confirmOpen === "go" ? "success" : "warning"
     );
     setConfirmOpen(null);
     setConfirmReason("");
   }
 
-  function handleUploadDoc() {
-    const name = `Uploaded_Document_${uploadedDocs.length + 1}.pdf`;
-    setUploadedDocs(prev => [...prev, name]);
-    toast(`Document "${name}" attached`, "success");
+  async function handleUploadDocs() {
+    if (!uploadFiles.length) return;
+    setUploading(true);
+    try {
+      const result = await ingestPursuitDocuments({
+        org,
+        lane: pursuit.lane,
+        files: uploadFiles,
+        priorText: pursuit.sourceText,
+      });
+      const next = applyIngestToPursuit(pursuit, result);
+      onUpdatePursuit(pursuit.id, next);
+      toast(
+        result.warning
+          ? result.warning
+          : `Attached ${result.documents.length} file${result.documents.length === 1 ? "" : "s"} — scored ${next.score} (${recLabel(next.rec)})`,
+        result.warning || next.rec === "nogo" ? "warning" : "success",
+      );
+      setUploadFiles([]);
+      setDocUploadOpen(false);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Upload failed", "error");
+    } finally {
+      setUploading(false);
+    }
   }
 
   return (
@@ -93,6 +120,12 @@ export function OpportunityView({
               <span>Score <strong className="text-foreground">{pursuit.score}</strong>/100</span>
               {pursuit.dueDate && <><span>·</span><span>Due {pursuit.dueDate}</span></>}
             </div>
+            <button
+              onClick={() => setOutreachOpen(true)}
+              className="mt-3 text-xs font-medium px-3.5 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+            >
+              Outreach
+            </button>
           </div>
           <div className="text-left sm:text-right shrink-0">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">
@@ -150,7 +183,7 @@ export function OpportunityView({
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
             <h3 className="oe-card-title">Documents</h3>
             <button
-              onClick={() => setDocUploadOpen(true)}
+              onClick={() => { setUploadFiles([]); setDocUploadOpen(true); }}
               className="text-xs font-medium px-3 py-1.5 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
             >
               + Upload
@@ -158,15 +191,29 @@ export function OpportunityView({
           </div>
           <div className="p-5">
             <div className="flex flex-wrap gap-2">
-              {[...pursuit.documents.map(d => d.name), ...uploadedDocs].map((name, i) => (
-                <div key={i} className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 bg-muted/20">
+              {pursuit.documents.map((doc, i) => (
+                <div key={`${doc.name}-${i}`} className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 bg-muted/20">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary shrink-0">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <polyline points="14 2 14 8 20 8" />
                   </svg>
-                  <span className="text-xs font-medium text-foreground">{name}</span>
+                  <div className="min-w-0">
+                    <span className="text-xs font-medium text-foreground block truncate">{doc.name}</span>
+                    {doc.parseStatus && (
+                      <span className="text-[10px] text-muted-foreground">
+                        {doc.parseStatus === "extracted"
+                          ? `${doc.extractedChars?.toLocaleString() ?? 0} chars extracted`
+                          : doc.parseStatus === "empty"
+                            ? "No extractable text"
+                            : "Attached · not parsed"}
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
+              {pursuit.documents.length === 0 && (
+                <p className="text-xs text-muted-foreground italic">No solicitation files yet. Upload the RFP or SOW to parse and score.</p>
+              )}
             </div>
           </div>
         </div>
@@ -344,10 +391,10 @@ export function OpportunityView({
         <div className="p-4 sm:p-5">
           <div className="flex xl:flex-col gap-0 overflow-x-auto oe-touch-scroll xl:overflow-visible pb-1 xl:pb-0">
           {[
-            { label: "Intake & shredding", done: true },
-            { label: "Triage scored", done: true },
-            { label: "Go/No-Go decision", done: pursuit.closed || pursuit.rec === "go", current: !pursuit.closed && pursuit.rec !== "go" },
-            { label: "Gap analysis", done: pursuit.gaps.length === 0 && !pursuit.closed },
+            { label: "Intake & shredding", done: pursuit.documents.length > 0 },
+            { label: "Triage scored", done: pursuit.rec !== "pending" && !pursuit.status.startsWith("New") },
+            { label: "Go/No-Go decision", done: pursuit.closed || pursuit.status.toLowerCase().includes("confirmed"), current: !pursuit.closed && pursuit.rec !== "pending" && !pursuit.status.toLowerCase().includes("confirmed") },
+            { label: "Gap analysis", done: pursuit.reqmap.length > 0 && pursuit.gaps.length === 0 && !pursuit.closed },
             { label: "Response drafting", done: false, current: pursuit.rec === "go" && !pursuit.closed },
             { label: "Review & submission", done: false },
           ].map((step, i, arr) => (
@@ -395,8 +442,8 @@ export function OpportunityView({
               : "bg-[hsl(var(--status-nogo-soft))] border-[hsl(var(--status-nogo))]/20 text-[hsl(var(--status-nogo))]"
           )}>
             {confirmOpen === "go"
-              ? `You are confirming GO for "${pursuit.name}". This will advance the pursuit to response drafting.`
-              : `You are confirming NO-GO for "${pursuit.name}". This will close the pursuit.`
+              ? `You are confirming GO for "${pursuit.name}". This will advance the project to response drafting.`
+              : `You are confirming NO-GO for "${pursuit.name}". This will close the project.`
             }
           </div>
           <FormField label="Reason / notes (optional)">
@@ -433,25 +480,28 @@ export function OpportunityView({
       </Modal>
 
       {/* Upload Document Modal */}
-      <Modal open={docUploadOpen} onClose={() => setDocUploadOpen(false)} title="Upload Document">
+      <Modal open={docUploadOpen} onClose={() => !uploading && setDocUploadOpen(false)} title="Upload Document">
         <div className="space-y-4">
-          <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-            <div className="text-3xl mb-2">📄</div>
-            <p className="text-xs text-muted-foreground mb-3">
-              Drag & drop files here, or click to browse
-            </p>
-            <button
-              onClick={handleUploadDoc}
-              className="text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm"
-            >
-              Select File
-            </button>
-          </div>
-          <div className="flex justify-end pt-2">
-            <SecondaryButton onClick={() => setDocUploadOpen(false)}>Done</SecondaryButton>
+          <p className="text-xs text-muted-foreground">
+            Additional files are parsed and folded into this project’s Go/No-Go packet and later response grounding.
+          </p>
+          <DocumentDropzone files={uploadFiles} onChange={setUploadFiles} disabled={uploading} />
+          <div className="flex justify-end gap-2 pt-2">
+            <SecondaryButton onClick={() => setDocUploadOpen(false)} disabled={uploading}>Cancel</SecondaryButton>
+            <PrimaryButton onClick={handleUploadDocs} disabled={!uploadFiles.length || uploading}>
+              {uploading ? "Parsing & scoring…" : "Upload & score"}
+            </PrimaryButton>
           </div>
         </div>
       </Modal>
+
+      <OutreachComposer
+        open={outreachOpen}
+        org={org}
+        pursuits={[pursuit]}
+        initialPursuitId={pursuit.id}
+        onClose={() => setOutreachOpen(false)}
+      />
     </div>
   );
 }

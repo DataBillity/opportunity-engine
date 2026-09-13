@@ -69,7 +69,7 @@ export function computePairwiseScore(a: EntityCandidate, b: EntityCandidate): Pa
   return { score, features, band };
 }
 
-function normalizeLegalName(name: string): string {
+export function normalizeLegalName(name: string): string {
   return name
     .toLowerCase()
     .replace(/\b(inc|llc|ltd|corp|sa|gmbh|co|company|incorporated|limited|corporation)\b\.?/gi, "")

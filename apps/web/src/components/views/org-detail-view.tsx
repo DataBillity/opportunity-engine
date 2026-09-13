@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import type { Organization, Pursuit } from "@/lib/mock-data";
-import { Modal, FormField, TextInput, TextArea, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
+import { Modal, FormField, TextArea, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { OutreachComposer } from "@/components/outreach/outreach-composer";
+import { AddPursuitForm } from "@/components/pursuit/add-pursuit-form";
+import { createPursuitFromForm, recLabel } from "@/lib/create-pursuit";
 import { cn } from "@/lib/cn";
 
 function getOrgPursuits(org: Organization, allPursuits: Record<string, Pursuit>): Pursuit[] {
@@ -46,66 +49,36 @@ export function OrgDetailView({
   const { toast } = useToast();
 
   const [outreachOpen, setOutreachOpen] = useState(false);
-  const [outreachSubject, setOutreachSubject] = useState("");
-  const [outreachBody, setOutreachBody] = useState("");
 
   const [addPursuitOpen, setAddPursuitOpen] = useState(false);
-  const [npName, setNpName] = useState("");
-  const [npType, setNpType] = useState<"B" | "C">("B");
-  const [npRef, setNpRef] = useState("");
 
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [localNotes, setLocalNotes] = useState(org.notes);
 
   function openOutreach() {
-    setOutreachSubject(`Follow-up: Opportunity Discussion with ${org.name}`);
-    setOutreachBody(`Dear ${org.contacts[0]?.name || "Team"},\n\nI'm reaching out regarding potential opportunities for collaboration.\n\nBest regards,\nJ. Tran`);
     setOutreachOpen(true);
   }
 
-  function handleSendOutreach() {
-    toast(`Outreach email queued for ${org.name}`, "success");
-    setOutreachOpen(false);
-  }
-
-  function handleCreatePursuit() {
-    if (!npName.trim()) return;
-    const id = `OPP-${Date.now().toString().slice(-4)}`;
-    const pursuit: Pursuit = {
-      id,
-      orgId: org.id,
-      name: npName.trim(),
-      typeLabel: npType === "B" ? "Government RFP" : "Private SOW",
-      solicitationRef: npRef.trim() || (npType === "B" ? `RFP-${id.slice(-4)}` : "Direct SOW"),
-      lane: npType,
-      score: 50,
-      status: "New — awaiting triage",
-      rec: "pending",
-      confidence: 0,
-      closed: false,
-      dueDate: null,
-      documents: [],
-      docSummary: { objective: [], services: [], deliverables: [] },
-      rationale: ["Awaiting initial triage and scoring."],
-      reqmap: [],
-      gaps: [],
-      rfund: { lane: npType, tier: "pending", score: 0, note: "Not yet assessed." },
-      decisionRecord: {
-        id: `DEC-${Date.now().toString().slice(-5)}`,
-        type: "D4 — Go/No-Go triage",
-        subject: `Pursuit ${id}`,
-        model: "triage-v3 / prompt v1.9 / graph v213",
-        reviewer: "— not yet assigned",
-        action: "Awaiting triage",
-        retention: "3 years minimum",
-      },
-    };
+  async function handleCreatePursuit(values: { name: string; lane: "B" | "C"; solicitationRef: string; files: File[] }) {
+    const { pursuit, ingested, warning } = await createPursuitFromForm({
+      org,
+      name: values.name,
+      lane: values.lane,
+      solicitationRef: values.solicitationRef,
+      files: values.files,
+    });
     onAddPursuit(pursuit);
-    toast(`Created pursuit "${npName.trim()}" for ${org.name}`, "success");
+    if (ingested) {
+      toast(
+        `"${pursuit.name}" scored ${pursuit.score} — ${recLabel(pursuit.rec)}. Confirm Go/No-Go on the opportunity.`,
+        pursuit.rec === "nogo" ? "warning" : "success",
+      );
+    } else {
+      toast(`Added project "${pursuit.name}" for ${org.name}`, "success");
+    }
+    if (warning) toast(warning, "warning");
     setAddPursuitOpen(false);
-    setNpName("");
-    setNpRef("");
   }
 
   function handleAddNote() {
@@ -155,10 +128,10 @@ export function OrgDetailView({
               Outreach
             </button>
             <button
-              onClick={() => { setNpName(""); setNpRef(""); setNpType("B"); setAddPursuitOpen(true); }}
+              onClick={() => setAddPursuitOpen(true)}
               className="text-xs font-semibold px-3.5 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm"
             >
-              + Add RFP/SOW
+              + Add Project
             </button>
           </div>
         </div>
@@ -214,12 +187,39 @@ export function OrgDetailView({
         </div>
         <div className="p-5">
           {org.contacts.length > 0 ? org.contacts.map((c, i) => (
-            <div key={i} className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5 py-2.5 border-b border-border last:border-b-0 text-xs">
-              <span className="text-foreground">
+            <div key={i} className="py-3 border-b border-border last:border-b-0 text-xs space-y-1.5">
+              <div className="text-foreground">
                 <span className="font-semibold">{c.name}</span>
-                <span className="text-muted-foreground"> — {c.title}</span>
-              </span>
-              <span className="text-muted-foreground font-mono break-all">{c.email}</span>
+                {c.title ? <span className="text-muted-foreground"> — {c.title}</span> : null}
+              </div>
+              <dl className="grid gap-1 text-muted-foreground">
+                {c.company && c.company !== org.name ? (
+                  <div className="flex flex-wrap gap-x-2">
+                    <dt className="font-medium text-foreground/80 w-24 shrink-0">Company</dt>
+                    <dd>{c.company}</dd>
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap gap-x-2">
+                  <dt className="font-medium text-foreground/80 w-24 shrink-0">Email</dt>
+                  <dd className="font-mono break-all">{c.email || (org.channel === "LinkedIn" ? "Not in LinkedIn export" : "—")}</dd>
+                </div>
+                {c.linkedinUrl ? (
+                  <div className="flex flex-wrap gap-x-2">
+                    <dt className="font-medium text-foreground/80 w-24 shrink-0">LinkedIn</dt>
+                    <dd>
+                      <a href={c.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">
+                        {c.linkedinUrl.replace(/^https?:\/\/(www\.)?/, "")}
+                      </a>
+                    </dd>
+                  </div>
+                ) : null}
+                {c.connectedOn ? (
+                  <div className="flex flex-wrap gap-x-2">
+                    <dt className="font-medium text-foreground/80 w-24 shrink-0">Connected</dt>
+                    <dd className="font-mono">{c.connectedOn}</dd>
+                  </div>
+                ) : null}
+              </dl>
             </div>
           )) : (
             <div className="text-xs text-muted-foreground italic">No contacts on file yet.</div>
@@ -253,10 +253,10 @@ export function OrgDetailView({
         </div>
       </div>
 
-      {/* Pursuits card */}
+      {/* Projects card */}
       <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
         <div className="px-5 py-3.5 border-b border-border">
-          <h3 className="oe-card-title">RFPs & SOWs — current and history</h3>
+          <h3 className="oe-card-title">Projects — current and history</h3>
         </div>
         <div className="lg:hidden divide-y divide-border">
           {pursuits.length > 0 ? pursuits.map(p => (
@@ -283,7 +283,7 @@ export function OrgDetailView({
             </div>
           )) : (
             <div className="px-4 py-6 text-center text-xs text-muted-foreground italic">
-              No pursuits yet. Click <strong className="text-foreground">+ Add RFP/SOW</strong> to create one.
+              No projects yet. Click <strong className="text-foreground">+ Add Project</strong> to add one.
             </div>
           )}
         </div>
@@ -291,7 +291,7 @@ export function OrgDetailView({
           <table className="w-full text-sm">
             <thead>
               <tr className="oe-table-header">
-                <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Pursuit</th>
+                <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Project</th>
                 <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Type</th>
                 <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Score</th>
                 <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Decision</th>
@@ -324,7 +324,7 @@ export function OrgDetailView({
               )) : (
                 <tr>
                   <td colSpan={6} className="px-4 py-6 text-center text-xs text-muted-foreground italic">
-                    No pursuits yet. Click <strong className="text-foreground">+ Add RFP/SOW</strong> to create one.
+                    No projects yet. Click <strong className="text-foreground">+ Add Project</strong> to add one.
                   </td>
                 </tr>
               )}
@@ -333,54 +333,20 @@ export function OrgDetailView({
         </div>
       </div>
 
-      {/* Outreach Modal */}
-      <Modal open={outreachOpen} onClose={() => setOutreachOpen(false)} title={`Outreach — ${org.name}`} wide>
-        <div className="space-y-4">
-          <FormField label="To">
-            <div className="text-xs text-foreground px-3 py-2 rounded-md border border-input bg-muted/30">
-              {org.contacts[0]
-                ? `${org.contacts[0].name} <${org.contacts[0].email}>`
-                : <span className="text-muted-foreground italic">No contacts on file</span>
-              }
-            </div>
-          </FormField>
-          <FormField label="Subject">
-            <TextInput value={outreachSubject} onChange={setOutreachSubject} />
-          </FormField>
-          <FormField label="Message">
-            <TextArea value={outreachBody} onChange={setOutreachBody} rows={6} />
-          </FormField>
-          <div className="flex justify-end gap-2 pt-2">
-            <SecondaryButton onClick={() => setOutreachOpen(false)}>Cancel</SecondaryButton>
-            <PrimaryButton onClick={handleSendOutreach}>Send Outreach</PrimaryButton>
-          </div>
-        </div>
-      </Modal>
+      <OutreachComposer
+        open={outreachOpen}
+        org={org}
+        pursuits={pursuits}
+        onClose={() => setOutreachOpen(false)}
+      />
 
-      {/* Add Pursuit Modal */}
-      <Modal open={addPursuitOpen} onClose={() => setAddPursuitOpen(false)} title={`Add RFP/SOW — ${org.name}`}>
-        <div className="space-y-4">
-          <FormField label="Pursuit name">
-            <TextInput value={npName} onChange={setNpName} placeholder="e.g. Claims Platform Modernization" />
-          </FormField>
-          <FormField label="Type">
-            <SelectInput
-              value={npType}
-              onChange={v => setNpType(v as "B" | "C")}
-              options={[
-                { value: "B", label: "Government RFP" },
-                { value: "C", label: "Private SOW" },
-              ]}
-            />
-          </FormField>
-          <FormField label="Solicitation reference (optional)">
-            <TextInput value={npRef} onChange={setNpRef} placeholder="e.g. RFP 24-118" />
-          </FormField>
-          <div className="flex justify-end gap-2 pt-2">
-            <SecondaryButton onClick={() => setAddPursuitOpen(false)}>Cancel</SecondaryButton>
-            <PrimaryButton onClick={handleCreatePursuit} disabled={!npName.trim()}>Create</PrimaryButton>
-          </div>
-        </div>
+      {/* Add Project Modal */}
+      <Modal open={addPursuitOpen} onClose={() => setAddPursuitOpen(false)} title={`Add Project — ${org.name}`} wide>
+        <AddPursuitForm
+          open={addPursuitOpen}
+          onCancel={() => setAddPursuitOpen(false)}
+          onSubmit={handleCreatePursuit}
+        />
       </Modal>
 
       {/* Add Note Modal */}

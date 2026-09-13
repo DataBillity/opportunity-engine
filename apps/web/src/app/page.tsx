@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { TopBar } from "@/components/layout/top-bar";
 import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
@@ -32,6 +32,26 @@ export default function CommandCenter() {
 
   const [orgs, setOrgs] = useState<Organization[]>(() => [...initialOrgs]);
   const [allPursuits, setAllPursuits] = useState<Record<string, Pursuit>>(() => ({ ...initialPursuits }));
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/pipeline/orgs")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { organizations?: Organization[] } | null) => {
+        if (cancelled || !data?.organizations?.length) return;
+        setOrgs((prev) => {
+          const seen = new Set(prev.map((o) => o.id));
+          const incoming = data.organizations!.filter((o) => !seen.has(o.id));
+          return incoming.length ? [...incoming, ...prev] : prev;
+        });
+      })
+      .catch(() => {
+        /* keep mock orgs if the bulk-list API is unavailable */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const currentOrg = orgs.find(o => o.id === currentOrgId);
   const currentPursuit = allPursuits[currentPursuitId];
@@ -88,10 +108,13 @@ export default function CommandCenter() {
       setOrgs(prev =>
         prev.map(o =>
           o.id === pursuit.orgId
-            ? { ...o, pursuits: [...o.pursuits, pursuit.id] }
+            ? { ...o, pursuits: o.pursuits.includes(pursuit.id) ? o.pursuits : [...o.pursuits, pursuit.id] }
             : o
         )
       );
+      setCurrentOrgId(pursuit.orgId);
+      setCurrentPursuitId(pursuit.id);
+      setActiveView("decision");
     },
     []
   );
@@ -181,6 +204,7 @@ export default function CommandCenter() {
                 onBack={() => setActiveView("pipeline")}
                 onDraft={() => setActiveView("draft")}
                 onConfirmDecision={handleConfirmDecision}
+                onUpdatePursuit={handleUpdatePursuit}
               />
             )}
             {activeView === "draft" && currentPursuit && (

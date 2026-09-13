@@ -80,6 +80,6 @@ function computeAccountValueFit(value: AccountValue): number {
   if (value.priorRelationship) score += 25;
   if (value.multiYearPotential) score += 15;
   if (value.referenceAccountPotential) score += 10;
-  if (["healthcare", "government", "public_transit", "financial_services"].includes(value.sector?.toLowerCase())) score += 10;
+  if (["healthcare", "government", "public_transit", "financial_services", "retail", "travel", "hospitality", "ecommerce", "automotive", "marketing_agency", "data_provider"].includes(value.sector?.toLowerCase())) score += 10;
   return Math.min(100, score);
 }

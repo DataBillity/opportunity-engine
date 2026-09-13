@@ -5,6 +5,8 @@ import type { ViewId } from "@/app/page";
 import type { Organization, Pursuit } from "@/lib/mock-data";
 import { Sidebar } from "@/components/layout/sidebar";
 import { navItems } from "@/components/layout/nav-items";
+import { BrandMark } from "@/components/brand-mark";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { cn } from "@/lib/cn";
 
 export function MobileNav({
@@ -94,11 +96,7 @@ export function MobileNav({
       >
         <div className="flex items-center justify-between gap-3 px-4 h-14 shrink-0 bg-[var(--billity-navy)] text-white">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-[var(--billity-bright)] flex items-center justify-center shrink-0">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-              </svg>
-            </div>
+            <BrandMark size={28} />
             <span className="font-bold tracking-tight text-[15px] truncate">Opportunity Engine</span>
           </div>
           <button
@@ -147,6 +145,13 @@ export function MobileNav({
             onOrgSelect={onOrgSelect}
             orgs={orgs}
             allPursuits={allPursuits}
+          />
+        </div>
+
+        <div className="shrink-0 border-t border-border p-3">
+          <SignOutButton
+            idleLabel="Sign out"
+            className="w-full min-h-11 px-3 rounded-lg text-[13px] font-semibold text-destructive hover:bg-[hsl(var(--status-nogo-soft))] text-left"
           />
         </div>
       </div>

@@ -20,6 +20,68 @@ const initialSections: SectionMeta[] = [
   { id: "mgmt", name: "Management Plan", ref: "Vol I § 3.6", trace: "none", tracePct: "Not started" },
 ];
 
+function sectionsForPursuit(pursuit: Pursuit): SectionMeta[] {
+  if (pursuit.id === "OPP-2219") return initialSections;
+  if (pursuit.complianceMatrix?.length) {
+    return pursuit.complianceMatrix.map(item => ({
+      id: item.sectionId,
+      name: item.title,
+      ref: item.ref,
+      trace: "none" as const,
+      tracePct: "Not started",
+    }));
+  }
+  return [
+    { id: "tech", name: "Technical Approach", ref: "Approach", trace: "none", tracePct: "Not started" },
+    { id: "scope", name: "Scope Response", ref: "Scope", trace: "none", tracePct: "Not started" },
+    { id: "mgmt", name: "Management & Delivery", ref: "Delivery", trace: "none", tracePct: "Not started" },
+  ];
+}
+
+function draftsForPursuit(pursuit: Pursuit, sections: SectionMeta[]): Record<string, string> {
+  if (pursuit.id === "OPP-2219") return { ...seedDraftContent };
+  return Object.fromEntries(sections.map(section => [section.id, ""]));
+}
+
+function outlineSection(pursuit: Pursuit, section: SectionMeta): string {
+  const docs = pursuit.documents.map(doc => doc.name).join(", ") || "the uploaded solicitation";
+  const objectives = pursuit.docSummary.objective.slice(0, 3);
+  const mapped = pursuit.reqmap.filter(item => item.status === "mapped").slice(0, 5);
+  const gaps = pursuit.gaps.slice(0, 4);
+  const lines = [
+    `This ${section.name.toLowerCase()} is grounded in ${docs}${pursuit.solicitationRef ? ` (${pursuit.solicitationRef})` : ""}.`,
+    "",
+  ];
+  if (objectives.length) {
+    lines.push("Stated objectives");
+    for (const item of objectives) lines.push(`• ${item}`);
+    lines.push("");
+  }
+  if (section.id === "scope" || section.id === "tech") {
+    if (pursuit.docSummary.services.length) {
+      lines.push("Requested services");
+      for (const item of pursuit.docSummary.services.slice(0, 5)) lines.push(`• ${item}`);
+      lines.push("");
+    }
+    if (mapped.length) {
+      lines.push("Capability coverage to expand in the full draft");
+      for (const item of mapped) lines.push(`• ${item.req}${item.node ? ` — ${item.node}` : ""}`);
+      lines.push("");
+    }
+  }
+  if (gaps.length && (section.id === "mgmt" || section.id === "tech")) {
+    lines.push("Open gaps the response must address or qualify");
+    for (const gap of gaps) lines.push(`• ${gap.title} (${gap.crit})`);
+    lines.push("");
+  }
+  if (pursuit.sourceText) {
+    lines.push("Source packet is on file. Generate the narrative from mapped requirements only; do not invent past performance.");
+  } else {
+    lines.push("Upload the solicitation on the opportunity if this outline is thin — the response builder uses the extracted packet.");
+  }
+  return lines.join("\n").trim();
+}
+
 const seedDraftContent: Record<string, string> = {
   tech: `The proposed technical approach leverages our team's direct experience migrating legacy mainframe benefits systems to modern cloud-native architectures. Our methodology, refined across two completed state-level unemployment insurance modernizations, addresses the core challenge of retiring a 30-year-old system while maintaining uninterrupted service delivery.
 
@@ -68,9 +130,9 @@ export function ResponseBuilderView({
   onUpdatePursuit: (pursuitId: string, updates: Partial<Pursuit>) => void;
 }) {
   const { toast } = useToast();
-  const [activeSection, setActiveSection] = useState("tech");
-  const [sections, setSections] = useState<SectionMeta[]>(initialSections);
-  const [drafts, setDrafts] = useState<Record<string, string>>({ ...seedDraftContent });
+  const [sections, setSections] = useState<SectionMeta[]>(() => sectionsForPursuit(pursuit));
+  const [activeSection, setActiveSection] = useState(() => sectionsForPursuit(pursuit)[0]?.id ?? "tech");
+  const [drafts, setDrafts] = useState<Record<string, string>>(() => draftsForPursuit(pursuit, sectionsForPursuit(pursuit)));
   const [generating, setGenerating] = useState(false);
   const [checking, setChecking] = useState(false);
   const [assertionResults, setAssertionResults] = useState<{ text: string; traced: boolean }[] | null>(null);
@@ -79,7 +141,9 @@ export function ResponseBuilderView({
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "system",
-      text: "Draft generated from 2 matched capability nodes and 4 experience references. 92% of assertions are source-traced.",
+      text: pursuit.sourceText
+        ? `Response workspace opened from ${pursuit.documents.length || 1} parsed document${pursuit.documents.length === 1 ? "" : "s"}. ${pursuit.reqmap.filter(r => r.status === "mapped").length} of ${pursuit.reqmap.length || 0} requirements are mapped.`
+        : "Draft generated from 2 matched capability nodes and 4 experience references. 92% of assertions are source-traced.",
     },
   ]);
   const [chatInput, setChatInput] = useState("");
@@ -91,20 +155,25 @@ export function ResponseBuilderView({
   }, [messages]);
 
   function handleGenerateDraft() {
+    const section = sections.find(item => item.id === activeSection);
+    if (!section) return;
     setGenerating(true);
     setTimeout(() => {
-      setDrafts(prev => ({ ...prev, [activeSection]: generatedMgmtDraft }));
+      const content = pursuit.id === "OPP-2219" && activeSection === "mgmt"
+        ? generatedMgmtDraft
+        : outlineSection(pursuit, section);
+      setDrafts(prev => ({ ...prev, [activeSection]: content }));
       setSections(prev =>
         prev.map(s =>
-          s.id === activeSection ? { ...s, trace: "partial", tracePct: "78%" } : s
+          s.id === activeSection ? { ...s, trace: "partial", tracePct: pursuit.sourceText ? "packet" : "78%" } : s
         )
       );
       setMessages(prev => [
         ...prev,
-        { role: "system", text: `Draft generated for "${sections.find(s => s.id === activeSection)?.name}". 78% of assertions are source-traced. Review recommended before submission.` },
+        { role: "system", text: `Draft generated for "${section.name}" from the parsed RFP/SOW packet and mapped capabilities. Review before submission.` },
       ]);
       setGenerating(false);
-      toast("Draft generated from capability graph and experience nodes", "success");
+      toast("Draft generated from the solicitation packet and capability map", "success");
     }, 1500);
   }
 

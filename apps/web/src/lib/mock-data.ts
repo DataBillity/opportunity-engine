@@ -24,6 +24,11 @@ export interface Contact {
   name: string;
   title: string;
   email: string;
+  firstName?: string;
+  lastName?: string;
+  company?: string;
+  linkedinUrl?: string;
+  connectedOn?: string;
 }
 
 export interface ScoreHistory {
@@ -36,6 +41,15 @@ export interface Note {
   author: string;
   date: string;
   text: string;
+}
+
+export interface PursuitDocument {
+  name: string;
+  kind?: "solicitation" | "sow" | "addendum" | "other";
+  mime?: string;
+  sizeBytes?: number;
+  extractedChars?: number;
+  parseStatus?: "extracted" | "empty" | "unsupported";
 }
 
 export interface Pursuit {
@@ -51,7 +65,10 @@ export interface Pursuit {
   confidence: number;
   closed: boolean;
   dueDate: string | null;
-  documents: { name: string }[];
+  documents: PursuitDocument[];
+  sourceText?: string;
+  sourceTextTruncated?: boolean;
+  triageMode?: "model" | "heuristic" | "pending";
   docSummary: {
     objective: string[];
     services: string[];
@@ -279,7 +296,7 @@ export const pursuits: Record<string, Pursuit> = {
       { id: "GAP-089", title: "Live GTFS-realtime / AVL feed integration", crit: "Scored preference — 15 of 100 pts", demand: "5 solicitations in 90 days", closure: "Partner or new hire" },
     ],
     rfund: { lane: "B", tier: "advisory", score: 38, note: "Mostly configuration/integration scope — limited platform-advancement content identified." },
-    decisionRecord: { id: "DEC-88213", type: "D4 — Go/No-Go triage (RFP-01, RFP-03)", subject: "Pursuit OPP-2201", model: "triage-v3 / prompt v1.9 / graph v212", reviewer: "—  not yet confirmed", action: "Recommendation generated, awaiting human confirmation", retention: "3 years minimum (bid-defensibility class)" },
+    decisionRecord: { id: "DEC-88213", type: "D4 — Go/No-Go triage (RFP-01, RFP-03)", subject: "Project OPP-2201", model: "triage-v3 / prompt v1.9 / graph v212", reviewer: "—  not yet confirmed", action: "Recommendation generated, awaiting human confirmation", retention: "3 years minimum (bid-defensibility class)" },
   },
   "OPP-2150": {
     id: "OPP-2150", orgId: "ORG-01", name: "Real-Time Passenger Information System", typeLabel: "Government RFP", solicitationRef: "RFP 24-062",
@@ -290,7 +307,7 @@ export const pursuits: Record<string, Pursuit> = {
     reqmap: [{ req: "Physical signage hardware installation, 400 sites", status: "unmapped", node: null, evidence: "Outside consortium scope" }],
     gaps: [{ id: "GAP-051", title: "Physical hardware installation at scale", crit: "Core scope requirement", demand: "1 solicitation", closure: "Not a fit for consortium model" }],
     rfund: { lane: "B", tier: "advisory", score: 12, note: "Field hardware/install scope — negligible funding relevance." },
-    decisionRecord: { id: "DEC-86110", type: "D4 — Go/No-Go triage", subject: "Pursuit OPP-2150", model: "triage-v2 / prompt v1.6 / graph v188", reviewer: "J. Tran (Bid Manager)", action: "Confirmed NO-GO, 2026-05-09", retention: "3 years minimum" },
+    decisionRecord: { id: "DEC-86110", type: "D4 — Go/No-Go triage", subject: "Project OPP-2150", model: "triage-v2 / prompt v1.6 / graph v188", reviewer: "J. Tran (Bid Manager)", action: "Confirmed NO-GO, 2026-05-09", retention: "3 years minimum" },
   },
   "OPP-2214": {
     id: "OPP-2214", orgId: "ORG-02", name: "Claims Platform Modernization", typeLabel: "Private SOW", solicitationRef: "Direct SOW",
@@ -308,7 +325,7 @@ export const pursuits: Record<string, Pursuit> = {
     ],
     gaps: [],
     rfund: { lane: "C", tier: "full", score: 71, note: "Claims-adjudication modernization touches core-engine consent-routing and cross-network signal processing (H1/H2)." },
-    decisionRecord: { id: "DEC-88190", type: "D4 — Go/No-Go triage (SOW lens)", subject: "Pursuit OPP-2214", model: "triage-v3 / prompt v1.9 / graph v211", reviewer: "M. Alvarez (Commercial Lead)", action: "Confirmed Go, 09/03", retention: "3 years minimum" },
+    decisionRecord: { id: "DEC-88190", type: "D4 — Go/No-Go triage (SOW lens)", subject: "Project OPP-2214", model: "triage-v3 / prompt v1.9 / graph v211", reviewer: "M. Alvarez (Commercial Lead)", action: "Confirmed Go, 09/03", retention: "3 years minimum" },
   },
   "OPP-2215": {
     id: "OPP-2215", orgId: "ORG-02", name: "Patient Portal Redesign", typeLabel: "Private SOW", solicitationRef: "Direct SOW",
@@ -323,7 +340,7 @@ export const pursuits: Record<string, Pursuit> = {
     reqmap: [{ req: "Patient portal UX redesign, WCAG 2.2 AA", status: "mapped", node: "CAP-0091 Regulated Healthcare Data Pipelines", evidence: "1 adjacent experience node" }],
     gaps: [],
     rfund: { lane: "C", tier: "full", score: 24, note: "Primarily client-specific UX/config work — low platform-advancement content." },
-    decisionRecord: { id: "DEC-88350", type: "D4 — Go/No-Go triage", subject: "Pursuit OPP-2215", model: "triage-v3 / prompt v1.9 / graph v213", reviewer: "—  not yet confirmed", action: "Recommendation generated, awaiting human confirmation", retention: "3 years minimum" },
+    decisionRecord: { id: "DEC-88350", type: "D4 — Go/No-Go triage", subject: "Project OPP-2215", model: "triage-v3 / prompt v1.9 / graph v213", reviewer: "—  not yet confirmed", action: "Recommendation generated, awaiting human confirmation", retention: "3 years minimum" },
   },
   "OPP-2219": {
     id: "OPP-2219", orgId: "ORG-03", name: "Unemployment Insurance Modernization", typeLabel: "Government RFP", solicitationRef: "RFP SOL-24-0441",
@@ -356,7 +373,7 @@ export const pursuits: Record<string, Pursuit> = {
       { id: "RAI-03", kind: "other", description: "Subcontracting plan percentage breakdown not yet finalized.", expectedResponseType: "text", relatedSection: "mgmt", assignedPartnerId: null, assignedInternal: "M. Alvarez", dueAt: "2026-09-22", status: "Open", gates: ["proposal_section:mgmt"], responseContent: "", responseDocument: null },
     ],
     rfund: { lane: "B", tier: "advisory", score: 19, note: "Legacy migration against a well-established pattern — largely replication, not new technical uncertainty." },
-    decisionRecord: { id: "DEC-87990", type: "D4 — Go/No-Go triage", subject: "Pursuit OPP-2219", model: "triage-v3 / prompt v1.8 / graph v204", reviewer: "J. Tran (Bid Manager)", action: "Confirmed Go, 08/22", retention: "3 years minimum" },
+    decisionRecord: { id: "DEC-87990", type: "D4 — Go/No-Go triage", subject: "Project OPP-2219", model: "triage-v3 / prompt v1.8 / graph v204", reviewer: "J. Tran (Bid Manager)", action: "Confirmed Go, 08/22", retention: "3 years minimum" },
   },
 };
 

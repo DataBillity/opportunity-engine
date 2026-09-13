@@ -1,2 +1,22 @@
-export { callModel } from "./gateway";
-export type { GatewayCallInput, GatewayCallOutput } from "./gateway";
+export {
+  callModel,
+  getAvailableProviders,
+  describeMissingKeys,
+  getAnthropicApiKey,
+  getGeminiApiKey,
+  ModelGatewayError,
+} from "./gateway";
+export type { GatewayCallInput, GatewayCallOutput, ModelGatewayCode } from "./gateway";
+export {
+  generateOutreachDraft,
+  collectGroundingFacts,
+  buildOutreachPrompt,
+  OUTREACH_PROMPT_VERSION,
+} from "./outreach";
+export type { GroundingFact, OutreachDraft } from "./outreach";
+export { parseModelJson } from "./json";
+export {
+  extractSolicitationWithModel,
+  buildSolicitationExtractPrompt,
+  SOLICITATION_EXTRACT_PROMPT_VERSION,
+} from "./solicitation";

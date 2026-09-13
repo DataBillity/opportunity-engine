@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "ingest:linkedin": "tsx src/run-linkedin-ingest.ts"
   },
   "dependencies": {
     "@opportunity-engine/core": "workspace:*",
@@ -14,7 +15,8 @@
     "@opportunity-engine/db": "workspace:*",
     "bullmq": "^5.25.0",
     "ioredis": "^5.4.0",
-    "pino": "^9.5.0"
+    "pino": "^9.5.0",
+    "postgres": "^3.4.0"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

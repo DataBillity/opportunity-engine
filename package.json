@@ -12,7 +12,8 @@
     "db:generate": "pnpm --filter @opportunity-engine/db generate",
     "db:migrate": "pnpm --filter @opportunity-engine/db migrate",
     "db:push": "pnpm --filter @opportunity-engine/db push",
-    "db:seed": "pnpm --filter @opportunity-engine/db seed"
+    "db:seed": "pnpm --filter @opportunity-engine/db seed",
+    "ingest:linkedin": "pnpm --filter @opportunity-engine/worker ingest:linkedin"
   },
   "devDependencies": {
     "turbo": "^2.3.0",

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 
 export function Modal({
@@ -17,6 +18,11 @@ export function Modal({
   wide?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -27,14 +33,14 @@ export function Modal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-0">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
       <div
         ref={ref}
-        className={`relative bg-card rounded-xl border shadow-2xl mx-3 sm:mx-4 w-[calc(100%-1.5rem)] max-h-[90dvh] overflow-y-auto oe-touch-scroll ${wide ? "sm:w-[640px] sm:max-w-[calc(100%-2rem)]" : "sm:w-[480px] sm:max-w-[calc(100%-2rem)]"}`}
+        className={`relative bg-card rounded-xl border shadow-2xl mx-3 sm:mx-4 w-[calc(100%-1.5rem)] max-h-[90dvh] overflow-y-auto oe-touch-scroll ${wide ? "sm:w-[720px] sm:max-w-[calc(100%-2rem)]" : "sm:w-[480px] sm:max-w-[calc(100%-2rem)]"}`}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border sticky top-0 bg-card z-10 rounded-t-xl">
           <h2 className="text-base font-bold text-foreground">{title}</h2>
@@ -49,15 +55,18 @@ export function Modal({
         </div>
         <div className="p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
 export function FormField({
   label,
+  hint,
   children,
 }: {
   label: string;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -66,6 +75,7 @@ export function FormField({
         {label}
       </label>
       {children}
+      {hint && <p className="text-[11px] text-muted-foreground leading-relaxed">{hint}</p>}
     </div>
   );
 }
@@ -160,13 +170,16 @@ export function PrimaryButton({
   children,
   onClick,
   disabled,
+  type = "button",
 }: {
   children: React.ReactNode;
-  onClick: () => void;
+  onClick?: () => void;
   disabled?: boolean;
+  type?: "button" | "submit";
 }) {
   return (
     <button
+      type={type}
       onClick={onClick}
       disabled={disabled}
       className="text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -179,14 +192,20 @@ export function PrimaryButton({
 export function SecondaryButton({
   children,
   onClick,
+  disabled,
+  type = "button",
 }: {
   children: React.ReactNode;
-  onClick: () => void;
+  onClick?: () => void;
+  disabled?: boolean;
+  type?: "button" | "submit";
 }) {
   return (
     <button
+      type={type}
       onClick={onClick}
-      className="text-xs font-medium px-4 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+      disabled={disabled}
+      className="text-xs font-medium px-4 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {children}
     </button>
