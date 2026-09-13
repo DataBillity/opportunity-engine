@@ -57,23 +57,40 @@ export function getAuthSecret(): string {
   return (process.env.AUTH_SECRET ?? "").trim();
 }
 
+function parseUsernameList(value: string): string[] {
+  return value
+    .split(/[,\s]+/)
+    .map(item => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function getExpectedUsernames(): string[] {
+  return parseUsernameList(process.env.AUTH_USERNAME ?? "");
+}
+
+export function getExpectedPassword(): string {
+  return (process.env.AUTH_PASSWORD ?? "").trim();
+}
+
 export function getExpectedCredentials(): { username: string; password: string } {
   return {
-    username: (process.env.AUTH_USERNAME ?? "").trim().toLowerCase(),
-    password: process.env.AUTH_PASSWORD ?? "",
+    username: getExpectedUsernames()[0] ?? "",
+    password: getExpectedPassword(),
   };
 }
 
 export function authIsConfigured(): boolean {
-  const { username, password } = getExpectedCredentials();
-  return Boolean(getAuthSecret() && username && password);
+  return Boolean(getAuthSecret() && getExpectedUsernames().length && getExpectedPassword());
 }
 
 export function credentialsMatch(username: string, password: string): boolean {
-  const expected = getExpectedCredentials();
-  if (!expected.username || !expected.password) return false;
-  const userOk = timingSafeEqual(username.trim().toLowerCase(), expected.username);
-  const passOk = timingSafeEqual(password, expected.password);
+  const allowed = getExpectedUsernames();
+  const expectedPass = getExpectedPassword();
+  if (!allowed.length || !expectedPass) return false;
+  const submittedUser = username.trim().toLowerCase();
+  const submittedPass = password.trim();
+  const userOk = allowed.some(allowedUser => timingSafeEqual(submittedUser, allowedUser));
+  const passOk = timingSafeEqual(submittedPass, expectedPass);
   return userOk && passOk;
 }
 

@@ -7,7 +7,7 @@ import { safeReturnPath } from "@/lib/auth-shared";
 export function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState("tech@databillity.com");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +62,7 @@ export function SignInForm() {
           spellCheck={false}
           value={username}
           onChange={e => setUsername(e.target.value)}
-          placeholder="you@databillity.com"
+            placeholder="tech@databillity.com"
           className="oe-field text-sm py-2.5"
           aria-invalid={Boolean(error)}
           required

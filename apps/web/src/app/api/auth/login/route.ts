@@ -4,7 +4,6 @@ import {
   authIsConfigured,
   createSessionToken,
   credentialsMatch,
-  getExpectedCredentials,
   sessionCookieOptions,
 } from "@/lib/auth";
 import { requestIsSameOrigin, safeReturnPath } from "@/lib/auth-shared";
@@ -59,14 +58,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const username = typeof body.username === "string" ? body.username : "";
+  const username = typeof body.username === "string" ? body.username.trim() : "";
   const password = typeof body.password === "string" ? body.password : "";
   if (!username || !password || !credentialsMatch(username, password)) {
     return NextResponse.json({ error: "Those credentials don’t match our records." }, { status: 401 });
   }
 
   attempts.delete(key);
-  const email = getExpectedCredentials().username;
+  const email = username.toLowerCase();
   const token = await createSessionToken(email);
   const response = NextResponse.json({ ok: true, redirectTo: safeReturnPath(typeof body.from === "string" ? body.from : "/") });
   response.cookies.set(COOKIE_NAME, token, sessionCookieOptions());

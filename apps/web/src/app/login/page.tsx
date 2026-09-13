@@ -99,7 +99,7 @@ export default function LoginPage() {
             <div className="mb-7">
               <h2 className="text-2xl font-bold tracking-tight text-foreground">Sign in</h2>
               <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
-                Use your Databillity credentials to access the command center.
+                Use the command-center username and password to continue.
               </p>
             </div>
 
