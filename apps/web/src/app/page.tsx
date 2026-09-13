@@ -1,38 +1,53 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { TopBar } from "@/components/layout/top-bar";
 import { Sidebar } from "@/components/layout/sidebar";
+import { MobileNav } from "@/components/layout/mobile-nav";
 import { PipelineView } from "@/components/views/pipeline-view";
 import { OpportunityView } from "@/components/views/opportunity-view";
 import { OrgDetailView } from "@/components/views/org-detail-view";
 import { SearchView } from "@/components/views/search-view";
 import { SourcesView } from "@/components/views/sources-view";
 import { ResponseBuilderView } from "@/components/views/response-builder-view";
-import { organizations, pursuits, getOrgPursuits } from "@/lib/mock-data";
+import {
+  organizations as initialOrgs,
+  pursuits as initialPursuits,
+  type Organization,
+  type Pursuit,
+} from "@/lib/mock-data";
 
 export type ViewId = "search" | "pipeline" | "org" | "decision" | "draft" | "sources";
+
+function getOrgPursuitsFromState(org: Organization, allPursuits: Record<string, Pursuit>): Pursuit[] {
+  return org.pursuits.map(pid => allPursuits[pid]).filter(Boolean) as Pursuit[];
+}
 
 export default function CommandCenter() {
   const [activeView, setActiveView] = useState<ViewId>("pipeline");
   const [currentOrgId, setCurrentOrgId] = useState("ORG-01");
   const [currentPursuitId, setCurrentPursuitId] = useState("OPP-2201");
   const [laneFilter, setLaneFilter] = useState("all");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const currentOrg = organizations.find(o => o.id === currentOrgId);
-  const currentPursuit = pursuits[currentPursuitId];
+  const [orgs, setOrgs] = useState<Organization[]>(() => [...initialOrgs]);
+  const [allPursuits, setAllPursuits] = useState<Record<string, Pursuit>>(() => ({ ...initialPursuits }));
+
+  const currentOrg = orgs.find(o => o.id === currentOrgId);
+  const currentPursuit = allPursuits[currentPursuitId];
 
   function handleOrgSelect(orgId: string) {
     setCurrentOrgId(orgId);
-    const org = organizations.find(o => o.id === orgId);
+    const org = orgs.find(o => o.id === orgId);
     if (!org) return;
-    const active = getOrgPursuits(org);
+    const active = getOrgPursuitsFromState(org, allPursuits);
     if (active.length === 1) {
       setCurrentPursuitId(active[0]!.id);
       setActiveView("decision");
     } else {
       setActiveView("org");
     }
+    setMobileNavOpen(false);
   }
 
   function handlePursuitSelect(pursuitId: string) {
@@ -42,11 +57,87 @@ export default function CommandCenter() {
 
   function handleNav(view: ViewId) {
     setActiveView(view);
+    setMobileNavOpen(false);
   }
 
+  const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
+
+  const handleConfirmDecision = useCallback(
+    (pursuitId: string, decision: "go" | "nogo") => {
+      setAllPursuits(prev => {
+        const p = prev[pursuitId];
+        if (!p) return prev;
+        return {
+          ...prev,
+          [pursuitId]: {
+            ...p,
+            rec: decision,
+            confidence: decision === "go" ? Math.max(p.confidence, 90) : Math.max(p.confidence, 85),
+            status: decision === "go" ? "Go confirmed" : "No-Go confirmed — closed",
+            closed: decision === "nogo",
+          },
+        };
+      });
+    },
+    []
+  );
+
+  const handleAddPursuit = useCallback(
+    (pursuit: Pursuit) => {
+      setAllPursuits(prev => ({ ...prev, [pursuit.id]: pursuit }));
+      setOrgs(prev =>
+        prev.map(o =>
+          o.id === pursuit.orgId
+            ? { ...o, pursuits: [...o.pursuits, pursuit.id] }
+            : o
+        )
+      );
+    },
+    []
+  );
+
+  const handleAddOrg = useCallback(
+    (org: Organization) => {
+      setOrgs(prev => [...prev, org]);
+    },
+    []
+  );
+
+  const handleUpdatePursuit = useCallback(
+    (pursuitId: string, updates: Partial<Pursuit>) => {
+      setAllPursuits(prev => {
+        const p = prev[pursuitId];
+        if (!p) return prev;
+        return { ...prev, [pursuitId]: { ...p, ...updates } };
+      });
+    },
+    []
+  );
+
   return (
-    <div className="flex flex-col min-h-screen">
-      <TopBar activeView={activeView} onNav={handleNav} />
+    <div className="flex flex-col h-dvh overflow-hidden">
+      <TopBar
+        activeView={activeView}
+        onNav={handleNav}
+        orgs={orgs}
+        onAddPursuit={handleAddPursuit}
+        onAddOrg={handleAddOrg}
+        menuOpen={mobileNavOpen}
+        onMenuToggle={() => setMobileNavOpen(open => !open)}
+      />
+
+      <MobileNav
+        open={mobileNavOpen}
+        onClose={closeMobileNav}
+        activeView={activeView}
+        onNav={handleNav}
+        currentOrgId={currentOrgId}
+        laneFilter={laneFilter}
+        onLaneFilter={setLaneFilter}
+        onOrgSelect={handleOrgSelect}
+        orgs={orgs}
+        allPursuits={allPursuits}
+      />
 
       <div className="flex flex-1 min-h-0">
         <Sidebar
@@ -54,22 +145,33 @@ export default function CommandCenter() {
           laneFilter={laneFilter}
           onLaneFilter={setLaneFilter}
           onOrgSelect={handleOrgSelect}
+          orgs={orgs}
+          allPursuits={allPursuits}
         />
 
-        <main className="flex-1 overflow-y-auto p-7">
-          <div className="max-w-[1160px] mx-auto">
-            {activeView === "search" && <SearchView />}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-4 sm:py-5 md:p-5 lg:p-6 oe-touch-scroll">
+          <div className="max-w-[1200px] 2xl:max-w-[1400px] mx-auto w-full">
+            {activeView === "search" && (
+              <SearchView
+                onAddOrg={handleAddOrg}
+              />
+            )}
             {activeView === "pipeline" && (
               <PipelineView
                 laneFilter={laneFilter}
                 onOrgSelect={handleOrgSelect}
+                orgs={orgs}
+                allPursuits={allPursuits}
+                onAddPursuit={handleAddPursuit}
               />
             )}
             {activeView === "org" && currentOrg && (
               <OrgDetailView
                 org={currentOrg}
+                allPursuits={allPursuits}
                 onPursuitSelect={handlePursuitSelect}
                 onBack={() => setActiveView("pipeline")}
+                onAddPursuit={handleAddPursuit}
               />
             )}
             {activeView === "decision" && currentPursuit && currentOrg && (
@@ -78,12 +180,14 @@ export default function CommandCenter() {
                 org={currentOrg}
                 onBack={() => setActiveView("pipeline")}
                 onDraft={() => setActiveView("draft")}
+                onConfirmDecision={handleConfirmDecision}
               />
             )}
             {activeView === "draft" && currentPursuit && (
               <ResponseBuilderView
                 pursuit={currentPursuit}
                 onBack={() => setActiveView("decision")}
+                onUpdatePursuit={handleUpdatePursuit}
               />
             )}
             {activeView === "sources" && <SourcesView />}

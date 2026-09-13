@@ -1,181 +1,237 @@
 "use client";
 
+import { useState } from "react";
 import type { Pursuit, Organization } from "@/lib/mock-data";
 import { getPartner } from "@/lib/mock-data";
+import { Modal, FormField, TextArea, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
+import { useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/cn";
 
 function RecBig({ rec, closed }: { rec: string; closed?: boolean }) {
   if (closed) return <div className="text-xl font-extrabold text-closed">CLOSED</div>;
   const map: Record<string, [string, string]> = {
-    go: ["GO", "text-go"], nogo: ["NO-GO", "text-nogo"],
-    cond: ["CONDITIONS", "text-cond"], pending: ["PENDING", "text-ink-soft"],
+    go: ["GO", "text-go"],
+    nogo: ["NO-GO", "text-nogo"],
+    cond: ["CONDITIONS", "text-cond"],
+    pending: ["PENDING", "text-muted-foreground"],
   };
   const [label, cls] = map[rec] ?? map.pending!;
   return <div className={`text-xl font-extrabold ${cls}`}>{label}</div>;
 }
 
+function StatusBadge({ status, label }: { status: string; label: string }) {
+  const cls: Record<string, string> = {
+    mapped: "oe-status-trace",
+    unmapped: "oe-status-nogo",
+    Open: "oe-status-cond",
+    Done: "oe-status-go",
+  };
+  return (
+    <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md ${cls[status] ?? "oe-status-pending"}`}>
+      {label}
+    </span>
+  );
+}
+
 export function OpportunityView({
-  pursuit, org, onBack, onDraft,
+  pursuit, org, onBack, onDraft, onConfirmDecision,
 }: {
   pursuit: Pursuit; org: Organization;
   onBack: () => void; onDraft: () => void;
+  onConfirmDecision: (pursuitId: string, decision: "go" | "nogo") => void;
 }) {
-  return (
-    <div className="flex gap-5 items-start">
-      <div className="flex-1 min-w-0">
-        <div className="text-xs text-ink-soft mb-2">
-          <button onClick={onBack} className="text-brand font-semibold cursor-pointer hover:underline bg-transparent border-none">Pipeline</button>
-          {" / "}
-          <button onClick={onBack} className="text-brand font-semibold cursor-pointer hover:underline bg-transparent border-none">{org.name}</button>
-          {" / "}{pursuit.name}
-        </div>
+  const { toast } = useToast();
+  const [confirmOpen, setConfirmOpen] = useState<"go" | "nogo" | null>(null);
+  const [confirmReason, setConfirmReason] = useState("");
+  const [docUploadOpen, setDocUploadOpen] = useState(false);
+  const [uploadedDocs, setUploadedDocs] = useState<string[]>([]);
 
-        {/* Decision header */}
-        <div className="bg-panel border border-line p-5 mb-4 flex justify-between gap-6 items-start">
-          <div>
-            <h1 className="text-[17px] font-bold mb-1">{pursuit.name}</h1>
-            <div className="text-xs text-ink-soft">
-              {pursuit.typeLabel} · {pursuit.solicitationRef} · Score {pursuit.score}/100
-              {pursuit.dueDate && <> · Due {pursuit.dueDate}</>}
+  function handleConfirm() {
+    if (!confirmOpen) return;
+    onConfirmDecision(pursuit.id, confirmOpen);
+    toast(
+      confirmOpen === "go"
+        ? `Pursuit "${pursuit.name}" confirmed GO — ready for response drafting`
+        : `Pursuit "${pursuit.name}" confirmed NO-GO — pursuit closed`,
+      confirmOpen === "go" ? "success" : "warning"
+    );
+    setConfirmOpen(null);
+    setConfirmReason("");
+  }
+
+  function handleUploadDoc() {
+    const name = `Uploaded_Document_${uploadedDocs.length + 1}.pdf`;
+    setUploadedDocs(prev => [...prev, name]);
+    toast(`Document "${name}" attached`, "success");
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
+        <button onClick={onBack} className="text-primary font-medium cursor-pointer hover:underline bg-transparent border-none shrink-0">
+          Pipeline
+        </button>
+        <span className="text-muted-foreground shrink-0">/</span>
+        <button onClick={onBack} className="text-primary font-medium cursor-pointer hover:underline bg-transparent border-none truncate max-w-[40%]">
+          {org.name}
+        </button>
+        <span className="text-muted-foreground shrink-0">/</span>
+        <span className="text-foreground font-medium truncate">{pursuit.name}</span>
+      </nav>
+
+    <div className="flex flex-col xl:flex-row gap-4 xl:gap-5 items-stretch xl:items-start">
+      <div className="flex-1 min-w-0 space-y-4 order-2 xl:order-1">
+        <div className="bg-card rounded-xl border shadow-sm p-4 sm:p-5 flex flex-col sm:flex-row justify-between gap-4 sm:gap-6 items-start">
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-lg font-bold text-foreground mb-1">{pursuit.name}</h1>
+            <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5">
+              <span>{pursuit.typeLabel}</span>
+              <span>·</span>
+              <span className="font-mono">{pursuit.solicitationRef}</span>
+              <span>·</span>
+              <span>Score <strong className="text-foreground">{pursuit.score}</strong>/100</span>
+              {pursuit.dueDate && <><span>·</span><span>Due {pursuit.dueDate}</span></>}
             </div>
           </div>
-          <div className="text-right shrink-0">
-            <div className="text-[10.5px] uppercase tracking-wider text-ink-soft mb-1">Recommendation</div>
+          <div className="text-left sm:text-right shrink-0">
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">
+              Recommendation
+            </div>
             <RecBig rec={pursuit.rec} closed={pursuit.closed} />
-            <div className="text-[11.5px] text-ink-soft mt-0.5">Confidence: {pursuit.confidence}%</div>
+            <div className="text-[11px] text-muted-foreground mt-1">
+              Confidence: <span className="font-mono font-semibold text-foreground">{pursuit.confidence}%</span>
+            </div>
           </div>
         </div>
 
-        {/* Rationale */}
-        <div className="bg-panel border border-line mb-4">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-line">
-            <h3 className="text-[13px] font-bold">Rationale</h3>
-            <span className="text-[11.5px] text-ink-soft">TRIAGE-02 capability mapping visible</span>
+        {/* Rationale card */}
+        <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+            <h3 className="oe-card-title">Rationale</h3>
+            <span className="text-[11px] text-muted-foreground font-mono">TRIAGE-02</span>
           </div>
-          <div className="p-4">
-            <ul className="list-disc pl-4 text-[13px] space-y-1.5">
+          <div className="p-5">
+            <ul className="list-disc pl-4 text-sm space-y-2 text-foreground">
               {pursuit.rationale.map((r, i) => <li key={i}>{r}</li>)}
             </ul>
           </div>
         </div>
 
-        {/* Scope summary */}
-        <div className="bg-panel border border-line mb-4">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-line">
-            <h3 className="text-[13px] font-bold">Scope Summary</h3>
+        {/* Scope summary card */}
+        <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-border">
+            <h3 className="oe-card-title">Scope Summary</h3>
           </div>
-          <div className="grid grid-cols-3 divide-x divide-line">
-            <div className="p-4">
-              <h4 className="text-[10.5px] uppercase tracking-wider text-ink-soft font-bold mb-1.5">Objective</h4>
-              <ul className="list-disc pl-4 text-xs space-y-1">{pursuit.docSummary.objective.map((o, i) => <li key={i}>{o}</li>)}</ul>
-            </div>
-            <div className="p-4">
-              <h4 className="text-[10.5px] uppercase tracking-wider text-ink-soft font-bold mb-1.5">Services</h4>
-              <ul className="list-disc pl-4 text-xs space-y-1">{pursuit.docSummary.services.map((s, i) => <li key={i}>{s}</li>)}</ul>
-            </div>
-            <div className="p-4">
-              <h4 className="text-[10.5px] uppercase tracking-wider text-ink-soft font-bold mb-1.5">Deliverables</h4>
-              <ul className="list-disc pl-4 text-xs space-y-1">{pursuit.docSummary.deliverables.map((d, i) => <li key={i}>{d}</li>)}</ul>
-            </div>
-          </div>
-        </div>
-
-        {/* Requirement mapping */}
-        <div className="bg-panel border border-line mb-4">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-line">
-            <h3 className="text-[13px] font-bold">Requirement → Capability Mapping</h3>
-            <span className="text-[11.5px] text-ink-soft">
-              {pursuit.reqmap.filter(r => r.status === "mapped").length} of {pursuit.reqmap.length} mapped
-            </span>
-          </div>
-          <table className="w-full border-collapse text-xs">
-            <thead>
-              <tr>
-                <th className="text-left text-[10.5px] uppercase tracking-wider text-ink-soft px-2.5 py-2 border-b border-line-strong">Requirement</th>
-                <th className="text-left text-[10.5px] uppercase tracking-wider text-ink-soft px-2.5 py-2 border-b border-line-strong">Status</th>
-                <th className="text-left text-[10.5px] uppercase tracking-wider text-ink-soft px-2.5 py-2 border-b border-line-strong">Mapped Node</th>
-                <th className="text-left text-[10.5px] uppercase tracking-wider text-ink-soft px-2.5 py-2 border-b border-line-strong">Evidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pursuit.reqmap.map((r, i) => (
-                <tr key={i} className="border-b border-line last:border-b-0">
-                  <td className="px-2.5 py-2.5 align-top">{r.req}</td>
-                  <td className="px-2.5 py-2.5 align-top">
-                    <span className={`text-[10.5px] font-bold px-1.5 py-px rounded-sm ${
-                      r.status === "mapped" ? "bg-trace-soft text-trace" : "bg-nogo-soft text-nogo"
-                    }`}>
-                      {r.status === "mapped" ? "MAPPED" : "UNMAPPED"}
-                    </span>
-                  </td>
-                  <td className="px-2.5 py-2.5 align-top font-mono text-[11.5px] text-brand">{r.node ?? "—"}</td>
-                  <td className="px-2.5 py-2.5 align-top text-ink-soft">{r.evidence}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Gap analysis */}
-        {pursuit.gaps.length > 0 && (
-          <div className="border border-dashed border-line-strong bg-[#FCFCFA] p-4 mb-4">
-            <div className="flex items-center gap-1.5 text-[10.5px] uppercase tracking-wider text-ink-soft font-bold mb-2.5">
-              <span className="w-[7px] h-[7px] bg-cond inline-block" />
-              Capability Gap Analysis
-            </div>
-            {pursuit.gaps.map(g => (
-              <div key={g.id} className="flex justify-between gap-3.5 py-3 border-b border-line last:border-b-0 flex-wrap">
-                <div className="flex-1">
-                  <div className="font-mono text-[11px] text-ink-soft">{g.id}</div>
-                  <div className="text-[13px] font-semibold mt-0.5 mb-1">{g.title}</div>
-                  <div className="text-[11.5px] text-ink-soft">Demand: {g.demand} · Closure: {g.closure}</div>
-                </div>
-                <span className="text-[10.5px] font-bold px-1.5 py-px rounded-sm bg-nogo-soft text-nogo whitespace-nowrap h-fit">
-                  {g.crit}
-                </span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border">
+            {([
+              ["Objective", pursuit.docSummary.objective],
+              ["Services", pursuit.docSummary.services],
+              ["Deliverables", pursuit.docSummary.deliverables],
+            ] as const).map(([heading, items]) => (
+              <div key={heading} className="p-4 sm:p-5">
+                <h4 className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">
+                  {heading}
+                </h4>
+                {items.length > 0 ? (
+                  <ul className="list-disc pl-4 text-xs space-y-1.5 text-foreground">
+                    {items.map((item, i) => <li key={i}>{item}</li>)}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">Not yet populated.</p>
+                )}
               </div>
             ))}
           </div>
-        )}
+        </div>
 
-        {/* RFUND */}
-        <div className="bg-panel border border-line mb-4">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-line">
-            <h3 className="text-[13px] font-bold">R&D Funding Eligibility (RFUND)</h3>
-            <span className="text-[11.5px] text-ink-soft">Lane {pursuit.rfund.lane} · {pursuit.rfund.tier}</span>
+        {/* Documents card */}
+        <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+            <h3 className="oe-card-title">Documents</h3>
+            <button
+              onClick={() => setDocUploadOpen(true)}
+              className="text-xs font-medium px-3 py-1.5 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+            >
+              + Upload
+            </button>
           </div>
-          <div className="p-4 flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-[70px] h-[5px] bg-[#EAEAE3] rounded-sm overflow-hidden">
-                <span className="block h-full bg-trace" style={{ width: `${pursuit.rfund.score}%` }} />
-              </div>
-              <span className="font-mono font-bold text-[13px]">{pursuit.rfund.score}</span>
+          <div className="p-5">
+            <div className="flex flex-wrap gap-2">
+              {[...pursuit.documents.map(d => d.name), ...uploadedDocs].map((name, i) => (
+                <div key={i} className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 bg-muted/20">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary shrink-0">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                  <span className="text-xs font-medium text-foreground">{name}</span>
+                </div>
+              ))}
             </div>
-            <p className="text-xs text-ink-soft flex-1">{pursuit.rfund.note}</p>
           </div>
         </div>
 
-        {/* Response action items */}
-        {pursuit.responseActionItems && pursuit.responseActionItems.length > 0 && (
-          <div className="bg-panel border border-line mb-4">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-line">
-              <h3 className="text-[13px] font-bold">Response Action Items</h3>
-              <span className="text-[11.5px] text-ink-soft">{pursuit.responseActionItems.filter(r => r.status === "Open").length} open</span>
+        {/* Requirement mapping card */}
+        {pursuit.reqmap.length > 0 && (
+          <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+              <h3 className="oe-card-title">Requirement → Capability Mapping</h3>
+              <span className="text-xs text-muted-foreground">
+                <span className="font-mono font-semibold text-foreground">
+                  {pursuit.reqmap.filter(r => r.status === "mapped").length}
+                </span>{" "}
+                of {pursuit.reqmap.length} mapped
+              </span>
             </div>
-            <div className="divide-y divide-line">
-              {pursuit.responseActionItems.map(item => (
-                <div key={item.id} className="px-4 py-3 flex justify-between items-start gap-4">
-                  <div className="flex-1">
-                    <div className="text-[13px] font-semibold mb-1">{item.description}</div>
-                    <div className="text-[11.5px] text-ink-soft">
-                      {item.assignedPartnerId ? getPartner(item.assignedPartnerId)?.name : item.assignedInternal}
-                      {" · Due "}{item.dueAt}
-                      {" · Blocks "}{item.gates.join(", ")}
+            <div className="overflow-x-auto oe-touch-scroll">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="oe-table-header">
+                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Requirement</th>
+                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
+                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Mapped Node</th>
+                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Evidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pursuit.reqmap.map((r, i) => (
+                    <tr key={i} className="oe-table-row border-b border-border last:border-b-0">
+                      <td className="px-4 py-3 align-top text-foreground">{r.req}</td>
+                      <td className="px-4 py-3 align-top">
+                        <StatusBadge
+                          status={r.status}
+                          label={r.status === "mapped" ? "MAPPED" : "UNMAPPED"}
+                        />
+                      </td>
+                      <td className="px-4 py-3 align-top font-mono text-[11px] text-primary">{r.node ?? "—"}</td>
+                      <td className="px-4 py-3 align-top text-muted-foreground">{r.evidence}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Gap analysis card */}
+        {pursuit.gaps.length > 0 && (
+          <div className="bg-card rounded-xl border border-dashed border-destructive/30 shadow-sm overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-border flex items-center gap-2">
+              <div className="w-2 h-2 rounded-sm bg-cond" />
+              <h3 className="oe-card-title">Capability Gap Analysis</h3>
+            </div>
+            <div className="divide-y divide-border">
+              {pursuit.gaps.map(g => (
+                <div key={g.id} className="px-4 sm:px-5 py-4 flex flex-col xs:flex-row justify-between gap-2 xs:gap-4 items-start">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-mono text-[10px] text-muted-foreground mb-0.5">{g.id}</div>
+                    <div className="text-sm font-semibold text-foreground mb-1">{g.title}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Demand: {g.demand} · Closure: {g.closure}
                     </div>
                   </div>
-                  <span className={`text-[10.5px] font-bold px-1.5 py-px rounded-sm ${
-                    item.status === "Open" ? "bg-cond-soft text-cond" : "bg-go-soft text-go"
-                  }`}>
-                    {item.status}
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md oe-status-nogo whitespace-nowrap shrink-0">
+                    {g.crit}
                   </span>
                 </div>
               ))}
@@ -183,26 +239,85 @@ export function OpportunityView({
           </div>
         )}
 
-        {/* Decision footer */}
-        <div className="bg-panel border border-line px-4 py-3.5 flex items-center justify-between gap-4 mt-4">
-          <div className="text-xs text-ink-soft">
-            Decision record: <span className="font-mono">{pursuit.decisionRecord.id}</span> · {pursuit.decisionRecord.action}
+        {/* RFUND card */}
+        <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+            <h3 className="oe-card-title">R&D Funding Eligibility (RFUND)</h3>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-mono">Lane {pursuit.rfund.lane}</span>
+              <span>·</span>
+              <span>{pursuit.rfund.tier}</span>
+            </div>
           </div>
-          <div className="flex gap-2.5">
+          <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+                <span className="block h-full bg-trace rounded-full" style={{ width: `${pursuit.rfund.score}%` }} />
+              </div>
+              <span className="font-mono font-bold text-sm text-foreground">{pursuit.rfund.score}</span>
+            </div>
+            <p className="text-xs text-muted-foreground flex-1">{pursuit.rfund.note}</p>
+          </div>
+        </div>
+
+        {/* Response action items card */}
+        {pursuit.responseActionItems && pursuit.responseActionItems.length > 0 && (
+          <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+              <h3 className="oe-card-title">Response Action Items</h3>
+              <span className="text-xs font-mono">
+                <span className="text-cond font-semibold">
+                  {pursuit.responseActionItems.filter(r => r.status === "Open").length}
+                </span>{" "}
+                <span className="text-muted-foreground">open</span>
+              </span>
+            </div>
+            <div className="divide-y divide-border">
+              {pursuit.responseActionItems.map(item => (
+                <div key={item.id} className="px-5 py-3.5 flex justify-between items-start gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-foreground mb-1">{item.description}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {item.assignedPartnerId ? getPartner(item.assignedPartnerId)?.name : item.assignedInternal}
+                      {" · Due "}{item.dueAt}
+                      {" · Blocks "}{item.gates.join(", ")}
+                    </div>
+                  </div>
+                  <StatusBadge status={item.status} label={item.status} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Decision footer */}
+        <div className="bg-card rounded-xl border shadow-sm px-4 sm:px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="text-xs text-muted-foreground">
+            Decision record:{" "}
+            <span className="font-mono text-foreground">{pursuit.decisionRecord.id}</span>
+            {" · "}{pursuit.decisionRecord.action}
+          </div>
+          <div className="flex gap-2.5 flex-wrap">
             {!pursuit.closed && pursuit.rec === "go" && (
               <button
                 onClick={onDraft}
-                className="text-xs font-semibold px-3.5 py-2 rounded-sm bg-brand border-brand text-white cursor-pointer hover:bg-[#233049]"
+                className="text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm"
               >
                 Open Response Builder →
               </button>
             )}
             {!pursuit.closed && (
               <>
-                <button className="text-xs font-semibold px-3.5 py-2 rounded-sm bg-go border-go text-white cursor-pointer hover:bg-[#255A42]">
+                <button
+                  onClick={() => { setConfirmReason(""); setConfirmOpen("go"); }}
+                  className="text-xs font-semibold px-4 py-2 rounded-md bg-go text-white cursor-pointer transition-all hover:opacity-90 shadow-sm"
+                >
                   Confirm Go
                 </button>
-                <button className="text-xs font-semibold px-3.5 py-2 rounded-sm bg-white border border-nogo text-nogo cursor-pointer hover:bg-nogo-soft">
+                <button
+                  onClick={() => { setConfirmReason(""); setConfirmOpen("nogo"); }}
+                  className="text-xs font-semibold px-4 py-2 rounded-md border border-nogo text-nogo bg-card cursor-pointer transition-all hover:bg-nogo-soft"
+                >
                   Confirm No-Go
                 </button>
               </>
@@ -212,20 +327,22 @@ export function OpportunityView({
       </div>
 
       {/* Rail — Pursuit timeline */}
-      <div className="w-[230px] shrink-0 bg-panel border border-line sticky top-7">
-        <div className="px-4 py-3.5 border-b border-line">
-          <div className="text-[10px] uppercase tracking-wider text-brand font-bold mb-0.5">{pursuit.typeLabel}</div>
-          <div className="text-[13px] font-bold leading-snug">{pursuit.name}</div>
+      <div className="w-full xl:w-[240px] shrink-0 bg-card rounded-xl border shadow-sm xl:sticky xl:top-6 overflow-hidden order-1 xl:order-2">
+        <div className="px-4 sm:px-5 py-4 border-b border-border">
+          <div className="text-[10px] uppercase tracking-widest text-primary font-bold mb-1">{pursuit.typeLabel}</div>
+          <div className="text-sm font-bold text-foreground leading-snug">{pursuit.name}</div>
           {pursuit.dueDate && (
-            <div className={`text-[11.5px] mt-2 px-2 py-1.5 rounded-sm ${
-              pursuit.closed ? "bg-closed-soft text-closed" :
-              pursuit.rec === "go" ? "bg-go-soft text-go" : "bg-cond-soft text-cond"
-            }`}>
+            <div className={cn(
+              "text-[11px] mt-2.5 px-2.5 py-1.5 rounded-md font-medium inline-block",
+              pursuit.closed ? "oe-status-closed" :
+              pursuit.rec === "go" ? "oe-status-go" : "oe-status-cond"
+            )}>
               {pursuit.closed ? "Closed" : `Due: ${pursuit.dueDate}`}
             </div>
           )}
         </div>
-        <div className="p-4">
+        <div className="p-4 sm:p-5">
+          <div className="flex xl:flex-col gap-0 overflow-x-auto oe-touch-scroll xl:overflow-visible pb-1 xl:pb-0">
           {[
             { label: "Intake & shredding", done: true },
             { label: "Triage scored", done: true },
@@ -234,24 +351,107 @@ export function OpportunityView({
             { label: "Response drafting", done: false, current: pursuit.rec === "go" && !pursuit.closed },
             { label: "Review & submission", done: false },
           ].map((step, i, arr) => (
-            <div key={i} className="flex gap-2.5 relative pb-5 last:pb-0">
+            <div key={i} className="flex xl:flex-row flex-col items-center xl:items-start gap-2 xl:gap-3 relative pb-0 xl:pb-5 last:pb-0 min-w-[5.5rem] xl:min-w-0 flex-1 xl:flex-none">
               {i < arr.length - 1 && (
-                <div className="absolute left-[5px] top-4 bottom-0 w-px bg-line-strong" />
+                <>
+                  <div className="hidden xl:block absolute left-[5px] top-4 bottom-0 w-px bg-border" />
+                  <div className="xl:hidden absolute left-1/2 top-[5px] right-0 h-px bg-border w-full" />
+                </>
               )}
-              <div className={`w-[11px] h-[11px] rounded-full border-2 shrink-0 mt-0.5 z-10 ${
-                step.done ? "bg-brand border-brand" :
-                step.current ? "bg-white border-brand shadow-[0_0_0_3px_var(--color-brand-soft)]" :
-                "bg-white border-line-strong"
-              }`} />
-              <span className={`text-xs leading-snug ${
-                step.done ? "text-ink" : step.current ? "font-bold text-brand" : "text-ink-soft"
-              }`}>
+              <div className={cn(
+                "w-3 h-3 rounded-full border-2 shrink-0 mt-0.5 z-10 transition-all",
+                step.done
+                  ? "bg-primary border-primary"
+                  : step.current
+                    ? "bg-card border-primary ring-[3px] ring-primary/15"
+                    : "bg-card border-muted"
+              )} />
+              <span className={cn(
+                "text-[10px] xl:text-xs leading-snug text-center xl:text-left",
+                step.done ? "text-foreground" :
+                step.current ? "font-bold text-primary" :
+                "text-muted-foreground"
+              )}>
                 {step.label}
               </span>
             </div>
           ))}
+          </div>
         </div>
       </div>
+      </div>
+
+      {/* Confirm Decision Modal */}
+      <Modal
+        open={confirmOpen !== null}
+        onClose={() => setConfirmOpen(null)}
+        title={confirmOpen === "go" ? "Confirm Go Decision" : "Confirm No-Go Decision"}
+      >
+        <div className="space-y-4">
+          <div className={cn(
+            "p-4 rounded-lg border text-sm",
+            confirmOpen === "go"
+              ? "bg-[hsl(var(--status-go-soft))] border-[hsl(var(--status-go))]/20 text-[hsl(var(--status-go))]"
+              : "bg-[hsl(var(--status-nogo-soft))] border-[hsl(var(--status-nogo))]/20 text-[hsl(var(--status-nogo))]"
+          )}>
+            {confirmOpen === "go"
+              ? `You are confirming GO for "${pursuit.name}". This will advance the pursuit to response drafting.`
+              : `You are confirming NO-GO for "${pursuit.name}". This will close the pursuit.`
+            }
+          </div>
+          <FormField label="Reason / notes (optional)">
+            <TextArea
+              value={confirmReason}
+              onChange={setConfirmReason}
+              placeholder="Add context for the decision record…"
+              rows={3}
+            />
+          </FormField>
+          <div className="text-[11px] text-muted-foreground">
+            Decision record <span className="font-mono text-foreground">{pursuit.decisionRecord.id}</span> will be updated.
+            Reviewer: <span className="text-foreground">J. Tran (Bid Manager)</span>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <SecondaryButton onClick={() => setConfirmOpen(null)}>Cancel</SecondaryButton>
+            {confirmOpen === "go" ? (
+              <button
+                onClick={handleConfirm}
+                className="text-xs font-semibold px-4 py-2 rounded-md bg-go text-white cursor-pointer transition-all hover:opacity-90 shadow-sm"
+              >
+                Confirm Go
+              </button>
+            ) : (
+              <button
+                onClick={handleConfirm}
+                className="text-xs font-semibold px-4 py-2 rounded-md bg-destructive text-white cursor-pointer transition-all hover:opacity-90 shadow-sm"
+              >
+                Confirm No-Go
+              </button>
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      {/* Upload Document Modal */}
+      <Modal open={docUploadOpen} onClose={() => setDocUploadOpen(false)} title="Upload Document">
+        <div className="space-y-4">
+          <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+            <div className="text-3xl mb-2">📄</div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Drag & drop files here, or click to browse
+            </p>
+            <button
+              onClick={handleUploadDoc}
+              className="text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm"
+            >
+              Select File
+            </button>
+          </div>
+          <div className="flex justify-end pt-2">
+            <SecondaryButton onClick={() => setDocUploadOpen(false)}>Done</SecondaryButton>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

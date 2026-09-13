@@ -1,13 +1,193 @@
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-::selection {
-  background: #CFE0DA;
+/*
+ * Billity AI Design Tokens — ported from @billity/design-tokens
+ * Palette: Primary #0050BC · Bright #02AFEF · Sky #96E0FF · Navy #002857
+ */
+:root {
+  color-scheme: light;
+
+  /* ---- Scrollbar ---- */
+  --scrollbar-track: 210 11% 96%;
+  --scrollbar-thumb: 210 6% 67%;
+  --scrollbar-thumb-hover: 210 6% 55%;
+
+  /* ---- Surfaces ---- */
+  --background: 210 11% 96%;
+  --foreground: 0 0% 7%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 7%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 7%;
+
+  /* ---- Brand ---- */
+  --primary: 214 100% 37%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 6% 92%;
+  --secondary-foreground: 0 0% 7%;
+  --muted: 210 6% 87%;
+  --muted-foreground: 216 2% 45%;
+  --accent: 196 93% 95%;
+  --accent-foreground: 214 100% 37%;
+  --destructive: 4 74% 49%;
+  --destructive-foreground: 0 0% 100%;
+
+  /* ---- Chrome ---- */
+  --border: 210 6% 87%;
+  --input: 210 5% 79%;
+  --ring: 196 98% 47%;
+  --radius: 0.5rem;
+
+  /* ---- Chart / data-viz ---- */
+  --chart-primary: #0050BC;
+  --chart-secondary: #02AFEF;
+  --chart-success: #12A150;
+  --chart-warning: #C97A09;
+  --chart-danger: #D92D20;
+  --chart-muted: #94979A;
+
+  /* ---- Tooltip ---- */
+  --tooltip: 0 0% 100%;
+  --tooltip-foreground: 0 0% 7%;
+  --tooltip-border: 210 6% 87%;
+
+  /* ---- Billity brand primitives ---- */
+  --billity-bright: #02AFEF;
+  --billity-sky: #96E0FF;
+  --billity-navy: #002857;
+  --billity-magenta: #E300B7;
+  --billity-purple: #7D00B7;
+
+  /* ---- Domain: opportunity status tokens ---- */
+  --status-go: 147 56% 30%;
+  --status-go-soft: 145 30% 92%;
+  --status-nogo: 8 56% 37%;
+  --status-nogo-soft: 8 40% 95%;
+  --status-cond: 36 62% 44%;
+  --status-cond-soft: 40 70% 93%;
+  --status-trace: 184 35% 37%;
+  --status-trace-soft: 184 30% 93%;
+  --status-closed: 50 3% 53%;
+  --status-closed-soft: 50 5% 92%;
 }
 
-body {
-  background: #F5F5F1;
-  color: #171A21;
-  -webkit-font-smoothing: antialiased;
+@layer base {
+  * {
+    @apply border-border;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--scrollbar-thumb) / 0.92) hsl(var(--scrollbar-track));
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Hanken Grotesk', -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  svg.lucide {
+    stroke-width: 1.75;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: hsl(var(--scrollbar-track));
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: hsl(var(--scrollbar-thumb) / 0.85);
+    border-radius: 9999px;
+    border: 2px solid hsl(var(--scrollbar-track));
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--scrollbar-thumb-hover) / 0.95);
+    border: 2px solid hsl(var(--scrollbar-track));
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-corner {
+    background: hsl(var(--scrollbar-track));
+  }
+}
+
+@layer components {
+  /* ---- Heading hierarchy (matches Autograph admin) ---- */
+  .oe-page-title {
+    @apply text-xl font-bold tracking-tight text-foreground sm:text-2xl;
+  }
+  .oe-section-title {
+    @apply text-base font-semibold text-foreground sm:text-lg;
+  }
+  .oe-card-title {
+    @apply text-sm font-semibold leading-snug text-foreground sm:text-base;
+  }
+
+  /* ---- Form controls (12px inset on both sides; custom chevron, never native) ---- */
+  .oe-field {
+    @apply w-full text-xs px-3 py-2 rounded-md border border-input bg-card text-foreground
+      placeholder:text-muted-foreground
+      focus:border-ring focus:ring-ring/50 focus:ring-[3px] outline-none transition-all;
+  }
+  .oe-select {
+    @apply w-full appearance-none text-xs pl-3 pr-9 py-2 rounded-md border border-input bg-card text-foreground
+      cursor-pointer
+      focus:border-ring focus:ring-ring/50 focus:ring-[3px] outline-none transition-all;
+  }
+  .oe-select::-ms-expand {
+    display: none;
+  }
+
+  /* ---- Table chrome ---- */
+  .oe-table-header {
+    @apply border-b border-border bg-muted/60;
+  }
+  .oe-table-row {
+    @apply bg-card transition-colors hover:bg-muted/30;
+  }
+
+  /* ---- Status pill colors ---- */
+  .oe-status-go       { @apply bg-[hsl(var(--status-go-soft))] text-[hsl(var(--status-go))]; }
+  .oe-status-nogo     { @apply bg-[hsl(var(--status-nogo-soft))] text-[hsl(var(--status-nogo))]; }
+  .oe-status-cond     { @apply bg-[hsl(var(--status-cond-soft))] text-[hsl(var(--status-cond))]; }
+  .oe-status-trace    { @apply bg-[hsl(var(--status-trace-soft))] text-[hsl(var(--status-trace))]; }
+  .oe-status-closed   { @apply bg-[hsl(var(--status-closed-soft))] text-[hsl(var(--status-closed))]; }
+  .oe-status-pending  { @apply bg-muted text-muted-foreground; }
+}
+
+::selection {
+  background: hsl(196 93% 95%);
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-slide-up {
+  animation: slide-up 0.25s ease-out;
+}
+
+/* ---- Responsive shell helpers ---- */
+.oe-touch-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+body.oe-nav-locked {
+  overflow: hidden;
+  touch-action: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-drawer-in,
+  .animate-drawer-out,
+  .animate-backdrop-in,
+  .animate-slide-up {
+    animation-duration: 0.01ms !important;
+  }
 }

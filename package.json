@@ -5,6 +5,7 @@
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "dev": "turbo dev",
+    "go": "powershell -NoProfile -ExecutionPolicy Bypass -File ./go.ps1",
     "build": "turbo build",
     "lint": "turbo lint",
     "test": "turbo test",
