@@ -20,6 +20,9 @@ importers:
       '@neondatabase/serverless':
         specifier: ^0.10.0
         version: 0.10.4
+      '@next/env':
+        specifier: ^15.1.0
+        version: 15.5.25
       '@opportunity-engine/ai':
         specifier: workspace:*
         version: link:../../packages/ai

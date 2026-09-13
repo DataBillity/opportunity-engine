@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.0",
+    "@next/env": "^15.1.0",
     "@opportunity-engine/ai": "workspace:*",
     "@opportunity-engine/contracts": "workspace:*",
     "@opportunity-engine/core": "workspace:*",
