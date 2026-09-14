@@ -237,13 +237,7 @@ export function TopBar({
         </button>
 
         {/* Brand */}
-        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 min-w-0">
-          <BrandMark size={28} />
-          <span className="font-bold tracking-tight text-[14px] sm:text-[15px] truncate">
-            <span className="xs:hidden">OE</span>
-            <span className="hidden xs:inline">Opportunity Engine</span>
-          </span>
-        </div>
+        <BrandMark height={24} className="shrink-0" />
 
         {/* Navigation */}
         <nav className="hidden lg:flex items-center gap-1 flex-1 min-w-0 overflow-x-auto oe-touch-scroll">

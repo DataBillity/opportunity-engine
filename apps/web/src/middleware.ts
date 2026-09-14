@@ -2,10 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE_NAME, readSessionToken } from "@/lib/auth";
 
 function isPublicPath(pathname: string) {
-  return (
-    pathname === "/login" ||
-    pathname.startsWith("/api/auth/")
-  );
+  return pathname === "/login" || pathname.startsWith("/login/") || pathname.startsWith("/api/auth/");
 }
 
 export async function middleware(request: NextRequest) {
@@ -20,7 +17,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (session && pathname === "/login") {
+  if (session && (pathname === "/login" || pathname === "/login/forgot")) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 

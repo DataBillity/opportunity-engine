@@ -19,6 +19,7 @@ const nextConfig: NextConfig = {
     "mammoth",
     "@neondatabase/serverless",
     "drizzle-orm",
+    "resend",
   ],
 };
 

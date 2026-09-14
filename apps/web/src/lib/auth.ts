@@ -80,16 +80,20 @@ export function getExpectedCredentials(): { username: string; password: string }
 }
 
 export function authIsConfigured(): boolean {
-  return Boolean(getAuthSecret() && getExpectedUsernames().length && getExpectedPassword());
+  return Boolean(getAuthSecret() && getExpectedUsernames().length);
+}
+
+export function isAllowedUsername(username: string): boolean {
+  const submitted = username.trim().toLowerCase();
+  if (!submitted) return false;
+  return getExpectedUsernames().some(allowedUser => timingSafeEqual(submitted, allowedUser));
 }
 
 export function credentialsMatch(username: string, password: string): boolean {
-  const allowed = getExpectedUsernames();
   const expectedPass = getExpectedPassword();
-  if (!allowed.length || !expectedPass) return false;
-  const submittedUser = username.trim().toLowerCase();
+  if (!expectedPass) return false;
   const submittedPass = password.trim();
-  const userOk = allowed.some(allowedUser => timingSafeEqual(submittedUser, allowedUser));
+  const userOk = isAllowedUsername(username);
   const passOk = timingSafeEqual(submittedPass, expectedPass);
   return userOk && passOk;
 }

@@ -95,10 +95,7 @@ export function MobileNav({
         style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="flex items-center justify-between gap-3 px-4 h-14 shrink-0 bg-[var(--billity-navy)] text-white">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <BrandMark size={28} />
-            <span className="font-bold tracking-tight text-[15px] truncate">Opportunity Engine</span>
-          </div>
+          <BrandMark height={24} className="min-w-0" />
           <button
             ref={closeRef}
             onClick={onClose}

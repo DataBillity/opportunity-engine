@@ -3,33 +3,14 @@ import {
   COOKIE_NAME,
   authIsConfigured,
   createSessionToken,
-  credentialsMatch,
   sessionCookieOptions,
 } from "@/lib/auth";
 import { requestIsSameOrigin, safeReturnPath } from "@/lib/auth-shared";
+import { clientKey, clearAttempts, tooManyAttempts } from "@/lib/auth-rate-limit";
+import { verifyLoginCredentials } from "@/lib/operator-credentials";
 
-const WINDOW_MS = 10 * 60 * 1000;
-const MAX_ATTEMPTS = 8;
-const attempts = new Map<string, { count: number; resetAt: number }>();
-
-function clientKey(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "local"
-  );
-}
-
-function tooManyAttempts(key: string): boolean {
-  const now = Date.now();
-  const current = attempts.get(key);
-  if (!current || current.resetAt < now) {
-    attempts.set(key, { count: 1, resetAt: now + WINDOW_MS });
-    return false;
-  }
-  current.count += 1;
-  return current.count > MAX_ATTEMPTS;
-}
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   if (!requestIsSameOrigin(request)) {
@@ -38,13 +19,13 @@ export async function POST(request: Request) {
 
   if (!authIsConfigured()) {
     return NextResponse.json(
-      { error: "Sign-in is not configured. Set AUTH_USERNAME, AUTH_PASSWORD, and AUTH_SECRET." },
+      { error: "Sign-in is not configured. Set AUTH_USERNAME and AUTH_SECRET." },
       { status: 503 },
     );
   }
 
   const key = clientKey(request);
-  if (tooManyAttempts(key)) {
+  if (tooManyAttempts(key, 8)) {
     return NextResponse.json(
       { error: "Too many attempts. Try again in a few minutes." },
       { status: 429 },
@@ -60,11 +41,11 @@ export async function POST(request: Request) {
 
   const username = typeof body.username === "string" ? body.username.trim() : "";
   const password = typeof body.password === "string" ? body.password : "";
-  if (!username || !password || !credentialsMatch(username, password)) {
+  if (!username || !password || !(await verifyLoginCredentials(username, password))) {
     return NextResponse.json({ error: "Those credentials don’t match our records." }, { status: 401 });
   }
 
-  attempts.delete(key);
+  clearAttempts(key);
   const email = username.toLowerCase();
   const token = await createSessionToken(email);
   const response = NextResponse.json({ ok: true, redirectTo: safeReturnPath(typeof body.from === "string" ? body.from : "/") });

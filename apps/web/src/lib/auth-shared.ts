@@ -1,3 +1,5 @@
+export const MIN_PASSWORD_LENGTH = 10;
+
 export function safeReturnPath(from: string | null | undefined): string {
   if (!from || !from.startsWith("/") || from.startsWith("//") || from.startsWith("/login")) return "/";
   return from;

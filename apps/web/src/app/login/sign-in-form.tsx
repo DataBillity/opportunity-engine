@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { safeReturnPath } from "@/lib/auth-shared";
 
 export function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [username, setUsername] = useState("tech@databillity.com");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +63,7 @@ export function SignInForm() {
           spellCheck={false}
           value={username}
           onChange={e => setUsername(e.target.value)}
-            placeholder="tech@databillity.com"
+            placeholder="you@databillity.com"
           className="oe-field text-sm py-2.5"
           aria-invalid={Boolean(error)}
           required
@@ -70,9 +71,17 @@ export function SignInForm() {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="password" className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
-          Password
-        </label>
+        <div className="flex items-center justify-between gap-3">
+          <label htmlFor="password" className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
+            Password
+          </label>
+          <Link
+            href={username.trim() ? `/login/forgot?email=${encodeURIComponent(username.trim())}` : "/login/forgot"}
+            className="text-[11px] font-semibold text-primary hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </div>
         <div className="relative">
           <input
             id="password"

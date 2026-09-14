@@ -1,31 +1,44 @@
 import { cn } from "@/lib/cn";
 
+const LOGO_SRC = "/brand/databillity-horizontal-white.png";
+const LOGO_ASPECT = 1024 / 140;
+
 export function BrandMark({
-  size = 28,
+  height = 22,
   className,
 }: {
-  size?: number;
+  height?: number;
   className?: string;
 }) {
-  const icon = Math.round(size * 0.5);
+  const width = Math.round(height * LOGO_ASPECT);
   return (
-    <div
-      className={cn("rounded-lg bg-[var(--billity-bright)] flex items-center justify-center shrink-0", className)}
-      style={{ width: size, height: size }}
-    >
-      <svg
-        width={icon}
-        height={icon}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="white"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden
-      >
-        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-      </svg>
+    <img
+      src={LOGO_SRC}
+      alt="DataBillity"
+      width={width}
+      height={height}
+      className={cn("w-auto shrink-0 select-none", className)}
+      style={{ height }}
+      draggable={false}
+    />
+  );
+}
+
+export function BrandLockup({
+  height = 22,
+  className,
+  subtitle = "Opportunity Engine",
+}: {
+  height?: number;
+  className?: string;
+  subtitle?: string;
+}) {
+  return (
+    <div className={cn("flex flex-col justify-center min-w-0", className)}>
+      <BrandMark height={height} />
+      <span className="mt-0.5 text-[10px] sm:text-[11px] font-semibold tracking-[0.08em] text-white/75 leading-none truncate">
+        {subtitle}
+      </span>
     </div>
   );
 }
