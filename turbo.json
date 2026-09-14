@@ -4,7 +4,18 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "env": [
+        "ANTHROPIC_API_KEY",
+        "AUTH_PASSWORD",
+        "AUTH_SECRET",
+        "AUTH_USERNAME",
+        "DATABASE_URL",
+        "GOOGLE_AI_API_KEY",
+        "NEXT_PUBLIC_APP_URL",
+        "RESEND_API_KEY",
+        "RESEND_FROM"
+      ]
     },
     "dev": {
       "cache": false,

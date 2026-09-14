@@ -33,7 +33,7 @@ export default function LoginLayout({ children }: { children: React.ReactNode })
 
         <div className="relative">
           <div className="flex items-center gap-3">
-            <BrandMark size={36} />
+            <BrandMark height={36} />
             <div>
               <div className="font-bold tracking-tight text-[17px] leading-tight">Opportunity Engine</div>
               <div className="text-[11px] uppercase tracking-[0.18em] text-white/55 font-semibold mt-0.5">
@@ -75,7 +75,7 @@ export default function LoginLayout({ children }: { children: React.ReactNode })
 
       <main className="flex flex-col min-h-dvh">
         <header className="lg:hidden flex items-center gap-2.5 px-5 h-14 shrink-0 bg-[var(--billity-navy)] text-white shadow-md">
-          <BrandMark size={28} />
+          <BrandMark height={28} />
           <div className="min-w-0">
             <div className="font-bold tracking-tight text-[15px] leading-tight truncate">Opportunity Engine</div>
             <div className="text-[10px] uppercase tracking-[0.16em] text-white/55 font-semibold">Command Center</div>
