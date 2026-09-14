@@ -1,0 +1,16 @@
+.git
+.github
+.cursor
+.vscode
+**/.next
+**/node_modules
+**/dist
+**/.turbo
+**/.vercel
+**/*.tsbuildinfo
+.env
+.env.*
+!.env.example
+apps/web/**
+!apps/web/package.json
+*.md
