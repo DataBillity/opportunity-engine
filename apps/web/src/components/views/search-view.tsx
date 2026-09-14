@@ -1,15 +1,20 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { searchResults as initialResults, type SearchResult, type Organization } from "@/lib/mock-data";
 import { Modal, FormField, TextArea, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
+import { parseBulkLeads, LEAD_CHANNELS } from "@/lib/create-lead";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 
 export function SearchView({
   onAddOrg,
+  onAddOrgs,
+  onImportedLeads,
 }: {
   onAddOrg: (org: Organization) => void;
+  onAddOrgs?: (orgs: Organization[]) => void;
+  onImportedLeads?: () => void;
 }) {
   const { toast } = useToast();
 
@@ -22,7 +27,12 @@ export function SearchView({
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
+  const [bulkChannel, setBulkChannel] = useState("Outbound");
+  const [bulkFileName, setBulkFileName] = useState("");
+  const [bulkDragOver, setBulkDragOver] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const bulkFileRef = useRef<HTMLInputElement>(null);
+  const parsedBulk = useMemo(() => parseBulkLeads(bulkText, bulkChannel), [bulkText, bulkChannel]);
 
   const allSources = ["Firmographic", "Filings", "Press", "LinkedIn"];
   const sourceMap: Record<string, string> = {
@@ -101,37 +111,29 @@ export function SearchView({
     toast(`${r.org} added to pipeline`, "success");
   }
 
-  function handleBulkUpload() {
-    const lines = bulkText.trim().split("\n").filter(Boolean);
-    if (lines.length === 0) return;
-    let added = 0;
-    for (const line of lines) {
-      const parts = line.split(",").map(s => s.trim());
-      const name = parts[0];
-      const ind = parts[1] || "Unknown";
-      if (!name) continue;
-      const newOrg: Organization = {
-        id: `ORG-${Date.now().toString().slice(-4)}-${added}`,
-        name,
-        industry: ind,
-        channel: "Bulk import",
-        score: 50,
-        domain: "",
-        registryId: "",
-        summary: "",
-        contacts: [],
-        whyGoodFit: "",
-        scoreFactors: [],
-        scoreHistory: [{ score: 50, at: new Date().toISOString().slice(0, 10), reason: "Bulk import — awaiting enrichment." }],
-        notes: [],
-        pursuits: [],
-      };
-      onAddOrg(newOrg);
-      added++;
-    }
-    toast(`${added} organization${added !== 1 ? "s" : ""} imported to pipeline`, "success");
+  function resetBulkForm() {
     setBulkOpen(false);
     setBulkText("");
+    setBulkChannel("Outbound");
+    setBulkFileName("");
+  }
+
+  async function readLeadFile(file: File) {
+    const text = await file.text();
+    setBulkFileName(file.name);
+    setBulkText(text);
+  }
+
+  function handleBulkUpload() {
+    if (parsedBulk.orgs.length === 0) return;
+    if (onAddOrgs) onAddOrgs(parsedBulk.orgs);
+    else for (const org of parsedBulk.orgs) onAddOrg(org);
+    const toastMsg = parsedBulk.kind === "linkedin"
+      ? `${parsedBulk.leadCount} LinkedIn lead${parsedBulk.leadCount !== 1 ? "s" : ""} at ${parsedBulk.companyCount} compan${parsedBulk.companyCount !== 1 ? "ies" : "y"} added to Prospects`
+      : `${parsedBulk.leadCount} sales lead${parsedBulk.leadCount !== 1 ? "s" : ""} added to Prospects`;
+    toast(toastMsg, "success");
+    resetBulkForm();
+    onImportedLeads?.();
   }
 
   return (
@@ -214,7 +216,7 @@ export function SearchView({
               onClick={() => setBulkOpen(true)}
               className="text-xs font-medium px-4 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
             >
-              Bulk upload a list
+              Bulk import leads
             </button>
           </div>
         </div>
@@ -355,30 +357,89 @@ export function SearchView({
         </p>
       </div>
 
-      {/* Bulk Upload Modal */}
-      <Modal open={bulkOpen} onClose={() => setBulkOpen(false)} title="Bulk Upload Organizations" wide>
+      {/* Bulk Import Leads Modal */}
+      <Modal open={bulkOpen} onClose={resetBulkForm} title="Bulk Import Leads" wide>
         <div className="space-y-4">
           <p className="text-xs text-muted-foreground">
-            Paste one organization per line. Optionally add the industry after a comma.
+            Upload a LinkedIn <span className="font-mono">Connections.csv</span> export, paste that CSV, or paste a simple lead list.
+            Qualified connections become sales leads on Prospects — not RFPs or SOWs.
           </p>
-          <FormField label="Organization list">
+          <div
+            onDragOver={e => {
+              e.preventDefault();
+              setBulkDragOver(true);
+            }}
+            onDragLeave={() => setBulkDragOver(false)}
+            onDrop={e => {
+              e.preventDefault();
+              setBulkDragOver(false);
+              const file = e.dataTransfer.files[0];
+              if (file) void readLeadFile(file);
+            }}
+            className={cn(
+              "border-2 border-dashed rounded-lg px-4 py-4 text-center transition-colors",
+              bulkDragOver ? "border-primary bg-primary/5" : "border-border bg-muted/10",
+            )}
+          >
+            <input
+              ref={bulkFileRef}
+              type="file"
+              accept=".csv,text/csv,text/plain"
+              className="sr-only"
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (file) void readLeadFile(file);
+                e.target.value = "";
+              }}
+            />
+            <p className="text-xs font-medium text-foreground">
+              {bulkFileName ? bulkFileName : "Drop Connections.csv here"}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              LinkedIn columns: First Name, Last Name, URL, Email Address, Company, Position, Connected On
+            </p>
+            <button
+              type="button"
+              onClick={() => bulkFileRef.current?.click()}
+              className="mt-3 text-xs font-semibold px-3.5 py-1.5 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+            >
+              Choose CSV
+            </button>
+          </div>
+          <FormField label={parsedBulk.kind === "linkedin" ? "Or paste the CSV" : "Lead list"}>
             <TextArea
-              value={bulkText}
-              onChange={setBulkText}
-              placeholder={"Acme Transit Authority, Public Transit\nBigCo Insurance, Insurance\nHealthFirst Partners, Healthcare"}
+              value={bulkFileName ? "" : bulkText}
+              onChange={value => {
+                setBulkFileName("");
+                setBulkText(value);
+              }}
+              placeholder={"First Name,Last Name,URL,Email Address,Company,Position,Connected On\nJordan,Hale,https://www.linkedin.com/in/jordanhale,,Acme Transit,Director of IT,11 Sep 2026"}
               rows={8}
             />
           </FormField>
+          {parsedBulk.kind !== "linkedin" && (
+            <FormField label="Channel">
+              <SelectInput
+                value={bulkChannel}
+                onChange={setBulkChannel}
+                options={LEAD_CHANNELS}
+              />
+            </FormField>
+          )}
           <div className="text-[11px] text-muted-foreground">
-            {bulkText.trim().split("\n").filter(Boolean).length} organization{bulkText.trim().split("\n").filter(Boolean).length !== 1 ? "s" : ""} detected
+            {parsedBulk.error
+              ? parsedBulk.error
+              : parsedBulk.kind === "linkedin"
+                ? `${parsedBulk.rowCount.toLocaleString()} connections · ${parsedBulk.leadCount} qualify as pipeline leads at ${parsedBulk.companyCount} companies`
+                : `${parsedBulk.leadCount} lead${parsedBulk.leadCount !== 1 ? "s" : ""} detected`}
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <SecondaryButton onClick={() => setBulkOpen(false)}>Cancel</SecondaryButton>
+            <SecondaryButton onClick={resetBulkForm}>Cancel</SecondaryButton>
             <PrimaryButton
               onClick={handleBulkUpload}
-              disabled={bulkText.trim().split("\n").filter(Boolean).length === 0}
+              disabled={parsedBulk.orgs.length === 0}
             >
-              Import to Pipeline
+              Import Leads
             </PrimaryButton>
           </div>
         </div>

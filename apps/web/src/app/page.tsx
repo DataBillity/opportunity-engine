@@ -10,14 +10,17 @@ import { OrgDetailView } from "@/components/views/org-detail-view";
 import { SearchView } from "@/components/views/search-view";
 import { SourcesView } from "@/components/views/sources-view";
 import { ResponseBuilderView } from "@/components/views/response-builder-view";
+import { SettingsView } from "@/components/views/settings-view";
+import { OperatorProvider } from "@/components/auth/operator-provider";
 import {
   organizations as initialOrgs,
   pursuits as initialPursuits,
   type Organization,
   type Pursuit,
 } from "@/lib/mock-data";
+import { mergeLeadOrganizations } from "@/lib/create-lead";
 
-export type ViewId = "search" | "pipeline" | "org" | "decision" | "draft" | "sources";
+export type ViewId = "search" | "pipeline" | "org" | "decision" | "draft" | "sources" | "settings";
 
 function getOrgPursuitsFromState(org: Organization, allPursuits: Record<string, Pursuit>): Pursuit[] {
   return org.pursuits.map(pid => allPursuits[pid]).filter(Boolean) as Pursuit[];
@@ -121,7 +124,14 @@ export default function CommandCenter() {
 
   const handleAddOrg = useCallback(
     (org: Organization) => {
-      setOrgs(prev => [...prev, org]);
+      setOrgs(prev => mergeLeadOrganizations(prev, [org]));
+    },
+    []
+  );
+
+  const handleAddOrgs = useCallback(
+    (incoming: Organization[]) => {
+      setOrgs(prev => mergeLeadOrganizations(prev, incoming));
     },
     []
   );
@@ -138,7 +148,8 @@ export default function CommandCenter() {
   );
 
   return (
-    <div className="flex flex-col h-dvh overflow-hidden">
+    <OperatorProvider>
+      <div className="flex flex-col h-dvh overflow-hidden">
       <TopBar
         activeView={activeView}
         onNav={handleNav}
@@ -177,6 +188,11 @@ export default function CommandCenter() {
             {activeView === "search" && (
               <SearchView
                 onAddOrg={handleAddOrg}
+                onAddOrgs={handleAddOrgs}
+                onImportedLeads={() => {
+                  setLaneFilter("A");
+                  handleNav("pipeline");
+                }}
               />
             )}
             {activeView === "pipeline" && (
@@ -215,9 +231,11 @@ export default function CommandCenter() {
               />
             )}
             {activeView === "sources" && <SourcesView />}
+            {activeView === "settings" && <SettingsView />}
           </div>
         </main>
       </div>
-    </div>
+      </div>
+    </OperatorProvider>
   );
 }

@@ -8,6 +8,8 @@ import { useToast } from "@/components/ui/toast";
 import { OutreachComposer } from "@/components/outreach/outreach-composer";
 import { DocumentDropzone } from "@/components/pursuit/document-dropzone";
 import { applyIngestToPursuit, ingestPursuitDocuments, recLabel } from "@/lib/create-pursuit";
+import { useOperator } from "@/components/auth/operator-provider";
+import { operatorReviewerLabel } from "@/lib/operator-profile";
 import { cn } from "@/lib/cn";
 
 function RecBig({ rec, closed }: { rec: string; closed?: boolean }) {
@@ -45,6 +47,7 @@ export function OpportunityView({
   onUpdatePursuit: (pursuitId: string, updates: Partial<Pursuit>) => void;
 }) {
   const { toast } = useToast();
+  const { profile } = useOperator();
   const [confirmOpen, setConfirmOpen] = useState<"go" | "nogo" | null>(null);
   const [confirmReason, setConfirmReason] = useState("");
   const [docUploadOpen, setDocUploadOpen] = useState(false);
@@ -456,7 +459,7 @@ export function OpportunityView({
           </FormField>
           <div className="text-[11px] text-muted-foreground">
             Decision record <span className="font-mono text-foreground">{pursuit.decisionRecord.id}</span> will be updated.
-            Reviewer: <span className="text-foreground">J. Tran (Bid Manager)</span>
+            Reviewer: <span className="text-foreground">{profile ? operatorReviewerLabel(profile) : "Operator"}</span>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <SecondaryButton onClick={() => setConfirmOpen(null)}>Cancel</SecondaryButton>

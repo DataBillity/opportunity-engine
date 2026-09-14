@@ -145,7 +145,19 @@ export function MobileNav({
           />
         </div>
 
-        <div className="shrink-0 border-t border-border p-3">
+        <div className="shrink-0 border-t border-border p-3 space-y-1">
+          <button
+            type="button"
+            onClick={() => onNav("settings")}
+            className={cn(
+              "w-full min-h-11 px-3 rounded-lg text-[13px] font-medium text-left cursor-pointer transition-all",
+              activeView === "settings"
+                ? "bg-accent text-accent-foreground font-semibold"
+                : "text-foreground hover:bg-muted/50"
+            )}
+          >
+            Settings
+          </button>
           <SignOutButton
             idleLabel="Sign out"
             className="w-full min-h-11 px-3 rounded-lg text-[13px] font-semibold text-destructive hover:bg-[hsl(var(--status-nogo-soft))] text-left"

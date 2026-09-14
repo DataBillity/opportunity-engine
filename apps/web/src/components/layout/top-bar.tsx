@@ -6,40 +6,21 @@ import type { Organization, Pursuit } from "@/lib/mock-data";
 import { Modal, FormField, TextInput, TextArea, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
 import { AddPursuitForm } from "@/components/pursuit/add-pursuit-form";
 import { createPursuitFromForm, recLabel } from "@/lib/create-pursuit";
+import { createSalesLead, LEAD_CHANNELS } from "@/lib/create-lead";
 import { useToast } from "@/components/ui/toast";
 import { navItems } from "@/components/layout/nav-items";
 import { BrandMark } from "@/components/brand-mark";
 import { SignOutButton } from "@/components/auth/sign-out-button";
+import { useOperator } from "@/components/auth/operator-provider";
+import { operatorInitials, operatorLabel } from "@/lib/operator-profile";
 import { cn } from "@/lib/cn";
 
-function displayNameFromEmail(email: string) {
-  const local = email.split("@")[0] ?? email;
-  return local.charAt(0).toUpperCase() + local.slice(1);
-}
-
-function initialsFromEmail(email: string) {
-  const local = (email.split("@")[0] ?? email).replace(/[^a-zA-Z]/g, "");
-  return (local.slice(0, 2) || "OE").toUpperCase();
-}
-
-function UserMenu() {
+function UserMenu({ onNav }: { onNav: (v: ViewId) => void }) {
   const [open, setOpen] = useState(false);
-  const [email, setEmail] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/auth/session")
-      .then(res => (res.ok ? res.json() : null))
-      .then(data => {
-        if (!cancelled && data?.email) setEmail(data.email as string);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { profile } = useOperator();
+  const email = profile?.email ?? null;
 
   useEffect(() => {
     if (!open) return;
@@ -58,7 +39,7 @@ function UserMenu() {
   }, [open]);
 
   const items = [
-    { label: "Profile Settings", icon: "👤", action: () => toast("Profile settings coming soon", "info") },
+    { label: "Settings", icon: "👤", action: () => onNav("settings") },
     { label: "Notification Preferences", icon: "🔔", action: () => toast("Notification preferences coming soon", "info") },
     { label: "Team Management", icon: "👥", action: () => toast("Team management coming soon", "info") },
     { label: "API & Integrations", icon: "🔗", action: () => toast("API settings coming soon", "info") },
@@ -74,12 +55,12 @@ function UserMenu() {
         aria-label="Account menu"
         className="w-8 h-8 rounded-full bg-white/15 text-white flex items-center justify-center text-[12px] font-semibold ring-2 ring-white/10 cursor-pointer hover:ring-white/30 transition-all"
       >
-        {email ? initialsFromEmail(email) : "OE"}
+        {profile ? operatorInitials(profile) : "OE"}
       </button>
       {open && (
         <div role="menu" className="absolute right-0 top-11 w-56 max-w-[calc(100vw-1.5rem)] bg-card rounded-xl border shadow-xl z-50 py-1.5 overflow-hidden">
           <div className="px-4 py-2.5 border-b border-border">
-            <div className="text-xs font-semibold text-foreground">{email ? displayNameFromEmail(email) : "Operator"}</div>
+            <div className="text-xs font-semibold text-foreground">{profile ? operatorLabel(profile) : "Operator"}</div>
             <div className="text-[11px] text-muted-foreground truncate">{email ?? "Databillity"}</div>
           </div>
           {items.map(item => (
@@ -104,15 +85,6 @@ function UserMenu() {
     </div>
   );
 }
-
-const LEAD_CHANNELS = [
-  { value: "Direct inquiry", label: "Direct inquiry" },
-  { value: "Outbound", label: "Outbound" },
-  { value: "Inbound", label: "Inbound" },
-  { value: "Partner", label: "Partner" },
-  { value: "Referral", label: "Referral" },
-  { value: "Event", label: "Event" },
-];
 
 export function TopBar({
   activeView,
@@ -185,30 +157,14 @@ export function TopBar({
 
   function handleCreateLead() {
     if (!leadName.trim()) return;
-    const id = `ORG-${Date.now().toString().slice(-4)}`;
-    const org: Organization = {
-      id,
-      name: leadName.trim(),
-      industry: leadIndustry.trim(),
+    onAddOrg(createSalesLead({
+      name: leadName,
+      industry: leadIndustry,
       channel: leadChannel,
-      score: 50,
-      domain: "",
-      registryId: "",
-      summary: leadSummary.trim(),
-      contacts: leadContact.trim()
-        ? [{ name: leadContact.trim(), title: "", email: leadEmail.trim() }]
-        : [],
-      whyGoodFit: "",
-      scoreFactors: [],
-      scoreHistory: [{
-        score: 50,
-        at: new Date().toISOString().slice(0, 10),
-        reason: "Added as a sales lead.",
-      }],
-      notes: [],
-      pursuits: [],
-    };
-    onAddOrg(org);
+      contactName: leadContact,
+      contactEmail: leadEmail,
+      summary: leadSummary,
+    }));
     toast(`Added sales lead "${leadName.trim()}" to the pipeline`, "success");
     setShowNewLead(false);
     setLeadName("");
@@ -323,7 +279,7 @@ export function TopBar({
                   className="w-full text-left px-4 py-2.5 text-xs text-foreground hover:bg-muted/40 cursor-pointer transition-all"
                 >
                   <div className="font-semibold">Sales Lead</div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">New organization on the pipeline</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">Prospect on the pipeline — not an RFP or SOW</div>
                 </button>
               </div>
             )}
@@ -331,7 +287,7 @@ export function TopBar({
           <span className="hidden lg:inline-flex font-mono text-[11px] text-white/50 border border-white/20 px-2.5 py-1 rounded-md">
             DEMO POV
           </span>
-          <UserMenu />
+          <UserMenu onNav={onNav} />
         </div>
       </header>
 

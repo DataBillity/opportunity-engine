@@ -102,3 +102,66 @@ export async function consumePasswordResetToken(token: string, password: string)
   `;
   return { email };
 }
+
+export type OperatorProfileRow = {
+  email: string;
+  displayName: string;
+  title: string;
+};
+
+function emptyProfile(email: string): OperatorProfileRow {
+  return { email: email.trim().toLowerCase(), displayName: "", title: "" };
+}
+
+export async function readOperatorProfile(email: string): Promise<OperatorProfileRow> {
+  const normalized = email.trim().toLowerCase();
+  const empty = emptyProfile(normalized);
+  const sql = getSql();
+  if (!sql || !normalized) return empty;
+  try {
+    const rows = (await sql`
+      SELECT email, display_name, title
+      FROM operator_profile
+      WHERE email = ${normalized}
+      LIMIT 1
+    `) as { email: string; display_name: string | null; title: string | null }[];
+    const row = rows[0];
+    if (!row) return empty;
+    return {
+      email: row.email,
+      displayName: row.display_name?.trim() ?? "",
+      title: row.title?.trim() ?? "",
+    };
+  } catch {
+    return empty;
+  }
+}
+
+export async function saveOperatorProfile(
+  email: string,
+  displayName: string,
+  title: string,
+): Promise<OperatorProfileRow> {
+  const sql = getSql();
+  if (!sql) throw new Error("DATABASE_URL is not set");
+  const normalized = email.trim().toLowerCase();
+  const name = displayName.trim();
+  const role = title.trim() || null;
+  const now = new Date().toISOString();
+  const rows = (await sql`
+    INSERT INTO operator_profile (email, display_name, title, created_at, updated_at)
+    VALUES (${normalized}, ${name}, ${role}, ${now}, ${now})
+    ON CONFLICT (email) DO UPDATE SET
+      display_name = excluded.display_name,
+      title = excluded.title,
+      updated_at = excluded.updated_at
+    RETURNING email, display_name, title
+  `) as { email: string; display_name: string; title: string | null }[];
+  const row = rows[0];
+  if (!row) throw new Error("Unable to save profile.");
+  return {
+    email: row.email,
+    displayName: row.display_name,
+    title: row.title ?? "",
+  };
+}

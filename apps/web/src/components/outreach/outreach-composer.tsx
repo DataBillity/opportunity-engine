@@ -5,6 +5,8 @@ import type { Organization, Pursuit } from "@/lib/mock-data";
 import { Modal, FormField, TextInput, TextArea, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { buildOutreachBriefing, preferredPursuitId } from "@/lib/outreach-briefing";
+import { useOperator } from "@/components/auth/operator-provider";
+import { operatorLabel } from "@/lib/operator-profile";
 import { cn } from "@/lib/cn";
 
 type GroundingInsight = {
@@ -48,6 +50,10 @@ export function OutreachComposer({
   onClose: () => void;
 }) {
   const { toast } = useToast();
+  const { profile } = useOperator();
+  const senderName = profile ? operatorLabel(profile) : "Operator";
+  const senderTitle = profile?.title.trim() || undefined;
+  const unnamed = Boolean(profile && !profile.displayName.trim());
   const [contactIndex, setContactIndex] = useState(0);
   const [pursuitId, setPursuitId] = useState<string>("");
   const [subject, setSubject] = useState("");
@@ -89,8 +95,9 @@ export function OutreachComposer({
       abortRef.current?.abort();
     };
     // selectablePursuits is derived from org/pursuits; org.id + initialPursuitId are the open trigger.
+    // senderName/title should refresh the draft once the operator profile loads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, org.id, initialPursuitId]);
+  }, [open, org.id, initialPursuitId, senderName, senderTitle]);
 
   async function generateDraft(nextPursuitId = pursuitId, nextContactIndex = contactIndex) {
     abortRef.current?.abort();
@@ -110,8 +117,8 @@ export function OutreachComposer({
       org,
       pursuit,
       contactIndex: nextContactIndex,
-      senderName: "J. Tran",
-      senderTitle: "Bid Manager",
+      senderName,
+      senderTitle,
     });
 
     try {
@@ -163,6 +170,11 @@ export function OutreachComposer({
             </span>
           )}
         </div>
+        {unnamed && (
+          <div className="text-[11px] text-muted-foreground rounded-md border border-border bg-muted/30 px-3 py-2">
+            Drafts currently sign as {senderName}. Set your name in Settings so outreach uses it.
+          </div>
+        )}
 
         {org.contacts.length > 1 && (
           <FormField label="To">

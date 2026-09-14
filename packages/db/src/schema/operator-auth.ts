@@ -12,6 +12,14 @@ export const operatorCredential = pgTable("operator_credential", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const operatorProfile = pgTable("operator_profile", {
+  email: text("email").primaryKey(),
+  displayName: text("display_name").notNull(),
+  title: text("title"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const passwordResetToken = pgTable("password_reset_token", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull(),

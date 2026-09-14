@@ -7,6 +7,8 @@ import { useToast } from "@/components/ui/toast";
 import { OutreachComposer } from "@/components/outreach/outreach-composer";
 import { AddPursuitForm } from "@/components/pursuit/add-pursuit-form";
 import { createPursuitFromForm, recLabel } from "@/lib/create-pursuit";
+import { useOperator } from "@/components/auth/operator-provider";
+import { operatorLabel } from "@/lib/operator-profile";
 import { cn } from "@/lib/cn";
 
 function getOrgPursuits(org: Organization, allPursuits: Record<string, Pursuit>): Pursuit[] {
@@ -47,6 +49,7 @@ export function OrgDetailView({
   const pursuits = getOrgPursuits(org, allPursuits);
   const score = getOrgTopScore(org, allPursuits);
   const { toast } = useToast();
+  const { profile } = useOperator();
 
   const [outreachOpen, setOutreachOpen] = useState(false);
 
@@ -84,7 +87,7 @@ export function OrgDetailView({
   function handleAddNote() {
     if (!noteText.trim()) return;
     const newNote = {
-      author: "J. Tran",
+      author: profile ? operatorLabel(profile) : "Operator",
       date: new Date().toISOString().slice(0, 10),
       text: noteText.trim(),
     };
