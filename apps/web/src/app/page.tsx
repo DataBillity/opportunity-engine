@@ -9,7 +9,7 @@ import { OpportunityView } from "@/components/views/opportunity-view";
 import { OrgDetailView } from "@/components/views/org-detail-view";
 import { SearchView } from "@/components/views/search-view";
 import { SourcesView } from "@/components/views/sources-view";
-import { ResponseBuilderView } from "@/components/views/response-builder-view";
+import { ResponseBuilderEmptyState, ResponseBuilderView } from "@/components/views/response-builder-view";
 import { SettingsView } from "@/components/views/settings-view";
 import { DashboardView } from "@/components/views/dashboard-view";
 import { OperatorProvider } from "@/components/auth/operator-provider";
@@ -25,6 +25,11 @@ export type ViewId = "dashboard" | "search" | "pipeline" | "org" | "decision" | 
 
 function getOrgPursuitsFromState(org: Organization, allPursuits: Record<string, Pursuit>): Pursuit[] {
   return org.pursuits.map(pid => allPursuits[pid]).filter(Boolean) as Pursuit[];
+}
+
+function findDraftablePursuit(org: Organization | undefined, allPursuits: Record<string, Pursuit>): Pursuit | undefined {
+  if (!org) return undefined;
+  return getOrgPursuitsFromState(org, allPursuits).find(p => !p.closed && p.rec === "go");
 }
 
 export default function CommandCenter() {
@@ -75,6 +80,15 @@ export default function CommandCenter() {
   }
 
   function handleNav(view: ViewId) {
+    if (view === "draft") {
+      const current = allPursuits[currentPursuitId];
+      const currentIsDraftable =
+        current?.rec === "go" && !current.closed && current.orgId === currentOrgId;
+      if (!currentIsDraftable) {
+        const draftable = findDraftablePursuit(currentOrg, allPursuits);
+        if (draftable) setCurrentPursuitId(draftable.id);
+      }
+    }
     setActiveView(view);
     setMobileNavOpen(false);
   }
@@ -259,11 +273,18 @@ export default function CommandCenter() {
                 onUpdatePursuit={handleUpdatePursuit}
               />
             )}
-            {activeView === "draft" && currentPursuit && currentPursuit.rec === "go" && (
+            {activeView === "draft" && currentPursuit?.rec === "go" && (
               <ResponseBuilderView
+                key={currentPursuit.id}
                 pursuit={currentPursuit}
                 onBack={() => setActiveView("decision")}
                 onUpdatePursuit={handleUpdatePursuit}
+              />
+            )}
+            {activeView === "draft" && currentPursuit?.rec !== "go" && (
+              <ResponseBuilderEmptyState
+                orgName={currentOrg?.name}
+                onOpenOpportunity={() => setActiveView(currentPursuit && currentOrg ? "decision" : currentOrg ? "org" : "pipeline")}
               />
             )}
             {activeView === "sources" && <SourcesView />}

@@ -102,6 +102,32 @@ const copilotResponses: Record<string, string> = {
   "Which claims aren't source-traced?": "Two assertions in the current draft lack direct source tracing.",
 };
 
+export function ResponseBuilderEmptyState({
+  orgName,
+  onOpenOpportunity,
+}: {
+  orgName?: string;
+  onOpenOpportunity: () => void;
+}) {
+  return (
+    <div className="bg-card rounded-xl border shadow-sm px-6 py-16 text-center">
+      <h2 className="text-base font-semibold text-foreground">Response Builder</h2>
+      <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
+        {orgName
+          ? `No confirmed Go pursuit for ${orgName}. Confirm Go on an opportunity before drafting a response.`
+          : "Confirm Go on an opportunity before drafting a response."}
+      </p>
+      <button
+        type="button"
+        onClick={onOpenOpportunity}
+        className="mt-6 text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm"
+      >
+        Open Opportunity →
+      </button>
+    </div>
+  );
+}
+
 export function ResponseBuilderView({
   pursuit, onBack, onUpdatePursuit,
 }: {
