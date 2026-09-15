@@ -133,7 +133,7 @@ export function MobileNav({
           </div>
         </nav>
 
-        <div className="flex-1 min-h-0 overflow-y-auto oe-touch-scroll">
+        <div className="flex-1 min-h-0 overflow-hidden">
           <Sidebar
             embedded
             currentOrgId={currentOrgId}

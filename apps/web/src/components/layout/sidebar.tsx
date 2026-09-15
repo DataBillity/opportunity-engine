@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Organization, Pursuit } from "@/lib/mock-data";
 import { cn } from "@/lib/cn";
 
@@ -62,6 +62,7 @@ export function Sidebar({
   embedded?: boolean;
 }) {
   const [search, setSearch] = useState("");
+  const listRef = useRef<HTMLDivElement>(null);
   const selectedRef = useRef<HTMLButtonElement>(null);
 
   const filteredOrgs = orgs.filter(org => {
@@ -76,29 +77,36 @@ export function Sidebar({
     return true;
   });
 
-  const scrollToSelected = useCallback(() => {
-    if (selectedRef.current) {
-      selectedRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
-  }, []);
-
   useEffect(() => {
-    const timer = setTimeout(scrollToSelected, 50);
-    return () => clearTimeout(timer);
-  }, [currentOrgId, scrollToSelected]);
+    const list = listRef.current;
+    const item = selectedRef.current;
+    if (!list || !item) return;
+
+    const timer = window.setTimeout(() => {
+      const listRect = list.getBoundingClientRect();
+      const itemRect = item.getBoundingClientRect();
+      const pad = 8;
+
+      if (itemRect.top < listRect.top) {
+        list.scrollTop += itemRect.top - listRect.top - pad;
+      } else if (itemRect.bottom > listRect.bottom) {
+        list.scrollTop += itemRect.bottom - listRect.bottom + pad;
+      }
+    }, 50);
+
+    return () => window.clearTimeout(timer);
+  }, [currentOrgId]);
 
   return (
     <aside
       className={cn(
-        "bg-card flex flex-col",
+        "bg-card flex flex-col min-h-0 overflow-hidden",
         embedded
-          ? "w-full"
-          : "hidden lg:block w-[240px] xl:w-[280px] shrink-0 border-r border-border"
+          ? "w-full h-full"
+          : "hidden lg:flex w-[240px] xl:w-[280px] shrink-0 h-full border-r border-border"
       )}
     >
-      {/* Sticky search + filter header */}
-      <div className="sticky top-0 z-10 bg-card border-b border-border shrink-0">
-        {/* Search */}
+      <div className="shrink-0 z-10 bg-card border-b border-border">
         <div className="px-4 pt-4 pb-2">
           <input
             type="text"
@@ -109,7 +117,6 @@ export function Sidebar({
           />
         </div>
 
-        {/* Pipeline filter */}
         <div className="px-4 pt-2 pb-3">
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">
             Pipeline filter
@@ -141,8 +148,7 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* Scrollable organization list */}
-      <div className="flex-1 overflow-y-auto oe-touch-scroll">
+      <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto oe-touch-scroll">
         {filteredOrgs.map(org => {
           const active = getOrgPursuits(org, allPursuits).filter(p => !p.closed);
           const headlineRec = active.length > 0
