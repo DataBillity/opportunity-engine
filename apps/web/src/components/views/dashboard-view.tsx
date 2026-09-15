@@ -120,10 +120,12 @@ export function DashboardView({
                 <div key={i} className="flex items-center gap-3">
                   <div className="w-28 text-xs text-muted-foreground text-right shrink-0">{stage.label}</div>
                   <div className="flex-1 h-7 bg-muted rounded-md overflow-hidden relative">
-                    <div className={cn("h-full rounded-md transition-all", stage.color)} style={{ width: `${Math.max(pct, 5)}%` }} />
-                    <span className="absolute inset-y-0 left-2 flex items-center text-[11px] font-bold text-white mix-blend-difference">
-                      {stage.count}
-                    </span>
+                    <div
+                      className={cn("h-full rounded-md transition-all flex items-center px-2", stage.color)}
+                      style={{ width: `${Math.max(pct, 8)}%` }}
+                    >
+                      <span className="text-[11px] font-bold text-white">{stage.count}</span>
+                    </div>
                   </div>
                 </div>
               );
