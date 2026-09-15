@@ -197,11 +197,13 @@ export function TopBar({
           <span className={cn("block h-[1.75px] w-[18px] bg-white rounded-full transition-transform duration-200 origin-center", menuOpen && "-translate-y-[6.75px] -rotate-45")} />
         </button>
 
-        {/* Brand */}
-        <BrandMark height={24} className="shrink-0" />
+        {/* Brand — occupies the sidebar column so nav starts in the body */}
+        <div className="shrink-0 lg:w-[220px] xl:w-[260px]">
+          <BrandMark height={24} />
+        </div>
 
         {/* Navigation */}
-        <nav className="hidden lg:flex items-center gap-1 flex-1 min-w-0 overflow-x-auto oe-touch-scroll">
+        <nav className="hidden lg:flex items-center gap-1 flex-1 min-w-0 overflow-x-auto oe-touch-scroll lg:pl-3">
           {navItems.map((item, i) => {
             const isActive = activeView === item.id || (item.id === "pipeline" && activeView === "org");
             const isDisabled = item.requiresPursuit && !currentOrgHasPursuits;
@@ -296,9 +298,6 @@ export function TopBar({
               </div>
             )}
           </div>
-          <span className="hidden lg:inline-flex font-mono text-[11px] text-white/50 border border-white/20 px-2.5 py-1 rounded-md">
-            DEMO POV
-          </span>
           <UserMenu onNav={onNav} />
         </div>
       </header>
