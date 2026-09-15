@@ -94,6 +94,7 @@ export function TopBar({
   onAddOrg,
   menuOpen,
   onMenuToggle,
+  currentOrgHasPursuits = false,
 }: {
   activeView: ViewId;
   onNav: (v: ViewId) => void;
@@ -102,6 +103,7 @@ export function TopBar({
   onAddOrg: (org: Organization) => void;
   menuOpen: boolean;
   onMenuToggle: () => void;
+  currentOrgHasPursuits?: boolean;
 }) {
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const newMenuRef = useRef<HTMLDivElement>(null);
@@ -111,6 +113,7 @@ export function TopBar({
   const [leadName, setLeadName] = useState("");
   const [leadIndustry, setLeadIndustry] = useState("");
   const [leadChannel, setLeadChannel] = useState("Direct inquiry");
+  const [leadSource, setLeadSource] = useState("");
   const [leadContact, setLeadContact] = useState("");
   const [leadEmail, setLeadEmail] = useState("");
   const [leadSummary, setLeadSummary] = useState("");
@@ -161,6 +164,7 @@ export function TopBar({
       name: leadName,
       industry: leadIndustry,
       channel: leadChannel,
+      source: leadSource,
       contactName: leadContact,
       contactEmail: leadEmail,
       summary: leadSummary,
@@ -170,6 +174,7 @@ export function TopBar({
     setLeadName("");
     setLeadIndustry("");
     setLeadChannel("Direct inquiry");
+    setLeadSource("");
     setLeadContact("");
     setLeadEmail("");
     setLeadSummary("");
@@ -197,29 +202,36 @@ export function TopBar({
 
         {/* Navigation */}
         <nav className="hidden lg:flex items-center gap-1 flex-1 min-w-0 overflow-x-auto oe-touch-scroll">
-          {navItems.map((item, i) => (
-            <span key={item.id} className="contents">
-              {i > 0 && navItems[i - 1]!.group !== item.group && (
-                <span className="w-px h-5 bg-white/15 mx-1.5 shrink-0" />
-              )}
-              <button
-                onClick={() => onNav(item.id)}
-                className={cn(
-                  "relative px-2.5 xl:px-3 py-1.5 rounded-md text-[12px] xl:text-[13px] font-medium transition-all cursor-pointer whitespace-nowrap",
-                  "hover:bg-white/10 hover:text-white",
-                  activeView === item.id
-                    ? "bg-white/[0.12] text-white font-semibold shadow-sm"
-                    : "text-white/70"
+          {navItems.map((item, i) => {
+            const isActive = activeView === item.id || (item.id === "pipeline" && activeView === "org");
+            const isDisabled = item.requiresPursuit && !currentOrgHasPursuits;
+            return (
+              <span key={item.id} className="contents">
+                {i > 0 && navItems[i - 1]!.group !== item.group && (
+                  <span className="w-px h-5 bg-white/15 mx-1.5 shrink-0" />
                 )}
-              >
-                <span className="xl:hidden">{item.shortLabel}</span>
-                <span className="hidden xl:inline">{item.label}</span>
-                {activeView === item.id && (
-                  <span className="absolute bottom-0 left-2.5 right-2.5 xl:left-3 xl:right-3 h-[2px] rounded-full bg-[var(--billity-bright)]" />
-                )}
-              </button>
-            </span>
-          ))}
+                <button
+                  onClick={() => !isDisabled && onNav(item.id)}
+                  disabled={isDisabled}
+                  className={cn(
+                    "relative px-2.5 xl:px-3 py-1.5 rounded-md text-[12px] xl:text-[13px] font-medium transition-all whitespace-nowrap",
+                    isDisabled
+                      ? "text-white/30 cursor-not-allowed"
+                      : "cursor-pointer hover:bg-white/10 hover:text-white",
+                    isActive
+                      ? "bg-white/[0.12] text-white font-semibold shadow-sm"
+                      : !isDisabled && "text-white/70"
+                  )}
+                >
+                  <span className="xl:hidden">{item.shortLabel}</span>
+                  <span className="hidden xl:inline">{item.label}</span>
+                  {isActive && (
+                    <span className="absolute bottom-0 left-2.5 right-2.5 xl:left-3 xl:right-3 h-[2px] rounded-full bg-[var(--billity-bright)]" />
+                  )}
+                </button>
+              </span>
+            );
+          })}
         </nav>
 
         <div className="flex-1 lg:hidden" />
@@ -300,7 +312,7 @@ export function TopBar({
               <SelectInput
                 value={npOrg}
                 onChange={setNpOrg}
-                options={orgs.map(o => ({ value: o.id, label: o.name }))}
+                options={orgs.slice().sort((a, b) => a.name.localeCompare(b.name)).map(o => ({ value: o.id, label: o.name }))}
               />
             </FormField>
           }
@@ -332,6 +344,13 @@ export function TopBar({
               value={leadChannel}
               onChange={setLeadChannel}
               options={LEAD_CHANNELS}
+            />
+          </FormField>
+          <FormField label="Source (optional)">
+            <TextInput
+              value={leadSource}
+              onChange={setLeadSource}
+              placeholder="e.g. Carey's LinkedIn Leads, CES 2026 Leads"
             />
           </FormField>
           <FormField label="Contact name (optional)">

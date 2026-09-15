@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { Organization, Pursuit } from "@/lib/mock-data";
-import { Modal, FormField, TextArea, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
+import type { Organization, Pursuit, Contact } from "@/lib/mock-data";
+import { Modal, FormField, TextInput, TextArea, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { OutreachComposer } from "@/components/outreach/outreach-composer";
 import { AddPursuitForm } from "@/components/pursuit/add-pursuit-form";
@@ -39,12 +39,16 @@ export function OrgDetailView({
   onPursuitSelect,
   onBack,
   onAddPursuit,
+  onArchiveOrg,
+  onUpdateOrg,
 }: {
   org: Organization;
   allPursuits: Record<string, Pursuit>;
   onPursuitSelect: (id: string) => void;
   onBack: () => void;
   onAddPursuit: (pursuit: Pursuit) => void;
+  onArchiveOrg?: (orgId: string) => void;
+  onUpdateOrg?: (orgId: string, updates: Partial<Organization>) => void;
 }) {
   const pursuits = getOrgPursuits(org, allPursuits);
   const score = getOrgTopScore(org, allPursuits);
@@ -52,12 +56,21 @@ export function OrgDetailView({
   const { profile } = useOperator();
 
   const [outreachOpen, setOutreachOpen] = useState(false);
-
   const [addPursuitOpen, setAddPursuitOpen] = useState(false);
 
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [localNotes, setLocalNotes] = useState(org.notes);
+
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+
+  // Contact CRUD state
+  const [addContactOpen, setAddContactOpen] = useState(false);
+  const [editContactIdx, setEditContactIdx] = useState<number | null>(null);
+  const [contactName, setContactName] = useState("");
+  const [contactTitle, setContactTitle] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactCompany, setContactCompany] = useState("");
 
   function openOutreach() {
     setOutreachOpen(true);
@@ -97,6 +110,86 @@ export function OrgDetailView({
     setNoteText("");
   }
 
+  function handleRefreshScore() {
+    const delta = Math.floor(Math.random() * 8) - 2;
+    const newScore = Math.max(0, Math.min(100, org.score + delta));
+    if (onUpdateOrg) {
+      onUpdateOrg(org.id, {
+        score: newScore,
+        scoreHistory: [
+          ...org.scoreHistory,
+          { score: newScore, at: new Date().toISOString().slice(0, 10), reason: "Manual score refresh." },
+        ],
+      });
+    }
+    toast(`Score refreshed: ${newScore}`, "success");
+  }
+
+  function handleArchive() {
+    if (onArchiveOrg) {
+      onArchiveOrg(org.id);
+      toast(`"${org.name}" archived`, "success");
+      onBack();
+    }
+    setArchiveConfirmOpen(false);
+  }
+
+  // Contact handlers
+  function resetContactForm() {
+    setContactName("");
+    setContactTitle("");
+    setContactEmail("");
+    setContactCompany("");
+  }
+
+  function handleAddContact() {
+    if (!contactName.trim()) return;
+    const newContact: Contact = {
+      name: contactName.trim(),
+      title: contactTitle.trim(),
+      email: contactEmail.trim(),
+      company: contactCompany.trim() || undefined,
+    };
+    if (onUpdateOrg) {
+      onUpdateOrg(org.id, { contacts: [...org.contacts, newContact] });
+    }
+    toast(`Contact "${contactName.trim()}" added`, "success");
+    setAddContactOpen(false);
+    resetContactForm();
+  }
+
+  function openEditContact(idx: number) {
+    const c = org.contacts[idx];
+    if (!c) return;
+    setContactName(c.name);
+    setContactTitle(c.title);
+    setContactEmail(c.email);
+    setContactCompany(c.company ?? "");
+    setEditContactIdx(idx);
+  }
+
+  function handleEditContact() {
+    if (editContactIdx === null || !contactName.trim()) return;
+    const updated = [...org.contacts];
+    updated[editContactIdx] = {
+      ...updated[editContactIdx]!,
+      name: contactName.trim(),
+      title: contactTitle.trim(),
+      email: contactEmail.trim(),
+      company: contactCompany.trim() || undefined,
+    };
+    if (onUpdateOrg) onUpdateOrg(org.id, { contacts: updated });
+    toast("Contact updated", "success");
+    setEditContactIdx(null);
+    resetContactForm();
+  }
+
+  function handleRemoveContact(idx: number) {
+    const updated = org.contacts.filter((_, i) => i !== idx);
+    if (onUpdateOrg) onUpdateOrg(org.id, { contacts: updated });
+    toast("Contact removed", "success");
+  }
+
   return (
     <div className="space-y-4">
       {/* Breadcrumb */}
@@ -117,13 +210,25 @@ export function OrgDetailView({
               <span>{org.industry || "Industry not set"}</span>
               <span>·</span>
               <span>Channel: {org.channel}</span>
+              {org.source && <><span>·</span><span>Source: {org.source}</span></>}
               <span>·</span>
               <span>Score <strong className="font-mono text-foreground">{score}</strong></span>
               {org.domain && <><span>·</span><span className="font-mono">{org.domain}</span></>}
               {org.registryId && <><span>·</span><span className="font-mono">{org.registryId}</span></>}
             </div>
+            {pursuits.some(p => p.draftStatus) && (
+              <div className="mt-1 text-xs text-muted-foreground">
+                Draft status: <strong className="text-foreground">{pursuits.find(p => p.draftStatus)?.draftStatus}</strong>
+              </div>
+            )}
           </div>
-          <div className="flex gap-2 shrink-0">
+          <div className="flex gap-2 shrink-0 flex-wrap">
+            <button
+              onClick={handleRefreshScore}
+              className="text-xs font-medium px-3.5 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+            >
+              Refresh Score
+            </button>
             <button
               onClick={openOutreach}
               className="text-xs font-medium px-3.5 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
@@ -136,16 +241,24 @@ export function OrgDetailView({
             >
               + Add Project
             </button>
+            {onArchiveOrg && (
+              <button
+                onClick={() => setArchiveConfirmOpen(true)}
+                className="text-xs font-medium px-3.5 py-2 rounded-md border border-destructive text-destructive bg-card cursor-pointer transition-all hover:bg-destructive/10"
+              >
+                Archive
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       {/* Summary card */}
       <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-          <div className="px-4 sm:px-5 py-3.5 border-b border-border">
-            <h3 className="oe-card-title">Summary</h3>
-          </div>
-          <div className="p-4 sm:p-5 text-sm text-foreground">
+        <div className="px-4 sm:px-5 py-3.5 border-b border-border">
+          <h3 className="oe-card-title">Summary</h3>
+        </div>
+        <div className="p-4 sm:p-5 text-sm text-foreground">
           {org.summary || <span className="text-muted-foreground italic">No summary yet.</span>}
         </div>
       </div>
@@ -185,15 +298,37 @@ export function OrgDetailView({
 
       {/* Contacts card */}
       <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-border">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
           <h3 className="oe-card-title">Key Contacts</h3>
+          <button
+            onClick={() => { resetContactForm(); setAddContactOpen(true); }}
+            className="text-xs font-medium px-3 py-1.5 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+          >
+            + Add Contact
+          </button>
         </div>
         <div className="p-5">
           {org.contacts.length > 0 ? org.contacts.map((c, i) => (
             <div key={i} className="py-3 border-b border-border last:border-b-0 text-xs space-y-1.5">
-              <div className="text-foreground">
-                <span className="font-semibold">{c.name}</span>
-                {c.title ? <span className="text-muted-foreground"> — {c.title}</span> : null}
+              <div className="flex items-start justify-between gap-2">
+                <div className="text-foreground">
+                  <span className="font-semibold">{c.name}</span>
+                  {c.title ? <span className="text-muted-foreground"> — {c.title}</span> : null}
+                </div>
+                <div className="flex gap-1.5 shrink-0">
+                  <button
+                    onClick={() => openEditContact(i)}
+                    className="text-[10px] font-medium px-2 py-1 rounded border border-input bg-card text-foreground cursor-pointer hover:bg-secondary"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleRemoveContact(i)}
+                    className="text-[10px] font-medium px-2 py-1 rounded border border-input bg-card text-destructive cursor-pointer hover:bg-destructive/10"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
               <dl className="grid gap-1 text-muted-foreground">
                 {c.company && c.company !== org.name ? (
@@ -275,6 +410,14 @@ export function OrgDetailView({
                 <div className="flex items-center gap-2 min-w-0">
                   <RecPill rec={p.rec} closed={p.closed} />
                   <span className="text-xs text-muted-foreground truncate">{p.status}</span>
+                  {p.draftStatus && (
+                    <span className="text-[10px] text-muted-foreground font-mono">· {p.draftStatus}</span>
+                  )}
+                  {p.outcome && (
+                    <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-md",
+                      p.outcome === "Won" ? "oe-status-go" : p.outcome === "Lost" ? "oe-status-nogo" : "oe-status-cond"
+                    )}>{p.outcome}</span>
+                  )}
                 </div>
                 <button
                   onClick={() => onPursuitSelect(p.id)}
@@ -299,6 +442,7 @@ export function OrgDetailView({
                 <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Score</th>
                 <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Decision</th>
                 <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
+                <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Outcome</th>
                 <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5"></th>
               </tr>
             </thead>
@@ -314,7 +458,17 @@ export function OrgDetailView({
                   <td className="px-4 py-3 text-muted-foreground">{p.typeLabel}</td>
                   <td className="px-4 py-3 font-mono font-semibold text-foreground">{p.score}</td>
                   <td className="px-4 py-3"><RecPill rec={p.rec} closed={p.closed} /></td>
-                  <td className="px-4 py-3 text-muted-foreground">{p.status}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {p.status}
+                    {p.draftStatus && <span className="block text-[10px] font-mono mt-0.5">{p.draftStatus}{p.draftStatusDate ? ` (${p.draftStatusDate})` : ""}</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    {p.outcome ? (
+                      <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-md",
+                        p.outcome === "Won" ? "oe-status-go" : p.outcome === "Lost" ? "oe-status-nogo" : "oe-status-cond"
+                      )}>{p.outcome}{p.outcomeDate ? ` (${p.outcomeDate})` : ""}</span>
+                    ) : <span className="text-muted-foreground">—</span>}
+                  </td>
                   <td className="px-4 py-3">
                     <button
                       onClick={() => onPursuitSelect(p.id)}
@@ -326,7 +480,7 @@ export function OrgDetailView({
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-xs text-muted-foreground italic">
+                  <td colSpan={7} className="px-4 py-6 text-center text-xs text-muted-foreground italic">
                     No projects yet. Click <strong className="text-foreground">+ Add Project</strong> to add one.
                   </td>
                 </tr>
@@ -361,6 +515,68 @@ export function OrgDetailView({
           <div className="flex justify-end gap-2 pt-2">
             <SecondaryButton onClick={() => setNoteOpen(false)}>Cancel</SecondaryButton>
             <PrimaryButton onClick={handleAddNote} disabled={!noteText.trim()}>Add Note</PrimaryButton>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Archive Confirmation Modal */}
+      <Modal open={archiveConfirmOpen} onClose={() => setArchiveConfirmOpen(false)} title="Archive Lead">
+        <div className="space-y-4">
+          <p className="text-sm text-foreground">
+            Are you sure you want to archive <strong>{org.name}</strong>? This will remove them from the active pipeline but retain their history.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <SecondaryButton onClick={() => setArchiveConfirmOpen(false)}>Cancel</SecondaryButton>
+            <button
+              onClick={handleArchive}
+              className="text-xs font-semibold px-4 py-2 rounded-md bg-destructive text-white cursor-pointer transition-all hover:opacity-90 shadow-sm"
+            >
+              Archive
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Add Contact Modal */}
+      <Modal open={addContactOpen} onClose={() => setAddContactOpen(false)} title="Add Contact">
+        <div className="space-y-4">
+          <FormField label="Name">
+            <TextInput value={contactName} onChange={setContactName} placeholder="e.g. Jordan Hale" />
+          </FormField>
+          <FormField label="Title (optional)">
+            <TextInput value={contactTitle} onChange={setContactTitle} placeholder="e.g. Director of IT" />
+          </FormField>
+          <FormField label="Email (optional)">
+            <TextInput value={contactEmail} onChange={setContactEmail} placeholder="e.g. jhale@example.gov" type="email" />
+          </FormField>
+          <FormField label="Company (optional)">
+            <TextInput value={contactCompany} onChange={setContactCompany} placeholder="e.g. Cascade Transit" />
+          </FormField>
+          <div className="flex justify-end gap-2 pt-2">
+            <SecondaryButton onClick={() => setAddContactOpen(false)}>Cancel</SecondaryButton>
+            <PrimaryButton onClick={handleAddContact} disabled={!contactName.trim()}>Add Contact</PrimaryButton>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Contact Modal */}
+      <Modal open={editContactIdx !== null} onClose={() => { setEditContactIdx(null); resetContactForm(); }} title="Edit Contact">
+        <div className="space-y-4">
+          <FormField label="Name">
+            <TextInput value={contactName} onChange={setContactName} placeholder="e.g. Jordan Hale" />
+          </FormField>
+          <FormField label="Title (optional)">
+            <TextInput value={contactTitle} onChange={setContactTitle} placeholder="e.g. Director of IT" />
+          </FormField>
+          <FormField label="Email (optional)">
+            <TextInput value={contactEmail} onChange={setContactEmail} placeholder="e.g. jhale@example.gov" type="email" />
+          </FormField>
+          <FormField label="Company (optional)">
+            <TextInput value={contactCompany} onChange={setContactCompany} placeholder="e.g. Cascade Transit" />
+          </FormField>
+          <div className="flex justify-end gap-2 pt-2">
+            <SecondaryButton onClick={() => { setEditContactIdx(null); resetContactForm(); }}>Cancel</SecondaryButton>
+            <PrimaryButton onClick={handleEditContact} disabled={!contactName.trim()}>Save Contact</PrimaryButton>
           </div>
         </div>
       </Modal>

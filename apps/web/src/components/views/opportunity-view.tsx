@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { Pursuit, Organization } from "@/lib/mock-data";
 import { getPartner } from "@/lib/mock-data";
 import { Modal, FormField, TextArea, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
@@ -54,6 +54,55 @@ export function OpportunityView({
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [outreachOpen, setOutreachOpen] = useState(false);
+  const [advisorOpen, setAdvisorOpen] = useState(false);
+  const [advisorMessages, setAdvisorMessages] = useState<{ role: "user" | "assistant" | "system"; text: string }[]>([
+    { role: "system", text: `AI Advisor ready for "${pursuit.name}". Ask about improving the score, ideal partner composition, or gap closure strategies.` },
+  ]);
+  const [advisorInput, setAdvisorInput] = useState("");
+  const [advisorTyping, setAdvisorTyping] = useState(false);
+  const advisorEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { advisorEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [advisorMessages]);
+
+  function sendAdvisorMessage(text: string) {
+    if (!text.trim()) return;
+    setAdvisorMessages(prev => [...prev, { role: "user", text: text.trim() }]);
+    setAdvisorInput("");
+    setAdvisorTyping(true);
+    const gaps = pursuit.gaps;
+    setTimeout(() => {
+      let response = "";
+      const q = text.toLowerCase();
+      if (q.includes("improve") || q.includes("score")) {
+        response = `To improve the opportunity score (currently ${pursuit.score}/100), consider:\n\n`;
+        if (gaps.length > 0) {
+          response += `1. Close ${gaps.length} open capability gap(s):\n`;
+          for (const g of gaps) response += `   - ${g.title} (${g.crit})\n`;
+        }
+        response += `\n2. Upload additional supporting documents to strengthen requirement mapping\n3. Ensure all key personnel have verified availability for the proposed period of performance`;
+      } else if (q.includes("partner") || q.includes("gap")) {
+        if (gaps.length > 0) {
+          response = "Based on the gap analysis, the ideal partner(s) would provide:\n\n";
+          for (const g of gaps) response += `- ${g.title}: Look for a partner with ${g.closure}\n`;
+          response += "\nConsider reaching out to partners in the Capability Sources graph who cover these gap areas.";
+        } else {
+          response = "All requirements are currently mapped to consortium capabilities. No additional partner coverage is needed for this opportunity.";
+        }
+      } else if (q.includes("team") || q.includes("composition")) {
+        response = "The ideal team composition for this opportunity would include:\n\n- A Program Manager with public-sector modernization experience\n- A Lead Data Architect with legacy migration expertise\n- A QA & Compliance Lead for certification testing\n\nBased on current gaps, consider adding a partner with specialized capabilities in the unmapped requirement areas.";
+      } else {
+        response = `I've analyzed the opportunity. The current score is ${pursuit.score}/100 with ${pursuit.reqmap.filter(r => r.status === "mapped").length} of ${pursuit.reqmap.length} requirements mapped. ${gaps.length > 0 ? `There are ${gaps.length} open gap(s) that should be addressed.` : "All requirements are mapped."}\n\nWould you like me to suggest specific strategies to improve the score or identify ideal partners?`;
+      }
+      setAdvisorMessages(prev => [...prev, { role: "assistant", text: response }]);
+      setAdvisorTyping(false);
+    }, 800);
+  }
+
+  const advisorQuickPrompts = [
+    "How can I improve this score?",
+    "What partner capabilities would fill the gaps?",
+    "What's the ideal team composition?",
+  ];
 
   function handleConfirm() {
     if (!confirmOpen) return;
@@ -123,12 +172,27 @@ export function OpportunityView({
               <span>Score <strong className="text-foreground">{pursuit.score}</strong>/100</span>
               {pursuit.dueDate && <><span>·</span><span>Due {pursuit.dueDate}</span></>}
             </div>
-            <button
-              onClick={() => setOutreachOpen(true)}
-              className="mt-3 text-xs font-medium px-3.5 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
-            >
-              Outreach
-            </button>
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => setOutreachOpen(true)}
+                className="text-xs font-medium px-3.5 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+              >
+                Outreach
+              </button>
+              <button
+                onClick={() => {
+                  const delta = Math.floor(Math.random() * 8) - 2;
+                  const newScore = Math.max(0, Math.min(100, pursuit.score + delta));
+                  onUpdatePursuit(pursuit.id, {
+                    score: newScore,
+                  });
+                  toast(`Score refreshed: ${newScore}`, "success");
+                }}
+                className="text-xs font-medium px-3.5 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+              >
+                Refresh Score
+              </button>
+            </div>
           </div>
           <div className="text-left sm:text-right shrink-0">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">
@@ -340,6 +404,29 @@ export function OpportunityView({
           </div>
         )}
 
+        {/* Draft status & outcome */}
+        {(pursuit.draftStatus || pursuit.outcome) && (
+          <div className="bg-card rounded-xl border shadow-sm px-4 sm:px-5 py-4 flex flex-wrap items-center gap-4">
+            {pursuit.draftStatus && (
+              <div className="text-xs text-muted-foreground">
+                Draft: <strong className="text-foreground">{pursuit.draftStatus}</strong>
+                {pursuit.draftStatusDate && <span className="font-mono ml-1">({pursuit.draftStatusDate})</span>}
+              </div>
+            )}
+            {pursuit.outcome && (
+              <div className="text-xs">
+                Outcome:{" "}
+                <span className={cn("font-bold px-2 py-0.5 rounded-md text-[10px]",
+                  pursuit.outcome === "Won" ? "oe-status-go" : pursuit.outcome === "Lost" ? "oe-status-nogo" : "oe-status-cond"
+                )}>
+                  {pursuit.outcome}
+                </span>
+                {pursuit.outcomeDate && <span className="text-muted-foreground font-mono ml-1">({pursuit.outcomeDate})</span>}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Decision footer */}
         <div className="bg-card rounded-xl border shadow-sm px-4 sm:px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="text-xs text-muted-foreground">
@@ -505,6 +592,62 @@ export function OpportunityView({
         initialPursuitId={pursuit.id}
         onClose={() => setOutreachOpen(false)}
       />
+
+      {/* AI Advisor panel */}
+      <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+        <button
+          onClick={() => setAdvisorOpen(prev => !prev)}
+          className="w-full px-5 py-3.5 flex items-center justify-between cursor-pointer hover:bg-muted/20 transition-colors"
+        >
+          <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2a10 10 0 1 0 10 10H12V2Z" /><path d="M12 2a10 10 0 0 1 10 10" /><circle cx="12" cy="12" r="3" />
+            </svg>
+            AI Advisor
+          </h3>
+          <span className="text-xs text-muted-foreground">{advisorOpen ? "▲ Collapse" : "▼ Expand"}</span>
+        </button>
+        {advisorOpen && (
+          <div className="border-t border-border">
+            <div className="p-4 flex flex-col gap-2.5 max-h-[300px] overflow-y-auto">
+              {advisorMessages.map((msg, i) => (
+                <div key={i} className={cn("px-3.5 py-2.5 rounded-xl text-xs leading-relaxed whitespace-pre-wrap",
+                  msg.role === "user" ? "self-end bg-primary text-primary-foreground rounded-br-sm max-w-[90%]" :
+                  msg.role === "assistant" ? "self-start bg-accent text-accent-foreground rounded-tl-sm max-w-[90%]" :
+                  "self-start bg-muted/50 text-foreground rounded-tl-sm max-w-[90%]"
+                )}>
+                  {msg.role === "system" && <span className="text-[9px] uppercase tracking-widest text-trace font-bold block mb-1">System</span>}
+                  {msg.role === "assistant" && <span className="text-[9px] uppercase tracking-widest text-primary font-bold block mb-1">AI Advisor</span>}
+                  {msg.text}
+                </div>
+              ))}
+              {advisorTyping && (
+                <div className="self-start bg-accent text-accent-foreground px-3.5 py-2.5 rounded-xl rounded-tl-sm text-xs">
+                  <span className="inline-flex gap-1">
+                    <span className="w-1.5 h-1.5 bg-primary/50 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-1.5 h-1.5 bg-primary/50 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-1.5 h-1.5 bg-primary/50 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </span>
+                </div>
+              )}
+              <div ref={advisorEndRef} />
+            </div>
+            <div className="flex flex-wrap gap-1.5 px-4 pb-3">
+              {advisorQuickPrompts.map(s => (
+                <button key={s} onClick={() => sendAdvisorMessage(s)} disabled={advisorTyping}
+                  className="text-[11px] px-3 py-1.5 border border-border bg-card rounded-lg cursor-pointer text-foreground hover:border-primary/40 hover:bg-accent/50 transition-all disabled:opacity-50">{s}</button>
+              ))}
+            </div>
+            <div className="flex gap-2 px-4 py-3 border-t border-border bg-muted/20">
+              <input type="text" value={advisorInput} onChange={e => setAdvisorInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && !advisorTyping) sendAdvisorMessage(advisorInput); }}
+                placeholder="Ask about this opportunity…" className="oe-field flex-1" />
+              <button onClick={() => sendAdvisorMessage(advisorInput)} disabled={!advisorInput.trim() || advisorTyping}
+                className="text-xs font-semibold px-3 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed">Send</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

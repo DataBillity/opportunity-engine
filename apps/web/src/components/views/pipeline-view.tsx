@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { Organization, Pursuit } from "@/lib/mock-data";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
@@ -23,18 +23,34 @@ function getOrgTopScore(org: Organization, allPursuits: Record<string, Pursuit>)
   return org.score;
 }
 
+type SortColumn = "name" | "industry" | "channel" | "source" | "score" | "projects";
+type SortDir = "asc" | "desc";
+
+function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" className={cn("inline-block ml-1 transition-opacity", active ? "opacity-100" : "opacity-30")}>
+      <path d="M5 1l3 3.5H2z" fill={active && dir === "asc" ? "currentColor" : "currentColor"} opacity={active && dir === "asc" ? 1 : 0.3} />
+      <path d="M5 9l3-3.5H2z" fill={active && dir === "desc" ? "currentColor" : "currentColor"} opacity={active && dir === "desc" ? 1 : 0.3} />
+    </svg>
+  );
+}
+
 export function PipelineView({
   laneFilter,
   onOrgSelect,
   orgs,
   allPursuits,
   onAddPursuit,
+  onArchiveOrg,
+  onRefreshAllScores,
 }: {
   laneFilter: string;
   onOrgSelect: (id: string) => void;
   orgs: Organization[];
   allPursuits: Record<string, Pursuit>;
   onAddPursuit: (pursuit: Pursuit) => void;
+  onArchiveOrg?: (orgId: string) => void;
+  onRefreshAllScores?: () => void;
 }) {
   const { toast } = useToast();
 
@@ -44,11 +60,62 @@ export function PipelineView({
   const [addPursuitOpen, setAddPursuitOpen] = useState(false);
   const [addPursuitOrg, setAddPursuitOrg] = useState<Organization | null>(null);
 
-  let rows = orgs;
-  if (laneFilter && laneFilter !== "all") {
-    if (laneFilter === "A") rows = orgs.filter(o => o.pursuits.length === 0);
-    else rows = orgs.filter(o => getOrgPursuits(o, allPursuits).some(p => p.lane === laneFilter));
+  const [sortCol, setSortCol] = useState<SortColumn>("score");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const [filterCol, setFilterCol] = useState<string | null>(null);
+  const [filterText, setFilterText] = useState("");
+
+  function toggleSort(col: SortColumn) {
+    if (sortCol === col) {
+      setSortDir(d => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(col);
+      setSortDir(col === "score" ? "desc" : "asc");
+    }
   }
+
+  const visibleOrgs = orgs.filter(o => !o.archived);
+
+  let rows = visibleOrgs;
+  if (laneFilter && laneFilter !== "all") {
+    if (laneFilter === "A") rows = visibleOrgs.filter(o => o.pursuits.length === 0);
+    else rows = visibleOrgs.filter(o => getOrgPursuits(o, allPursuits).some(p => p.lane === laneFilter));
+  }
+
+  if (filterText.trim()) {
+    const q = filterText.toLowerCase();
+    rows = rows.filter(org => {
+      if (filterCol === "name") return org.name.toLowerCase().includes(q);
+      if (filterCol === "industry") return (org.industry || "").toLowerCase().includes(q);
+      if (filterCol === "channel") return org.channel.toLowerCase().includes(q);
+      if (filterCol === "source") return (org.source || "").toLowerCase().includes(q);
+      return org.name.toLowerCase().includes(q) || (org.industry || "").toLowerCase().includes(q) || org.channel.toLowerCase().includes(q) || (org.source || "").toLowerCase().includes(q);
+    });
+  }
+
+  const sortedRows = useMemo(() => {
+    const sorted = [...rows];
+    const dir = sortDir === "asc" ? 1 : -1;
+    sorted.sort((a, b) => {
+      let cmp = 0;
+      switch (sortCol) {
+        case "name": cmp = a.name.localeCompare(b.name); break;
+        case "industry": cmp = (a.industry || "").localeCompare(b.industry || ""); break;
+        case "channel": cmp = a.channel.localeCompare(b.channel); break;
+        case "source": cmp = (a.source || "").localeCompare(b.source || ""); break;
+        case "score": cmp = getOrgTopScore(a, allPursuits) - getOrgTopScore(b, allPursuits); break;
+        case "projects": {
+          const aCount = getOrgPursuits(a, allPursuits).filter(p => !p.closed).length;
+          const bCount = getOrgPursuits(b, allPursuits).filter(p => !p.closed).length;
+          cmp = aCount - bCount;
+          break;
+        }
+      }
+      return cmp * dir;
+    });
+    return sorted;
+  }, [rows, sortCol, sortDir, allPursuits]);
 
   function openOutreach(org: Organization) {
     setOutreachOrg(org);
@@ -82,21 +149,84 @@ export function PipelineView({
     setAddPursuitOpen(false);
   }
 
+  function handleRefreshAll() {
+    if (onRefreshAllScores) {
+      onRefreshAllScores();
+      toast("Refreshing scores for all pipeline leads…", "info");
+    }
+  }
+
+  function handleArchive(e: React.MouseEvent, orgId: string) {
+    e.stopPropagation();
+    if (onArchiveOrg) {
+      onArchiveOrg(orgId);
+      toast("Lead archived — removed from active pipeline", "success");
+    }
+  }
+
+  const columns: { key: SortColumn; label: string; hideOnMobile?: boolean }[] = [
+    { key: "name", label: "Organization" },
+    { key: "industry", label: "Industry", hideOnMobile: true },
+    { key: "channel", label: "Channel" },
+    { key: "source", label: "Source" },
+    { key: "score", label: "Score" },
+    { key: "projects", label: "Projects" },
+  ];
+
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div>
-        <h1 className="oe-page-title">Pipeline</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Every organization currently being worked — from search &amp; discovery, direct leads, or partner introductions.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <h1 className="oe-page-title">Pipeline</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Every organization currently being worked — from search &amp; discovery, direct leads, or partner introductions.
+          </p>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <button
+            onClick={handleRefreshAll}
+            className="text-xs font-medium px-3.5 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+          >
+            Refresh All Scores
+          </button>
+        </div>
+      </div>
+
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          type="text"
+          value={filterText}
+          onChange={e => setFilterText(e.target.value)}
+          placeholder="Filter pipeline…"
+          className="oe-field text-[11px] w-48"
+        />
+        <select
+          value={filterCol ?? ""}
+          onChange={e => setFilterCol(e.target.value || null)}
+          className="oe-select text-[11px] w-32"
+        >
+          <option value="">All columns</option>
+          {columns.map(c => (
+            <option key={c.key} value={c.key}>{c.label}</option>
+          ))}
+        </select>
+        {filterText && (
+          <button
+            onClick={() => { setFilterText(""); setFilterCol(null); }}
+            className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       {/* Table card */}
       <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
         {/* Mobile / tablet cards */}
         <div className="lg:hidden divide-y divide-border">
-          {rows.map(org => {
+          {sortedRows.map(org => {
             const active = getOrgPursuits(org, allPursuits).filter(p => !p.closed);
             const score = getOrgTopScore(org, allPursuits);
             return (
@@ -109,7 +239,7 @@ export function PipelineView({
                   <div className="min-w-0">
                     <div className="font-semibold text-foreground">{org.name}</div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {org.industry || "—"} · {org.channel}
+                      {org.industry || "—"} · {org.channel}{org.source ? ` · ${org.source}` : ""}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -157,6 +287,14 @@ export function PipelineView({
                   >
                     Add Project
                   </button>
+                  {onArchiveOrg && (
+                    <button
+                      onClick={e => handleArchive(e, org.id)}
+                      className="text-xs font-medium px-3 py-1.5 rounded-md border border-input bg-card text-destructive cursor-pointer transition-all hover:bg-destructive/10"
+                    >
+                      Archive
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -167,16 +305,24 @@ export function PipelineView({
           <table className="w-full text-sm">
             <thead>
               <tr className="oe-table-header">
-                <th className="text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold px-3 lg:px-4 py-3">Organization</th>
-                <th className="text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold px-3 lg:px-4 py-3 hidden lg:table-cell">Industry</th>
-                <th className="text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold px-3 lg:px-4 py-3">Channel</th>
-                <th className="text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold px-3 lg:px-4 py-3">Score</th>
-                <th className="text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold px-3 lg:px-4 py-3">Projects</th>
+                {columns.map(col => (
+                  <th
+                    key={col.key}
+                    onClick={() => toggleSort(col.key)}
+                    className={cn(
+                      "text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold px-3 lg:px-4 py-3 cursor-pointer select-none hover:text-foreground transition-colors",
+                      col.hideOnMobile && "hidden lg:table-cell"
+                    )}
+                  >
+                    {col.label}
+                    <SortIcon active={sortCol === col.key} dir={sortDir} />
+                  </th>
+                ))}
                 <th className="text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold px-3 lg:px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(org => {
+              {sortedRows.map(org => {
                 const active = getOrgPursuits(org, allPursuits).filter(p => !p.closed);
                 const score = getOrgTopScore(org, allPursuits);
                 return (
@@ -188,6 +334,7 @@ export function PipelineView({
                     <td className="px-3 lg:px-4 py-3.5 font-semibold text-foreground">{org.name}</td>
                     <td className="px-3 lg:px-4 py-3.5 text-muted-foreground hidden lg:table-cell">{org.industry || "—"}</td>
                     <td className="px-3 lg:px-4 py-3.5 text-foreground">{org.channel}</td>
+                    <td className="px-3 lg:px-4 py-3.5 text-muted-foreground">{org.source || "—"}</td>
                     <td className="px-3 lg:px-4 py-3.5">
                       <div className="flex items-center gap-2.5">
                         <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -240,6 +387,15 @@ export function PipelineView({
                         >
                           Add Project
                         </button>
+                        {onArchiveOrg && (
+                          <button
+                            onClick={e => handleArchive(e, org.id)}
+                            className="text-xs font-medium px-3 py-1.5 rounded-md border border-input bg-card text-destructive cursor-pointer transition-all hover:bg-destructive/10"
+                            title="Archive lead"
+                          >
+                            Archive
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -255,7 +411,7 @@ export function PipelineView({
         <div className="w-1 self-stretch bg-primary rounded-full shrink-0" />
         <p>
           Click an organization to open its full record. Use <strong className="text-foreground">Outreach</strong> or{" "}
-          <strong className="text-foreground">Add Project</strong> right from the row.
+          <strong className="text-foreground">Add Project</strong> right from the row. Click column headers to sort.
         </p>
       </div>
 

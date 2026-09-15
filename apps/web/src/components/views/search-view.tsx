@@ -28,11 +28,23 @@ export function SearchView({
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [bulkChannel, setBulkChannel] = useState("Outbound");
+  const [bulkSource, setBulkSource] = useState("");
   const [bulkFileName, setBulkFileName] = useState("");
   const [bulkDragOver, setBulkDragOver] = useState(false);
+  const [bulkMinScore, setBulkMinScore] = useState("");
+  const [bulkSelected, setBulkSelected] = useState<Set<number>>(new Set());
   const [hasSearched, setHasSearched] = useState(false);
   const bulkFileRef = useRef<HTMLInputElement>(null);
   const parsedBulk = useMemo(() => parseBulkLeads(bulkText, bulkChannel), [bulkText, bulkChannel]);
+
+  const filteredBulkOrgs = useMemo(() => {
+    const minVal = bulkMinScore ? Number(bulkMinScore) : 0;
+    return parsedBulk.orgs.map((org, idx) => ({ org, idx })).filter(({ org }) => org.score >= minVal);
+  }, [parsedBulk.orgs, bulkMinScore]);
+
+  useMemo(() => {
+    setBulkSelected(new Set(filteredBulkOrgs.map(f => f.idx)));
+  }, [filteredBulkOrgs.length]);
 
   const allSources = ["Firmographic", "Filings", "Press", "LinkedIn"];
   const sourceMap: Record<string, string> = {
@@ -115,7 +127,10 @@ export function SearchView({
     setBulkOpen(false);
     setBulkText("");
     setBulkChannel("Outbound");
+    setBulkSource("");
     setBulkFileName("");
+    setBulkMinScore("");
+    setBulkSelected(new Set());
   }
 
   async function readLeadFile(file: File) {
@@ -125,12 +140,16 @@ export function SearchView({
   }
 
   function handleBulkUpload() {
-    if (parsedBulk.orgs.length === 0) return;
-    if (onAddOrgs) onAddOrgs(parsedBulk.orgs);
-    else for (const org of parsedBulk.orgs) onAddOrg(org);
+    const selectedOrgs = parsedBulk.orgs.filter((_, idx) => bulkSelected.has(idx));
+    if (selectedOrgs.length === 0) return;
+    const orgsWithSource = bulkSource.trim()
+      ? selectedOrgs.map(org => ({ ...org, source: bulkSource.trim() }))
+      : selectedOrgs;
+    if (onAddOrgs) onAddOrgs(orgsWithSource);
+    else for (const org of orgsWithSource) onAddOrg(org);
     const toastMsg = parsedBulk.kind === "linkedin"
-      ? `${parsedBulk.leadCount} LinkedIn lead${parsedBulk.leadCount !== 1 ? "s" : ""} at ${parsedBulk.companyCount} compan${parsedBulk.companyCount !== 1 ? "ies" : "y"} added to Prospects`
-      : `${parsedBulk.leadCount} sales lead${parsedBulk.leadCount !== 1 ? "s" : ""} added to Prospects`;
+      ? `${selectedOrgs.length} LinkedIn lead${selectedOrgs.length !== 1 ? "s" : ""} added to Prospects`
+      : `${selectedOrgs.length} sales lead${selectedOrgs.length !== 1 ? "s" : ""} added to Prospects`;
     toast(toastMsg, "success");
     resetBulkForm();
     onImportedLeads?.();
@@ -426,20 +445,71 @@ export function SearchView({
               />
             </FormField>
           )}
-          <div className="text-[11px] text-muted-foreground">
-            {parsedBulk.error
-              ? parsedBulk.error
-              : parsedBulk.kind === "linkedin"
-                ? `${parsedBulk.rowCount.toLocaleString()} connections · ${parsedBulk.leadCount} qualify as pipeline leads at ${parsedBulk.companyCount} companies`
-                : `${parsedBulk.leadCount} lead${parsedBulk.leadCount !== 1 ? "s" : ""} detected`}
+          <FormField label="Source (optional)">
+            <input
+              type="text"
+              value={bulkSource}
+              onChange={e => setBulkSource(e.target.value)}
+              placeholder="e.g. CES 2026 Leads"
+              className="oe-field text-xs"
+            />
+          </FormField>
+          <div className="flex items-center gap-3">
+            <FormField label="Minimum Score">
+              <input
+                type="number"
+                value={bulkMinScore}
+                onChange={e => setBulkMinScore(e.target.value)}
+                placeholder="e.g. 50"
+                className="oe-field text-xs w-24"
+              />
+            </FormField>
+            <div className="text-[11px] text-muted-foreground mt-4">
+              {parsedBulk.error
+                ? parsedBulk.error
+                : `${filteredBulkOrgs.length} of ${parsedBulk.orgs.length} leads match · ${bulkSelected.size} selected`}
+            </div>
           </div>
+          {filteredBulkOrgs.length > 0 && (
+            <div className="max-h-[200px] overflow-y-auto border border-border rounded-lg">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="oe-table-header">
+                    <th className="px-3 py-2 text-left w-8">
+                      <input type="checkbox" checked={bulkSelected.size === filteredBulkOrgs.length} onChange={e => {
+                        if (e.target.checked) setBulkSelected(new Set(filteredBulkOrgs.map(f => f.idx)));
+                        else setBulkSelected(new Set());
+                      }} />
+                    </th>
+                    <th className="px-3 py-2 text-left text-[10px] uppercase text-muted-foreground font-semibold">Organization</th>
+                    <th className="px-3 py-2 text-left text-[10px] uppercase text-muted-foreground font-semibold">Score</th>
+                    <th className="px-3 py-2 text-left text-[10px] uppercase text-muted-foreground font-semibold">Industry</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredBulkOrgs.map(({ org, idx }) => (
+                    <tr key={idx} className="border-b border-border last:border-b-0">
+                      <td className="px-3 py-1.5">
+                        <input type="checkbox" checked={bulkSelected.has(idx)} onChange={e => {
+                          setBulkSelected(prev => { const next = new Set(prev); e.target.checked ? next.add(idx) : next.delete(idx); return next; });
+                        }} />
+                      </td>
+                      <td className="px-3 py-1.5 text-foreground">{org.name}</td>
+                      <td className="px-3 py-1.5 font-mono font-bold text-primary">{org.score}</td>
+                      <td className="px-3 py-1.5 text-muted-foreground">{org.industry || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <SecondaryButton onClick={resetBulkForm}>Cancel</SecondaryButton>
             <PrimaryButton
               onClick={handleBulkUpload}
-              disabled={parsedBulk.orgs.length === 0}
+              disabled={bulkSelected.size === 0}
             >
-              Import Leads
+              Import {bulkSelected.size} Lead{bulkSelected.size !== 1 ? "s" : ""}
             </PrimaryButton>
           </div>
         </div>

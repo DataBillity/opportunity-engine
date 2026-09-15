@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type { Organization, Pursuit } from "@/lib/mock-data";
 import { cn } from "@/lib/cn";
 
@@ -62,65 +62,87 @@ export function Sidebar({
   embedded?: boolean;
 }) {
   const [search, setSearch] = useState("");
+  const selectedRef = useRef<HTMLButtonElement>(null);
 
   const filteredOrgs = orgs.filter(org => {
     if (search && !org.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (laneFilter && laneFilter !== "all") {
+      if (laneFilter === "A") {
+        if (org.pursuits.length !== 0) return false;
+      } else {
+        if (!getOrgPursuits(org, allPursuits).some(p => p.lane === laneFilter)) return false;
+      }
+    }
     return true;
   });
+
+  const scrollToSelected = useCallback(() => {
+    if (selectedRef.current) {
+      selectedRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(scrollToSelected, 50);
+    return () => clearTimeout(timer);
+  }, [currentOrgId, scrollToSelected]);
 
   return (
     <aside
       className={cn(
-        "bg-card overflow-y-auto oe-touch-scroll",
+        "bg-card flex flex-col",
         embedded
           ? "w-full"
           : "hidden lg:block w-[240px] xl:w-[280px] shrink-0 border-r border-border"
       )}
     >
-      {/* Search */}
-      <div className="px-4 pt-4 pb-2">
-        <input
-          type="text"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search organizations…"
-          className="oe-field text-[11px]"
-        />
+      {/* Sticky search + filter header */}
+      <div className="sticky top-0 z-10 bg-card border-b border-border shrink-0">
+        {/* Search */}
+        <div className="px-4 pt-4 pb-2">
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search organizations…"
+            className="oe-field text-[11px]"
+          />
+        </div>
+
+        {/* Pipeline filter */}
+        <div className="px-4 pt-2 pb-3">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">
+            Pipeline filter
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {lanes.map(l => {
+              const count = l.key === "all"
+                ? orgs.length
+                : l.key === "A"
+                  ? orgs.filter(o => o.pursuits.length === 0).length
+                  : orgs.filter(o => getOrgPursuits(o, allPursuits).some(p => p.lane === l.key)).length;
+              return (
+                <button
+                  key={l.key}
+                  onClick={() => onLaneFilter(l.key)}
+                  className={cn(
+                    "text-[11px] font-medium px-3 py-1.5 rounded-md border transition-all cursor-pointer",
+                    laneFilter === l.key
+                      ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                      : "bg-card text-muted-foreground border-border hover:bg-secondary hover:text-foreground"
+                  )}
+                >
+                  {l.label}
+                  <span className="ml-1 opacity-70">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
-      {/* Pipeline filter */}
-      <div className="px-4 pt-2 pb-3">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">
-          Pipeline filter
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {lanes.map(l => {
-            const count = l.key === "all"
-              ? orgs.length
-              : l.key === "A"
-                ? orgs.filter(o => o.pursuits.length === 0).length
-                : orgs.filter(o => getOrgPursuits(o, allPursuits).some(p => p.lane === l.key)).length;
-            return (
-              <button
-                key={l.key}
-                onClick={() => onLaneFilter(l.key)}
-                className={cn(
-                  "text-[11px] font-medium px-3 py-1.5 rounded-md border transition-all cursor-pointer",
-                  laneFilter === l.key
-                    ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                    : "bg-card text-muted-foreground border-border hover:bg-secondary hover:text-foreground"
-                )}
-              >
-                {l.label}
-                <span className="ml-1 opacity-70">{count}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Organization list */}
-      <div className="border-t border-border">
+      {/* Scrollable organization list */}
+      <div className="flex-1 overflow-y-auto oe-touch-scroll">
         {filteredOrgs.map(org => {
           const active = getOrgPursuits(org, allPursuits).filter(p => !p.closed);
           const headlineRec = active.length > 0
@@ -131,7 +153,9 @@ export function Sidebar({
           return (
             <button
               key={org.id}
+              ref={isSelected ? selectedRef : undefined}
               onClick={() => onOrgSelect(org.id)}
+              aria-current={isSelected ? "true" : undefined}
               className={cn(
                 "block w-full text-left border-b border-border px-4 py-3.5 cursor-pointer transition-all",
                 isSelected

@@ -58,11 +58,11 @@ const APPROVED_REGIONS: Record<string, string[]> = {
   regulated: ["ca"],
 };
 
-const CLAUDE_MODELS = ["claude-sonnet-4-20250514", "claude-sonnet-4-5", "claude-3-5-sonnet-latest"];
+const CLAUDE_MODELS = ["claude-sonnet-5", "claude-sonnet-4-6"];
 const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
 
-const CLAUDE_INPUT_USD = 3 / 1_000_000;
-const CLAUDE_OUTPUT_USD = 15 / 1_000_000;
+const CLAUDE_INPUT_USD = 2 / 1_000_000;
+const CLAUDE_OUTPUT_USD = 10 / 1_000_000;
 const GEMINI_INPUT_USD = 0.15 / 1_000_000;
 const GEMINI_OUTPUT_USD = 0.60 / 1_000_000;
 
@@ -129,6 +129,30 @@ export async function callModel(input: GatewayCallInput): Promise<GatewayCallOut
   );
 }
 
+function usesClaudeSonnet5Api(model: string): boolean {
+  return model === "claude-sonnet-5" || model.startsWith("claude-sonnet-5-");
+}
+
+function buildClaudeRequestBody(model: string, input: GatewayCallInput): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model,
+    max_tokens: input.maxTokens ?? 1200,
+    system: input.systemPrompt || undefined,
+    messages: [{ role: "user", content: input.prompt }],
+  };
+
+  if (usesClaudeSonnet5Api(model)) {
+    // Sonnet 5 turns adaptive thinking on by default and rejects non-default
+    // sampling params. Keep the existing no-thinking JSON path so outreach and
+    // extraction stay within their current max_tokens budgets.
+    body.thinking = { type: "disabled" };
+  } else {
+    body.temperature = input.temperature ?? 0.4;
+  }
+
+  return body;
+}
+
 async function callClaude(input: GatewayCallInput, region: string): Promise<GatewayCallOutput> {
   const apiKey = getAnthropicApiKey();
   const models = input.modelVersion ? [input.modelVersion, ...CLAUDE_MODELS] : CLAUDE_MODELS;
@@ -145,13 +169,7 @@ async function callClaude(input: GatewayCallInput, region: string): Promise<Gate
           "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
         },
-        body: JSON.stringify({
-          model,
-          max_tokens: input.maxTokens ?? 1200,
-          temperature: input.temperature ?? 0.4,
-          system: input.systemPrompt || undefined,
-          messages: [{ role: "user", content: input.prompt }],
-        }),
+        body: JSON.stringify(buildClaudeRequestBody(model, input)),
         signal: AbortSignal.timeout(input.timeoutMs ?? CALL_TIMEOUT_MS),
       });
 

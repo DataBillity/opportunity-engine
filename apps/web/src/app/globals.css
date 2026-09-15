@@ -176,6 +176,7 @@
 .oe-touch-scroll {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
 }
 
 body.oe-nav-locked {

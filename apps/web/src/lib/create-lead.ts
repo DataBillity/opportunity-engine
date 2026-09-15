@@ -18,6 +18,7 @@ export interface SalesLeadInput {
   name: string;
   industry?: string;
   channel?: string;
+  source?: string;
   contactName?: string;
   contactEmail?: string;
   contactTitle?: string;
@@ -38,6 +39,7 @@ export function createSalesLead(input: SalesLeadInput): Organization {
     name,
     industry: input.industry?.trim() ?? "",
     channel: input.channel?.trim() || "Outbound",
+    source: input.source?.trim() || undefined,
     score,
     domain: "",
     registryId: "",

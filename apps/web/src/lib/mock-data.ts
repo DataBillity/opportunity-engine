@@ -8,6 +8,7 @@ export interface Organization {
   name: string;
   industry: string;
   channel: string;
+  source?: string;
   score: number;
   domain: string;
   registryId: string;
@@ -18,6 +19,7 @@ export interface Organization {
   scoreHistory: ScoreHistory[];
   notes: Note[];
   pursuits: string[];
+  archived?: boolean;
 }
 
 export interface Contact {
@@ -89,6 +91,10 @@ export interface Pursuit {
   };
   responseActionItems?: ResponseActionItem[];
   complianceMatrix?: { ref: string; title: string; sectionId: string }[];
+  draftStatus?: "In Draft" | "Submitted" | "On Hold" | "Canceled";
+  draftStatusDate?: string;
+  outcome?: "Won" | "Lost" | "Postponed" | "Canceled";
+  outcomeDate?: string;
 }
 
 export interface RequirementMapping {

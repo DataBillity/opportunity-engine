@@ -11,6 +11,7 @@ import { SearchView } from "@/components/views/search-view";
 import { SourcesView } from "@/components/views/sources-view";
 import { ResponseBuilderView } from "@/components/views/response-builder-view";
 import { SettingsView } from "@/components/views/settings-view";
+import { DashboardView } from "@/components/views/dashboard-view";
 import { OperatorProvider } from "@/components/auth/operator-provider";
 import {
   organizations as initialOrgs,
@@ -20,7 +21,7 @@ import {
 } from "@/lib/mock-data";
 import { mergeLeadOrganizations } from "@/lib/create-lead";
 
-export type ViewId = "search" | "pipeline" | "org" | "decision" | "draft" | "sources" | "settings";
+export type ViewId = "dashboard" | "search" | "pipeline" | "org" | "decision" | "draft" | "sources" | "settings";
 
 function getOrgPursuitsFromState(org: Organization, allPursuits: Record<string, Pursuit>): Pursuit[] {
   return org.pursuits.map(pid => allPursuits[pid]).filter(Boolean) as Pursuit[];
@@ -48,9 +49,7 @@ export default function CommandCenter() {
           return incoming.length ? [...incoming, ...prev] : prev;
         });
       })
-      .catch(() => {
-        /* keep mock orgs if the bulk-list API is unavailable */
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -58,18 +57,15 @@ export default function CommandCenter() {
 
   const currentOrg = orgs.find(o => o.id === currentOrgId);
   const currentPursuit = allPursuits[currentPursuitId];
+  const currentOrgHasPursuits = currentOrg
+    ? getOrgPursuitsFromState(currentOrg, allPursuits).filter(p => !p.closed).length > 0
+    : false;
 
   function handleOrgSelect(orgId: string) {
     setCurrentOrgId(orgId);
     const org = orgs.find(o => o.id === orgId);
     if (!org) return;
-    const active = getOrgPursuitsFromState(org, allPursuits);
-    if (active.length === 1) {
-      setCurrentPursuitId(active[0]!.id);
-      setActiveView("decision");
-    } else {
-      setActiveView("org");
-    }
+    setActiveView("org");
     setMobileNavOpen(false);
   }
 
@@ -147,6 +143,38 @@ export default function CommandCenter() {
     []
   );
 
+  const handleArchiveOrg = useCallback(
+    (orgId: string) => {
+      setOrgs(prev => prev.map(o => o.id === orgId ? { ...o, archived: true } : o));
+    },
+    []
+  );
+
+  const handleUpdateOrg = useCallback(
+    (orgId: string, updates: Partial<Organization>) => {
+      setOrgs(prev => prev.map(o => o.id === orgId ? { ...o, ...updates } : o));
+    },
+    []
+  );
+
+  const handleRefreshAllScores = useCallback(
+    () => {
+      setOrgs(prev => prev.map(o => {
+        const delta = Math.floor(Math.random() * 6) - 2;
+        const newScore = Math.max(0, Math.min(100, o.score + delta));
+        return {
+          ...o,
+          score: newScore,
+          scoreHistory: [
+            ...o.scoreHistory,
+            { score: newScore, at: new Date().toISOString().slice(0, 10), reason: "Batch score refresh." },
+          ],
+        };
+      }));
+    },
+    []
+  );
+
   return (
     <OperatorProvider>
       <div className="flex flex-col h-dvh overflow-hidden">
@@ -158,6 +186,7 @@ export default function CommandCenter() {
         onAddOrg={handleAddOrg}
         menuOpen={mobileNavOpen}
         onMenuToggle={() => setMobileNavOpen(open => !open)}
+        currentOrgHasPursuits={currentOrgHasPursuits}
       />
 
       <MobileNav
@@ -179,12 +208,15 @@ export default function CommandCenter() {
           laneFilter={laneFilter}
           onLaneFilter={setLaneFilter}
           onOrgSelect={handleOrgSelect}
-          orgs={orgs}
+          orgs={orgs.filter(o => !o.archived)}
           allPursuits={allPursuits}
         />
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:px-4 sm:py-5 md:p-5 lg:p-6 oe-touch-scroll">
           <div className="max-w-[1200px] 2xl:max-w-[1400px] mx-auto w-full">
+            {activeView === "dashboard" && (
+              <DashboardView orgs={orgs} allPursuits={allPursuits} />
+            )}
             {activeView === "search" && (
               <SearchView
                 onAddOrg={handleAddOrg}
@@ -202,6 +234,8 @@ export default function CommandCenter() {
                 orgs={orgs}
                 allPursuits={allPursuits}
                 onAddPursuit={handleAddPursuit}
+                onArchiveOrg={handleArchiveOrg}
+                onRefreshAllScores={handleRefreshAllScores}
               />
             )}
             {activeView === "org" && currentOrg && (
@@ -211,19 +245,21 @@ export default function CommandCenter() {
                 onPursuitSelect={handlePursuitSelect}
                 onBack={() => setActiveView("pipeline")}
                 onAddPursuit={handleAddPursuit}
+                onArchiveOrg={handleArchiveOrg}
+                onUpdateOrg={handleUpdateOrg}
               />
             )}
             {activeView === "decision" && currentPursuit && currentOrg && (
               <OpportunityView
                 pursuit={currentPursuit}
                 org={currentOrg}
-                onBack={() => setActiveView("pipeline")}
+                onBack={() => setActiveView("org")}
                 onDraft={() => setActiveView("draft")}
                 onConfirmDecision={handleConfirmDecision}
                 onUpdatePursuit={handleUpdatePursuit}
               />
             )}
-            {activeView === "draft" && currentPursuit && (
+            {activeView === "draft" && currentPursuit && currentPursuit.rec === "go" && (
               <ResponseBuilderView
                 pursuit={currentPursuit}
                 onBack={() => setActiveView("decision")}
