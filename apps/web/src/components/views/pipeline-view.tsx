@@ -164,11 +164,11 @@ export function PipelineView({
     }
   }
 
-  const columns: { key: SortColumn; label: string; hideOnMobile?: boolean }[] = [
+  const columns: { key: SortColumn; label: string; hideOnMobile?: boolean; minWidth?: string }[] = [
     { key: "name", label: "Organization" },
     { key: "industry", label: "Industry", hideOnMobile: true },
     { key: "channel", label: "Channel" },
-    { key: "source", label: "Source" },
+    { key: "source", label: "Source", minWidth: "min-w-[7.5rem]" },
     { key: "score", label: "Score" },
     { key: "projects", label: "Projects" },
   ];
@@ -310,15 +310,16 @@ export function PipelineView({
                     key={col.key}
                     onClick={() => toggleSort(col.key)}
                     className={cn(
-                      "text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold px-3 lg:px-4 py-3 cursor-pointer select-none hover:text-foreground transition-colors",
-                      col.hideOnMobile && "hidden lg:table-cell"
+                      "text-left text-[10px] uppercase tracking-wide text-muted-foreground font-semibold px-3 lg:px-4 py-3 cursor-pointer select-none hover:text-foreground transition-colors whitespace-nowrap",
+                      col.hideOnMobile && "hidden lg:table-cell",
+                      col.minWidth
                     )}
                   >
                     {col.label}
                     <SortIcon active={sortCol === col.key} dir={sortDir} />
                   </th>
                 ))}
-                <th className="text-left text-[11px] uppercase tracking-wider text-muted-foreground font-semibold px-3 lg:px-4 py-3">Actions</th>
+                <th className="text-left text-[10px] uppercase tracking-wide text-muted-foreground font-semibold px-3 lg:px-4 py-3 whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
