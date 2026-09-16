@@ -37,7 +37,7 @@ function findDraftablePursuit(org: Organization | undefined, allPursuits: Record
 }
 
 export default function CommandCenter() {
-  const [activeView, setActiveView] = useState<ViewId>("pipeline");
+  const [activeView, setActiveView] = useState<ViewId>("dashboard");
   const [currentOrgId, setCurrentOrgId] = useState("ORG-01");
   const [currentPursuitId, setCurrentPursuitId] = useState("OPP-2201");
   const [laneFilter, setLaneFilter] = useState("all");

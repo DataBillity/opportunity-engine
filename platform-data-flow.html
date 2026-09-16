@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opportunity Engine — Platform Data Flow</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --bg-surface: #16213e;
+    --bg-card: #1c2541;
+    --bg-elevated: #222b45;
+    --text-primary: #e8e8f0;
+    --text-secondary: #a0a0b8;
+    --text-tertiary: #6e6e88;
+    --accent: #4a90d9;
+    --accent-dim: #4a90d930;
+    --stroke: #3a3a58;
+    --stroke-dim: #2a2a42;
+    --band-source: rgba(46,121,181,0.12);
+    --band-source-border: rgba(46,121,181,0.35);
+    --band-ingest: rgba(31,138,101,0.12);
+    --band-ingest-border: rgba(31,138,101,0.35);
+    --band-core: rgba(123,100,184,0.12);
+    --band-core-border: rgba(123,100,184,0.35);
+    --band-ai: rgba(240,160,64,0.12);
+    --band-ai-border: rgba(240,160,64,0.35);
+    --band-scoring: rgba(200,88,152,0.12);
+    --band-scoring-border: rgba(200,88,152,0.35);
+    --band-governance: rgba(232,192,48,0.12);
+    --band-governance-border: rgba(232,192,48,0.35);
+    --band-db: rgba(90,108,192,0.12);
+    --band-db-border: rgba(90,108,192,0.35);
+    --band-ui: rgba(82,184,150,0.12);
+    --band-ui-border: rgba(82,184,150,0.35);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f5f5fa;
+      --bg-surface: #ffffff;
+      --bg-card: #ffffff;
+      --bg-elevated: #ffffff;
+      --text-primary: #141420;
+      --text-secondary: #555568;
+      --text-tertiary: #888898;
+      --accent: #2E6EB5;
+      --accent-dim: #2E6EB520;
+      --stroke: #d4d4e0;
+      --stroke-dim: #e8e8f0;
+      --band-source: rgba(46,121,181,0.08);
+      --band-source-border: rgba(46,121,181,0.25);
+      --band-ingest: rgba(31,138,101,0.08);
+      --band-ingest-border: rgba(31,138,101,0.25);
+      --band-core: rgba(123,100,184,0.08);
+      --band-core-border: rgba(123,100,184,0.25);
+      --band-ai: rgba(240,160,64,0.08);
+      --band-ai-border: rgba(240,160,64,0.25);
+      --band-scoring: rgba(200,88,152,0.08);
+      --band-scoring-border: rgba(200,88,152,0.25);
+      --band-governance: rgba(232,192,48,0.08);
+      --band-governance-border: rgba(232,192,48,0.25);
+      --band-db: rgba(90,108,192,0.08);
+      --band-db-border: rgba(90,108,192,0.25);
+      --band-ui: rgba(82,184,150,0.08);
+      --band-ui-border: rgba(82,184,150,0.25);
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif; background: var(--bg); color: var(--text-primary); line-height: 1.5; padding: 32px; max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 26px; font-weight: 650; margin-bottom: 6px; }
+  h2 { font-size: 20px; font-weight: 600; margin: 32px 0 12px; border-bottom: 1px solid var(--stroke-dim); padding-bottom: 8px; }
+  h3 { font-size: 16px; font-weight: 600; margin: 20px 0 8px; }
+  p, .desc { color: var(--text-secondary); font-size: 14px; margin-bottom: 12px; }
+  .subtitle { color: var(--text-secondary); font-size: 14px; margin-bottom: 24px; }
+  .stats { display: flex; gap: 24px; margin-bottom: 24px; flex-wrap: wrap; }
+  .stat { text-align: center; }
+  .stat-value { font-size: 28px; font-weight: 700; color: var(--accent); }
+  .stat-label { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 24px; flex-wrap: wrap; }
+  .tab { padding: 6px 16px; border-radius: 16px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--stroke); background: transparent; color: var(--text-secondary); transition: all 0.15s; }
+  .tab:hover { border-color: var(--accent); color: var(--text-primary); }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .diagram-wrap { overflow-x: auto; border: 1px solid var(--stroke-dim); border-radius: 8px; background: var(--bg-surface); padding: 8px; }
+  .legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-top: 16px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+  .legend-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px; }
+  th { text-align: left; padding: 8px 12px; background: var(--bg-elevated); color: var(--text-secondary); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 2px solid var(--stroke); }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--stroke-dim); vertical-align: top; }
+  tr:nth-child(even) td { background: var(--bg-surface); }
+  .callout { background: var(--accent-dim); border-left: 3px solid var(--accent); padding: 12px 16px; border-radius: 0 6px 6px 0; margin-bottom: 16px; font-size: 13px; }
+  .callout-title { font-weight: 600; margin-bottom: 4px; }
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .card { background: var(--bg-card); border: 1px solid var(--stroke-dim); border-radius: 8px; padding: 16px; }
+  .card-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .card p { font-size: 12px; }
+  details { margin-bottom: 8px; border: 1px solid var(--stroke-dim); border-radius: 6px; }
+  details[open] { margin-bottom: 16px; }
+  summary { padding: 10px 14px; cursor: pointer; font-weight: 600; font-size: 14px; background: var(--bg-elevated); border-radius: 6px; }
+  details[open] summary { border-radius: 6px 6px 0 0; border-bottom: 1px solid var(--stroke-dim); }
+  .details-body { padding: 12px 14px; }
+  .details-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; }
+  code { font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; font-size: 12px; background: var(--bg-elevated); padding: 1px 5px; border-radius: 3px; }
+  .print-break { page-break-before: always; }
+  @media print {
+    body { background: #fff; color: #000; }
+    .tabs { display: none; }
+    .tab-content { display: block !important; }
+    .tab-content + .tab-content { page-break-before: always; }
+    th { background: #f0f0f0; }
+  }
+  @media (max-width: 720px) {
+    .card-grid { grid-template-columns: 1fr; }
+    .stats { gap: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Opportunity Engine &mdash; Platform Data Flow</h1>
+<p class="subtitle">
+  Complete data flow architecture for the Opportunity Engine platform &mdash; a Turborepo monorepo
+  (Next.js web app + shared packages) built for DataBillity's opportunity identification,
+  pursuit triage, and AI-governed outreach. Generated Sep 15, 2026.
+</p>
+
+<div class="stats">
+  <div class="stat"><div class="stat-value">9</div><div class="stat-label">Schema Clusters</div></div>
+  <div class="stat"><div class="stat-value">50+</div><div class="stat-label">Database Tables</div></div>
+  <div class="stat"><div class="stat-value">8</div><div class="stat-label">Major Workflows</div></div>
+  <div class="stat"><div class="stat-value">6</div><div class="stat-label">API Route Groups</div></div>
+  <div class="stat"><div class="stat-value">5</div><div class="stat-label">Monorepo Packages</div></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('flow')">Architecture Diagram</button>
+  <button class="tab" onclick="showTab('workflows')">Workflow Details</button>
+  <button class="tab" onclick="showTab('schema')">Schema Clusters</button>
+  <button class="tab" onclick="showTab('api')">API Routes &amp; Packages</button>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB 1: ARCHITECTURE DIAGRAM                                       -->
+<!-- ================================================================ -->
+<div id="tab-flow" class="tab-content active">
+<h2>System Data Flow</h2>
+<div class="callout">
+  <div class="callout-title">Reading the diagram</div>
+  Data flows top-to-bottom across eight layers: External Sources &rarr; Ingest &amp; Parse &rarr;
+  Core Processing &rarr; AI Gateway &rarr; Scoring &amp; Decision &rarr; Governance &rarr;
+  Database &rarr; UI Views. Dashed bands group nodes by layer. Scroll horizontally if needed.
+</div>
+
+<div class="diagram-wrap">
+<svg id="flow-svg" xmlns="http://www.w3.org/2000/svg" style="display:block;min-width:100%;"></svg>
+</div>
+
+<h3>Layer Legend</h3>
+<div class="legend">
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--band-source);border:1px solid var(--band-source-border)"></div>External Sources</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--band-ingest);border:1px solid var(--band-ingest-border)"></div>Ingest &amp; Parse</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--band-core);border:1px solid var(--band-core-border)"></div>Core Processing</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--band-ai);border:1px solid var(--band-ai-border)"></div>AI Gateway</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--band-scoring);border:1px solid var(--band-scoring-border)"></div>Scoring &amp; Decision</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--band-governance);border:1px solid var(--band-governance-border)"></div>Governance</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--band-db);border:1px solid var(--band-db-border)"></div>Database (Neon PostgreSQL)</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--band-ui);border:1px solid var(--band-ui-border)"></div>UI Views (Next.js)</div>
+</div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB 2: WORKFLOW DETAILS                                           -->
+<!-- ================================================================ -->
+<div id="tab-workflows" class="tab-content">
+<h2>Workflow Breakdowns</h2>
+<p>Each major workflow traced step-by-step with the responsible component, its input, and its output.</p>
+
+<details open>
+<summary>1. LinkedIn Connections Bulk Ingest</summary>
+<div class="details-body">
+<p class="details-desc">Operator uploads a LinkedIn Connections.csv export. The system parses, classifies seniority, resolves entities into accounts, matches ICP verticals and capabilities, scores via Opportunity Alignment (40/35/25), routes leads to pipeline (score &ge; 62 with ICP/capability fit), and persists results to the database.</p>
+<table>
+<tr><th>Step</th><th>Component</th><th>Input</th><th>Output</th></tr>
+<tr><td>1. Upload CSV</td><td>Pipeline View (UI)</td><td>Connections.csv file</td><td>Raw CSV text</td></tr>
+<tr><td>2. Detect format</td><td><code>isLinkedInConnectionsCsv()</code></td><td>CSV text</td><td>Boolean &mdash; LinkedIn format detected</td></tr>
+<tr><td>3. Parse rows</td><td><code>parseLinkedInConnectionsCsv()</code></td><td>CSV text</td><td>LinkedInConnectionRow[]</td></tr>
+<tr><td>4. Evaluate batch</td><td><code>evaluateLinkedInBatch()</code></td><td>Parsed rows</td><td>LinkedInBatchResult</td></tr>
+<tr><td>&nbsp;&nbsp;4a. Classify seniority</td><td><code>classifySeniority()</code></td><td>Position title</td><td>SeniorityBand (15 tiers)</td></tr>
+<tr><td>&nbsp;&nbsp;4b. Infer ICP vertical</td><td><code>inferIcpVertical()</code></td><td>Profile + company text</td><td>IcpVerticalMatch | null</td></tr>
+<tr><td>&nbsp;&nbsp;4c. Match capabilities</td><td><code>matchBillityCapabilities()</code></td><td>Profile text</td><td>CapabilityMatch[] (12 capabilities)</td></tr>
+<tr><td>&nbsp;&nbsp;4d. Score alignment</td><td><code>computeOpportunityAlignment()</code></td><td>Match count, maturity, signals, value</td><td>ScoreRunOutput (0&ndash;100)</td></tr>
+<tr><td>&nbsp;&nbsp;4e. Route lead</td><td><code>isQualifiedPipelineLead()</code></td><td>Score, vertical, motion</td><td>pipeline | parked</td></tr>
+<tr><td>5. Roll up accounts</td><td><code>rollupAccounts()</code></td><td>Evaluated leads</td><td>ResolvedAccount[] (deduplicated)</td></tr>
+<tr><td>6. Persist to DB</td><td><code>POST /api/pipeline/orgs</code></td><td>Accounts + leads</td><td>account, lead, score_run rows</td></tr>
+</table>
+</div>
+</details>
+
+<details>
+<summary>2. RFP / SOW Document Ingest &amp; Triage</summary>
+<div class="details-body">
+<p class="details-desc">Operator uploads an RFP or SOW for a specific organization. The system extracts text (PDF/DOCX/TXT), runs heuristic extraction, optionally enhances with Claude/Gemini AI extraction, maps requirements to the capability graph, scores via Pursuit Triage, and produces a Go / No-Go / Conditional recommendation.</p>
+<table>
+<tr><th>Step</th><th>Component</th><th>Input</th><th>Output</th></tr>
+<tr><td>1. Upload document</td><td>Add Pursuit Form (UI)</td><td>File(s) + org context</td><td>FormData</td></tr>
+<tr><td>2. Extract text</td><td><code>extractDocumentText()</code></td><td>File bytes (PDF/DOCX/TXT)</td><td>ExtractedDocument (text)</td></tr>
+<tr><td>3. Heuristic parse</td><td><code>extractSolicitationHeuristic()</code></td><td>Document text + filename</td><td>SolicitationExtraction (baseline)</td></tr>
+<tr><td>4. AI extraction</td><td><code>extractSolicitationWithModel()</code></td><td>Document text + org context</td><td>Enhanced SolicitationExtraction</td></tr>
+<tr><td>&nbsp;&nbsp;4a. Gateway call</td><td><code>callModel()</code> &mdash; extraction tier</td><td>Prompt + document text</td><td>Structured JSON (requirements, dates, sections)</td></tr>
+<tr><td>5. Merge extractions</td><td><code>mergeSolicitationExtractions()</code></td><td>Heuristic + model extraction</td><td>Merged SolicitationExtraction</td></tr>
+<tr><td>6. Score triage</td><td><code>scorePursuitTriage()</code></td><td>Extraction + source text + org</td><td>PursuitTriageView</td></tr>
+<tr><td>&nbsp;&nbsp;6a. Map requirements</td><td><code>mapRequirement()</code></td><td>Each requirement text</td><td>mapped | unmapped status</td></tr>
+<tr><td>&nbsp;&nbsp;6b. Compute alignment</td><td><code>computeOpportunityAlignment()</code></td><td>Match counts + intent signals</td><td>ScoreRunOutput</td></tr>
+<tr><td>&nbsp;&nbsp;6c. Determine rec</td><td>Coverage + pass/fail logic</td><td>Coverage %, pass/fail gaps</td><td>go | nogo | cond | pending</td></tr>
+<tr><td>7. Build triage view</td><td><code>applyIngestToPursuit()</code></td><td>Base pursuit + ingest result</td><td>Full Pursuit with triage data</td></tr>
+</table>
+</div>
+</details>
+
+<details>
+<summary>3. AI-Powered Outreach Generation</summary>
+<div class="details-body">
+<p class="details-desc">Operator selects an organization and optional pursuit, then requests an outreach email. The system builds a grounded briefing from pipeline data, collects grounding facts, and calls the AI Gateway (judgment tier &mdash; Claude preferred) to generate a factual, concise outreach email. The model may only cite listed grounding facts.</p>
+<table>
+<tr><th>Step</th><th>Component</th><th>Input</th><th>Output</th></tr>
+<tr><td>1. Select target</td><td>Outreach Composer (UI)</td><td>Organization + pursuit + contact</td><td>User selections</td></tr>
+<tr><td>2. Build briefing</td><td><code>buildOutreachBriefing()</code></td><td>Org, pursuit, sender info</td><td>OutreachBriefing (Zod-validated)</td></tr>
+<tr><td>3. Collect facts</td><td><code>collectGroundingFacts()</code></td><td>OutreachBriefing</td><td>GroundingFact[] (max 22)</td></tr>
+<tr><td>4. Build prompt</td><td><code>buildOutreachPrompt()</code></td><td>Briefing + facts</td><td>Structured prompt string</td></tr>
+<tr><td>5. Call AI gateway</td><td><code>callModel()</code> &mdash; judgment tier</td><td>System prompt + user prompt</td><td>JSON {subject, body, usedInsightIds}</td></tr>
+<tr><td>6. Parse + validate</td><td><code>parseModelJson()</code> + Zod</td><td>Model output string</td><td>OutreachDraftOutput</td></tr>
+<tr><td>7. Return draft</td><td><code>POST /api/outreach/generate</code></td><td>Draft + metadata</td><td>OutreachDraft to UI</td></tr>
+</table>
+</div>
+</details>
+
+<details>
+<summary>4. Partner Document Ingest (Graph Building)</summary>
+<div class="details-body">
+<p class="details-desc">Operator uploads partner capability statements, experience narratives, credentials (insurance/certs), or personnel resumes. The system extracts text, parses with heuristics, optionally enhances with the AI gateway (extraction tier), and merges results into the capability/experience graph.</p>
+<table>
+<tr><th>Step</th><th>Component</th><th>Input</th><th>Output</th></tr>
+<tr><td>1. Upload documents</td><td>Sources View (UI)</td><td>Files + kind selector</td><td>FormData</td></tr>
+<tr><td>2. Extract text</td><td><code>extractDocumentText()</code></td><td>File bytes</td><td>ExtractedDocument</td></tr>
+<tr><td>3. Heuristic parse</td><td><code>parsePartnerDocument()</code></td><td>Text + kind</td><td>PartnerIngestResult</td></tr>
+<tr><td>4. AI enhancement</td><td><code>enhanceWithModel()</code></td><td>Text + kind + filename</td><td>Enhanced PartnerIngestResult</td></tr>
+<tr><td>5. Merge into graph</td><td><code>applyPartnerIngest()</code></td><td>Current graph + ingest result</td><td>Updated GraphData + added/merged lists</td></tr>
+</table>
+</div>
+</details>
+
+<details>
+<summary>5. Opportunity Alignment Scoring (40/35/25)</summary>
+<div class="details-body">
+<p class="details-desc">Pure deterministic scoring function used across all workflows. Three weighted dimensions: Capability Alignment (40 pts) measures coverage ratio and maturity. Intent &amp; Timing (35 pts) decays signal confidence by recency. Account Value Fit (25 pts) considers sector, prior relationship, multi-year potential, and reference-account potential. Inbound leads get an additional uplift.</p>
+<table>
+<tr><th>Step</th><th>Component</th><th>Input</th><th>Output</th></tr>
+<tr><td>1. Capability score</td><td><code>computeCapabilityAlignment()</code></td><td>Match count / total, maturity (0&ndash;1)</td><td>0&ndash;100 (weighted at 40%)</td></tr>
+<tr><td>2. Intent score</td><td><code>computeIntentTiming()</code></td><td>IntentSignal[] with type, confidence, recency</td><td>0&ndash;100 (weighted at 35%)</td></tr>
+<tr><td>3. Value score</td><td><code>computeAccountValueFit()</code></td><td>Sector, size, prior relationship flags</td><td>0&ndash;100 (weighted at 25%)</td></tr>
+<tr><td>4. Weighted sum</td><td><code>computeOpportunityAlignment()</code></td><td>Three sub-scores + isInbound flag</td><td>Total 0&ndash;100 + optional inbound uplift</td></tr>
+</table>
+</div>
+</details>
+
+<details>
+<summary>6. Entity Resolution (Account Deduplication)</summary>
+<div class="details-body">
+<p class="details-desc">Four-stage entity resolution ensures every organization resolves to a single account record. Stage 1: Blocking (cheap candidate generation by domain/name). Stage 2: Pairwise scoring (Jaro-Winkler + weighted features). Stage 3: Banding (auto-merge &ge; 0.92, review 0.70&ndash;0.92, distinct &lt; 0.70). Stage 4: Non-destructive merge with un-merge support.</p>
+<table>
+<tr><th>Step</th><th>Component</th><th>Input</th><th>Output</th></tr>
+<tr><td>1. Normalize names</td><td><code>normalizeLegalName()</code></td><td>Raw company name</td><td>Stripped name (no Inc/LLC/etc.)</td></tr>
+<tr><td>2. Block candidates</td><td>Domain + name blocking</td><td>Candidate pool</td><td>Candidate pairs</td></tr>
+<tr><td>3. Pairwise score</td><td><code>computePairwiseScore()</code></td><td>EntityCandidate pair</td><td>PairwiseScore with 5 features (0&ndash;1)</td></tr>
+<tr><td>4. Apply bands</td><td><code>ENTITY_RESOLUTION_THRESHOLDS</code></td><td>Pairwise score</td><td>auto_merge | review | distinct</td></tr>
+<tr><td>5. Merge records</td><td><code>account_merge</code> table</td><td>Surviving + merged IDs</td><td>Non-destructive merge link</td></tr>
+</table>
+</div>
+</details>
+
+<details>
+<summary>7. Operator Authentication</summary>
+<div class="details-body">
+<p class="details-desc">Session-based authentication using JWT cookies. Operators sign in with email + password (bcrypt-hashed). Rate limiting protects the login endpoint. Middleware redirects unauthenticated requests to /login. Forgot-password flow sends a time-limited reset token via Resend email.</p>
+<table>
+<tr><th>Step</th><th>Component</th><th>Input</th><th>Output</th></tr>
+<tr><td>1. Submit credentials</td><td>Sign-In Form (UI)</td><td>Email + password</td><td>POST /api/auth/login</td></tr>
+<tr><td>2. Verify credentials</td><td><code>verifyLoginCredentials()</code></td><td>Email + password</td><td>Boolean (bcrypt compare)</td></tr>
+<tr><td>3. Issue session</td><td><code>createSessionToken()</code></td><td>Email</td><td>JWT + httpOnly cookie</td></tr>
+<tr><td>4. Middleware guard</td><td><code>middleware.ts</code></td><td>Request + cookie</td><td>Next or redirect to /login</td></tr>
+<tr><td>5. Forgot password</td><td><code>POST /api/auth/forgot</code></td><td>Email</td><td>Reset token via Resend</td></tr>
+<tr><td>6. Reset password</td><td><code>POST /api/auth/reset</code></td><td>Token + new password</td><td>Updated operator_credential</td></tr>
+</table>
+</div>
+</details>
+
+<details>
+<summary>8. AI Governance &amp; Decision Envelope</summary>
+<div class="details-body">
+<p class="details-desc">Every automated AI decision flows through the Decision Envelope &mdash; a hash-chained, append-only log ensuring auditability. Each record captures inputs, model/prompt/graph/weights versions, and output. Rows are SHA-256 hash-chained for tamper detection. Human review, overrides, and appeals are tracked.</p>
+<table>
+<tr><th>Step</th><th>Component</th><th>Input</th><th>Output</th></tr>
+<tr><td>1. Build record</td><td><code>buildDecisionRecord()</code></td><td>DecisionInput + output</td><td>DecisionOutput with hash chain</td></tr>
+<tr><td>2. Hash chain</td><td><code>computeRowHash()</code></td><td>Previous hash + canonical JSON row</td><td>SHA-256 row hash</td></tr>
+<tr><td>3. Persist decision</td><td><code>decision</code> table (Cluster G)</td><td>Full decision record</td><td>Append-only row (UPDATE/DELETE revoked)</td></tr>
+<tr><td>4. Log model call</td><td><code>model_call</code> table</td><td>Gateway ref, tokens, cost, latency</td><td>Cost/usage tracking</td></tr>
+<tr><td>5. Human review</td><td><code>decision_review</code> table</td><td>Reviewer + notes + outcome</td><td>Auditable confirmation</td></tr>
+<tr><td>6. Appeal</td><td><code>appeal</code> table</td><td>Decision ID + raised by</td><td>Independent review record</td></tr>
+</table>
+</div>
+</details>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB 3: SCHEMA CLUSTERS                                            -->
+<!-- ================================================================ -->
+<div id="tab-schema" class="tab-content">
+<h2>Database Schema Clusters</h2>
+<p>Nine schema clusters organized by domain concern, following the Master Technical Blueprint. All tables use Drizzle ORM on Neon PostgreSQL with UUID primary keys, timestamp tracking, classification and retention-class tagging.</p>
+
+<table>
+<tr><th>Cluster</th><th>Name</th><th>Key Tables</th><th>Purpose</th></tr>
+<tr><td><strong>A</strong></td><td>Identity &amp; Demand</td><td><code>account</code>, <code>account_alias</code>, <code>account_merge</code>, <code>contact</code>, <code>lead</code>, <code>opportunity</code>, <code>enriched_field</code>, <code>source_batch</code></td><td>Entity-resolution anchor. Every lead, opportunity, and solicitation resolves to a single account.</td></tr>
+<tr><td><strong>B</strong></td><td>Capability Graph</td><td><code>graph_node</code>, <code>graph_edge</code>, <code>node_evidence</code>, <code>node_version</code>, <code>graph_snapshot</code>, <code>person_notice</code></td><td>The spine of the platform &mdash; capabilities, experience, credentials, and people as typed graph nodes.</td></tr>
+<tr><td><strong>C</strong></td><td>Gap Register</td><td><code>gap</code>, <code>gap_evidence</code>, <code>gap_coverage</code></td><td>Tracks unmet capability requirements with criticality, demand frequency, and closure routes.</td></tr>
+<tr><td><strong>D</strong></td><td>Partners</td><td><code>partner</code>, <code>partner_account_link</code>, <code>partner_obligation</code>, <code>partner_user</code></td><td>Partner entities (never merged into account). Tracks teaming agreements, obligations, and access scope.</td></tr>
+<tr><td><strong>E</strong></td><td>Pursuit</td><td><code>pursuit_document</code>, <code>triage_run</code>, <code>triage_requirement</code>, <code>compliance_matrix_item</code>, <code>personnel_role</code>, <code>personnel_slate</code>, <code>slate_candidate</code>, <code>proposal_section</code>, <code>draft_assertion</code>, <code>teaming_instrument</code>, <code>deliverable</code>, <code>handoff</code>, <code>response_action_item</code></td><td>Full pursuit lifecycle &mdash; triage, requirement mapping, personnel, proposals, deliverables, action items.</td></tr>
+<tr><td><strong>G</strong></td><td>Governance &amp; AI</td><td><code>ai_decision_point</code>, <code>decision</code>, <code>decision_review</code>, <code>risk_assessment</code>, <code>subject_request</code>, <code>appeal</code>, <code>fairness_test_run</code>, <code>model_call</code></td><td>Append-only, hash-chained decision log. Every AI output is traceable and auditable.</td></tr>
+<tr><td><strong>H</strong></td><td>Consent &amp; Notice</td><td><code>data_collection_asset</code>, <code>consent_notice</code>, <code>consent_record</code>, <code>suppression</code></td><td>GDPR/CCPA/PIPEDA compliance &mdash; consent records, notices, and suppression lists.</td></tr>
+<tr><td><strong>J</strong></td><td>Outcomes &amp; Learning</td><td><code>score_run</code>, <code>score_override</code>, <code>outcome</code>, <code>weights_version</code>, <code>draft_edit_delta</code></td><td>Append-only scoring history, win/loss outcomes, weight versioning, and draft-edit tracking for learning loops.</td></tr>
+<tr><td><strong>K</strong></td><td>Operations</td><td><code>job_submission</code>, <code>dead_letter</code>, <code>retention_policy</code>, <code>audit_log</code>, <code>document</code>, <code>document_access_log</code></td><td>Idempotent job processing, dead-letter queue, document storage, and audit trails.</td></tr>
+</table>
+
+<h3>Cross-Cutting Patterns</h3>
+<div class="card-grid">
+  <div class="card">
+    <div class="card-title">Classification &amp; Retention</div>
+    <p>Every row carries a <code>classification</code> (public, internal, confidential, regulated) and <code>retention_class</code> (standard, extended, regulatory, permanent) field, enforcing data governance at the row level.</p>
+  </div>
+  <div class="card">
+    <div class="card-title">Append-Only Audit</div>
+    <p>Cluster G decisions and Cluster J score runs are append-only &mdash; UPDATE and DELETE are structurally revoked. The <code>decision</code> table is hash-chained (SHA-256) for tamper detection.</p>
+  </div>
+  <div class="card">
+    <div class="card-title">Entity Resolution Anchoring</div>
+    <p>Cluster A's <code>account</code> table is the single identity anchor (I2). Every lead, opportunity, contact, and solicitation references it. Merges are non-destructive with un-merge support via <code>account_merge</code>.</p>
+  </div>
+  <div class="card">
+    <div class="card-title">Operator Auth</div>
+    <p>Separate from the main schema: <code>operator_credential</code>, <code>operator_profile</code>, and <code>password_reset_token</code> handle session-based JWT authentication with bcrypt password hashing.</p>
+  </div>
+</div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB 4: API ROUTES                                                 -->
+<!-- ================================================================ -->
+<div id="tab-api" class="tab-content">
+<h2>API Route Map</h2>
+<p>All API routes in the Next.js web application, showing HTTP methods, purpose, key dependencies, and rate limiting.</p>
+<table>
+<tr><th>Route</th><th>Methods</th><th>Purpose</th><th>Key Dependencies</th><th>Rate Limit</th></tr>
+<tr><td><code>/api/auth/login</code></td><td>POST</td><td>Operator sign-in (email + password)</td><td><code>operator_credential</code> (bcrypt), JWT session</td><td>8 / 10 min</td></tr>
+<tr><td><code>/api/auth/logout</code></td><td>POST</td><td>Clear session cookie</td><td>Cookie deletion</td><td>&mdash;</td></tr>
+<tr><td><code>/api/auth/session</code></td><td>GET</td><td>Return current session info</td><td>JWT verification</td><td>&mdash;</td></tr>
+<tr><td><code>/api/auth/profile</code></td><td>GET, PATCH</td><td>Read/update operator profile</td><td><code>operator_profile</code> table</td><td>&mdash;</td></tr>
+<tr><td><code>/api/auth/forgot</code></td><td>POST</td><td>Send password reset email</td><td>Resend email, <code>password_reset_token</code></td><td>Rate limited</td></tr>
+<tr><td><code>/api/auth/reset</code></td><td>POST</td><td>Reset password with token</td><td>Token verification, bcrypt hash</td><td>Rate limited</td></tr>
+<tr><td><code>/api/projects/ingest</code></td><td>GET, POST</td><td>Upload RFP/SOW documents for triage</td><td><code>@opportunity-engine/core</code> + <code>/ai</code></td><td>12 / 10 min</td></tr>
+<tr><td><code>/api/partners/ingest</code></td><td>POST</td><td>Upload partner documents to graph</td><td><code>@opportunity-engine/ai</code> (extraction)</td><td>&mdash;</td></tr>
+<tr><td><code>/api/outreach/generate</code></td><td>GET, POST</td><td>Generate AI outreach email</td><td><code>@opportunity-engine/ai</code> (judgment)</td><td>20 / 10 min</td></tr>
+<tr><td><code>/api/pipeline/orgs</code></td><td>GET</td><td>Fetch pipeline orgs from DB</td><td>Neon PostgreSQL (<code>account</code> + <code>lead</code> join)</td><td>&mdash;</td></tr>
+</table>
+
+<h2>Monorepo Package Map</h2>
+<table>
+<tr><th>Package</th><th>Responsibility</th><th>Key Exports</th></tr>
+<tr><td><code>@opportunity-engine/ai</code></td><td>Single Model Gateway (Claude + Gemini), outreach drafting, solicitation extraction</td><td><code>callModel()</code>, <code>generateOutreachDraft()</code>, <code>extractSolicitationWithModel()</code></td></tr>
+<tr><td><code>@opportunity-engine/core</code></td><td>Pure scoring, entity resolution, LinkedIn ingest, decision envelope, ICP taxonomy</td><td><code>computeOpportunityAlignment()</code>, <code>scorePursuitTriage()</code>, <code>evaluateLinkedInBatch()</code>, <code>buildDecisionRecord()</code></td></tr>
+<tr><td><code>@opportunity-engine/contracts</code></td><td>Shared Zod schemas for type-safe boundaries between web and worker</td><td><code>OutreachBriefing</code>, <code>SolicitationExtraction</code>, <code>PursuitTriageView</code>, <code>ScoreRunOutput</code></td></tr>
+<tr><td><code>@opportunity-engine/db</code></td><td>Drizzle ORM schema definitions and Neon PostgreSQL client</td><td>9 schema cluster exports, <code>createSql()</code></td></tr>
+<tr><td><code>apps/web</code></td><td>Next.js 15 application &mdash; UI views, API routes, middleware</td><td>6 API route groups, 6 UI views, auth middleware</td></tr>
+</table>
+
+<h2>AI Gateway Architecture</h2>
+<div class="card-grid">
+  <div class="card">
+    <div class="card-title">Judgment Tier (Claude preferred)</div>
+    <p>Used for outreach generation and high-stakes reasoning. Models: <code>claude-sonnet-5</code>, <code>claude-sonnet-4-6</code>. Falls back to Gemini if Claude API key is missing or fails. Max 1,200 tokens, temperature 0.4.</p>
+  </div>
+  <div class="card">
+    <div class="card-title">Extraction Tier (Gemini preferred)</div>
+    <p>Used for solicitation extraction and partner document parsing. Models: <code>gemini-2.5-flash</code>, <code>gemini-2.0-flash</code>. Falls back to Claude if Gemini is unavailable. JSON mode enabled, temperature 0.1.</p>
+  </div>
+  <div class="card">
+    <div class="card-title">Region &amp; Classification Guards</div>
+    <p>Public/internal data may route to US, EU, or CA. Confidential restricts to US + CA. Regulated data may only be processed in the CA region. Enforced at the gateway level before any API call.</p>
+  </div>
+  <div class="card">
+    <div class="card-title">Cost Tracking</div>
+    <p>Every call logs input/output tokens, cost (USD), latency (ms), model version, and redaction profile to the <code>model_call</code> table in Cluster G for auditability and budget tracking.</p>
+  </div>
+</div>
+</div>
+
+<!-- ================================================================ -->
+<!-- JAVASCRIPT: Tabs + SVG rendering                                  -->
+<!-- ================================================================ -->
+<script>
+function showTab(id) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// Simplified DAG layout (Sugiyama-style)
+(function renderFlowDiagram() {
+  const groups = {
+    source:     { rank: 0, bg: 'var(--band-source)',     border: 'var(--band-source-border)',     label: 'External Sources' },
+    ingest:     { rank: 1, bg: 'var(--band-ingest)',      border: 'var(--band-ingest-border)',     label: 'Ingest & Parse' },
+    core:       { rank: 2, bg: 'var(--band-core)',        border: 'var(--band-core-border)',       label: 'Core Processing' },
+    ai:         { rank: 3, bg: 'var(--band-ai)',          border: 'var(--band-ai-border)',         label: 'AI Gateway' },
+    scoring:    { rank: 4, bg: 'var(--band-scoring)',     border: 'var(--band-scoring-border)',    label: 'Scoring & Decision' },
+    governance: { rank: 5, bg: 'var(--band-governance)',  border: 'var(--band-governance-border)', label: 'Governance' },
+    db:         { rank: 6, bg: 'var(--band-db)',          border: 'var(--band-db-border)',         label: 'Database (Neon PostgreSQL)' },
+    ui:         { rank: 7, bg: 'var(--band-ui)',          border: 'var(--band-ui-border)',         label: 'UI Views (Next.js)' },
+  };
+
+  const nodes = [
+    { id: 'linkedin_csv',     label: 'LinkedIn CSV',           group: 'source' },
+    { id: 'rfp_docs',         label: 'RFP / SOW Docs',         group: 'source' },
+    { id: 'partner_docs',     label: 'Partner Docs',           group: 'source' },
+    { id: 'manual_lead',      label: 'Manual Lead Entry',      group: 'source' },
+    { id: 'operator_auth',    label: 'Operator Login',         group: 'source' },
+
+    { id: 'linkedin_parser',  label: 'LinkedIn CSV Parser',    group: 'ingest' },
+    { id: 'doc_extractor',    label: 'Document Extractor',     group: 'ingest' },
+    { id: 'partner_parser',   label: 'Partner Doc Parser',     group: 'ingest' },
+    { id: 'lead_parser',      label: 'Lead / Bulk Parser',     group: 'ingest' },
+    { id: 'auth_middleware',   label: 'Auth Middleware',        group: 'ingest' },
+
+    { id: 'entity_resolution',label: 'Entity Resolution',      group: 'core' },
+    { id: 'icp_matching',     label: 'Billity ICP Matching',   group: 'core' },
+    { id: 'capability_match', label: 'Capability Taxonomy',    group: 'core' },
+    { id: 'seniority_class',  label: 'Seniority Classification', group: 'core' },
+    { id: 'heuristic_extract',label: 'Heuristic Extraction',   group: 'core' },
+
+    { id: 'ai_gateway',       label: 'Model Gateway',          group: 'ai' },
+    { id: 'claude',            label: 'Claude (Judgment)',      group: 'ai' },
+    { id: 'gemini',            label: 'Gemini (Extraction)',    group: 'ai' },
+
+    { id: 'opp_alignment',    label: 'Opp. Alignment (40/35/25)', group: 'scoring' },
+    { id: 'pursuit_triage',   label: 'Pursuit Triage',         group: 'scoring' },
+    { id: 'lead_routing',     label: 'Lead Scoring & Routing', group: 'scoring' },
+    { id: 'outreach_gen',     label: 'Outreach Generation',    group: 'scoring' },
+    { id: 'personnel_fit',    label: 'Personnel Fit Ranking',  group: 'scoring' },
+
+    { id: 'decision_envelope',label: 'Decision Envelope',      group: 'governance' },
+    { id: 'audit_log',        label: 'Audit Log',              group: 'governance' },
+
+    { id: 'cluster_a',        label: 'A: Identity & Demand',   group: 'db' },
+    { id: 'cluster_b',        label: 'B: Capability Graph',    group: 'db' },
+    { id: 'cluster_c',        label: 'C: Gap Register',        group: 'db' },
+    { id: 'cluster_d',        label: 'D: Partners',            group: 'db' },
+    { id: 'cluster_e',        label: 'E: Pursuit',             group: 'db' },
+    { id: 'cluster_g',        label: 'G: Governance & AI',     group: 'db' },
+    { id: 'cluster_j',        label: 'J: Outcomes',            group: 'db' },
+    { id: 'cluster_k',        label: 'K: Operations',          group: 'db' },
+
+    { id: 'pipeline_view',    label: 'Pipeline View',          group: 'ui' },
+    { id: 'opportunity_view', label: 'Opportunity View',       group: 'ui' },
+    { id: 'sources_view',     label: 'Capability Sources',     group: 'ui' },
+    { id: 'search_view',      label: 'Search & Discovery',     group: 'ui' },
+    { id: 'dashboard_view',   label: 'Dashboard',              group: 'ui' },
+  ];
+
+  const edges = [
+    ['linkedin_csv','linkedin_parser'],['rfp_docs','doc_extractor'],['partner_docs','partner_parser'],
+    ['manual_lead','lead_parser'],['operator_auth','auth_middleware'],
+    ['linkedin_parser','entity_resolution'],['linkedin_parser','seniority_class'],['linkedin_parser','icp_matching'],
+    ['doc_extractor','heuristic_extract'],['doc_extractor','capability_match'],
+    ['partner_parser','capability_match'],['lead_parser','entity_resolution'],
+    ['heuristic_extract','ai_gateway'],['partner_parser','ai_gateway'],
+    ['ai_gateway','claude'],['ai_gateway','gemini'],
+    ['capability_match','opp_alignment'],['icp_matching','opp_alignment'],
+    ['seniority_class','lead_routing'],['entity_resolution','lead_routing'],
+    ['opp_alignment','lead_routing'],['opp_alignment','pursuit_triage'],
+    ['heuristic_extract','pursuit_triage'],['claude','pursuit_triage'],['gemini','pursuit_triage'],
+    ['claude','outreach_gen'],['gemini','outreach_gen'],['capability_match','personnel_fit'],
+    ['pursuit_triage','decision_envelope'],['lead_routing','decision_envelope'],
+    ['outreach_gen','decision_envelope'],['decision_envelope','audit_log'],
+    ['decision_envelope','cluster_g'],['lead_routing','cluster_a'],['pursuit_triage','cluster_e'],
+    ['pursuit_triage','cluster_c'],['capability_match','cluster_b'],['personnel_fit','cluster_e'],
+    ['lead_routing','cluster_j'],['audit_log','cluster_k'],['partner_parser','cluster_d'],
+    ['cluster_a','pipeline_view'],['cluster_a','search_view'],['cluster_e','opportunity_view'],
+    ['cluster_b','sources_view'],['cluster_b','opportunity_view'],['cluster_d','sources_view'],
+    ['cluster_j','dashboard_view'],['cluster_g','dashboard_view'],
+  ];
+
+  // Layout
+  const NW = 140, NH = 36, RANK_GAP = 68, NODE_GAP = 16, PAD = 28;
+  const byRank = {};
+  nodes.forEach(n => {
+    const r = groups[n.group].rank;
+    if (!byRank[r]) byRank[r] = [];
+    byRank[r].push(n);
+  });
+
+  const maxCols = Math.max(...Object.values(byRank).map(a => a.length));
+  const totalW = maxCols * (NW + NODE_GAP) - NODE_GAP + PAD * 2;
+  const totalRanks = Object.keys(byRank).length;
+  const totalH = totalRanks * (NH + RANK_GAP) - RANK_GAP + PAD * 2 + 18 * totalRanks;
+
+  const pos = {};
+  Object.entries(byRank).forEach(([rank, rankNodes]) => {
+    const r = parseInt(rank);
+    const count = rankNodes.length;
+    const rowW = count * (NW + NODE_GAP) - NODE_GAP;
+    const startX = (totalW - rowW) / 2;
+    const y = PAD + r * (NH + RANK_GAP) + r * 18;
+    rankNodes.forEach((n, i) => {
+      pos[n.id] = { x: startX + i * (NW + NODE_GAP), y, rank: r };
+    });
+  });
+
+  // Build SVG
+  const svg = document.getElementById('flow-svg');
+  svg.setAttribute('width', totalW);
+  svg.setAttribute('height', totalH);
+  svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
+
+  let html = `<defs><marker id="ah" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="var(--text-tertiary)"/></marker></defs>`;
+
+  // Rank bands
+  const rankGroups = {};
+  nodes.forEach(n => {
+    const g = n.group;
+    const p = pos[n.id];
+    if (!rankGroups[g]) rankGroups[g] = { minX: p.x, maxX: p.x + NW, minY: p.y, maxY: p.y + NH };
+    else {
+      rankGroups[g].minX = Math.min(rankGroups[g].minX, p.x);
+      rankGroups[g].maxX = Math.max(rankGroups[g].maxX, p.x + NW);
+      rankGroups[g].minY = Math.min(rankGroups[g].minY, p.y);
+      rankGroups[g].maxY = Math.max(rankGroups[g].maxY, p.y + NH);
+    }
+  });
+
+  Object.entries(rankGroups).forEach(([g, b]) => {
+    const gc = groups[g];
+    const pad = 12;
+    html += `<rect x="8" y="${b.minY - pad}" width="${totalW - 16}" height="${b.maxY - b.minY + pad*2}" rx="5" fill="${gc.bg}" stroke="${gc.border}" stroke-width="1" stroke-dasharray="4 2"/>`;
+    html += `<text x="14" y="${b.minY - pad + 12}" font-size="9" font-weight="600" fill="var(--text-tertiary)" font-family="system-ui,sans-serif">${gc.label}</text>`;
+  });
+
+  // Edges
+  edges.forEach(([from, to]) => {
+    const a = pos[from], b = pos[to];
+    if (!a || !b) return;
+    const sx = a.x + NW/2, sy = a.y + NH;
+    const tx = b.x + NW/2, ty = b.y;
+    html += `<line x1="${sx}" y1="${sy}" x2="${tx}" y2="${ty}" stroke="var(--stroke)" stroke-width="0.8" marker-end="url(#ah)" opacity="0.45"/>`;
+  });
+
+  // Nodes
+  nodes.forEach(n => {
+    const p = pos[n.id];
+    const gc = groups[n.group];
+    html += `<rect x="${p.x}" y="${p.y}" width="${NW}" height="${NH}" rx="4" fill="var(--bg-elevated)" stroke="${gc.border}" stroke-width="1"/>`;
+    html += `<text x="${p.x + NW/2}" y="${p.y + NH/2 + 4}" text-anchor="middle" font-size="9.5" font-weight="450" fill="var(--text-primary)" font-family="system-ui,sans-serif">${n.label}</text>`;
+  });
+
+  svg.innerHTML = html;
+})();
+</script>
+
+</body>
+</html>
