@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import type { Pursuit, Organization } from "@/lib/mock-data";
+import type { Partner, Pursuit, Organization, ResponseActionItem } from "@/lib/mock-data";
 import { getPartner } from "@/lib/mock-data";
 import { Modal, FormField, TextArea, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
+import { ActionItemResponseModal } from "@/components/action-items/action-item-response-modal";
 import { useToast } from "@/components/ui/toast";
 import { OutreachComposer } from "@/components/outreach/outreach-composer";
 import { DocumentDropzone } from "@/components/pursuit/document-dropzone";
@@ -39,9 +40,10 @@ function StatusBadge({ status, label }: { status: string; label: string }) {
 }
 
 export function OpportunityView({
-  pursuit, org, onBack, onDraft, onConfirmDecision, onUpdatePursuit,
+  pursuit, org, partners, onBack, onDraft, onConfirmDecision, onUpdatePursuit,
 }: {
   pursuit: Pursuit; org: Organization;
+  partners?: Partner[];
   onBack: () => void; onDraft: () => void;
   onConfirmDecision: (pursuitId: string, decision: "go" | "nogo") => void;
   onUpdatePursuit: (pursuitId: string, updates: Partial<Pursuit>) => void;
@@ -60,6 +62,7 @@ export function OpportunityView({
   ]);
   const [advisorInput, setAdvisorInput] = useState("");
   const [advisorTyping, setAdvisorTyping] = useState(false);
+  const [actionItem, setActionItem] = useState<ResponseActionItem | null>(null);
   const advisorEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { advisorEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [advisorMessages]);
@@ -388,17 +391,22 @@ export function OpportunityView({
             </div>
             <div className="divide-y divide-border">
               {pursuit.responseActionItems.map(item => (
-                <div key={item.id} className="px-5 py-3.5 flex justify-between items-start gap-4">
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActionItem(item)}
+                  className="w-full text-left px-5 py-3.5 flex justify-between items-start gap-4 hover:bg-muted/30 cursor-pointer"
+                >
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-foreground mb-1">{item.description}</div>
                     <div className="text-[11px] text-muted-foreground">
-                      {item.assignedPartnerId ? getPartner(item.assignedPartnerId)?.name : item.assignedInternal}
+                      {item.assignedPartnerId ? getPartner(item.assignedPartnerId, partners)?.name : item.assignedInternal}
                       {" · Due "}{item.dueAt}
                       {" · Blocks "}{item.gates.join(", ")}
                     </div>
                   </div>
                   <StatusBadge status={item.status} label={item.status} />
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -648,6 +656,22 @@ export function OpportunityView({
           </div>
         )}
       </div>
+      <ActionItemResponseModal
+        open={actionItem !== null}
+        item={actionItem}
+        pursuitName={pursuit.name}
+        assigneeLabel={actionItem?.assignedPartnerId ? getPartner(actionItem.assignedPartnerId, partners)?.name : actionItem?.assignedInternal ?? undefined}
+        onClose={() => setActionItem(null)}
+        onSave={updates => {
+          if (!actionItem) return;
+          onUpdatePursuit(pursuit.id, {
+            responseActionItems: (pursuit.responseActionItems ?? []).map(item =>
+              item.id === actionItem.id ? { ...item, ...updates } : item
+            ),
+          });
+          toast("Action item updated", "success");
+        }}
+      />
     </div>
   );
 }

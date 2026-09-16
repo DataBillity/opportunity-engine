@@ -3,7 +3,7 @@ import "./globals.css";
 import { ToastProvider } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
-  title: "The Opportunity Engine — Command Center",
+  title: "DataBillity | Opportunity Engine | Prospects, Partners & Projects",
   description: "Unified bid management platform",
 };
 

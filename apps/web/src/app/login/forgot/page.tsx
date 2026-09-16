@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ForgotPasswordForm } from "../forgot-form";
 
 export const metadata: Metadata = {
-  title: "Forgot password — Opportunity Engine",
+  title: "DataBillity | Opportunity Engine | Prospects, Partners & Projects",
   description: "Set a new Opportunity Engine password",
 };
 

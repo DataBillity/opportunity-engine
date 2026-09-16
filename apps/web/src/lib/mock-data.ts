@@ -124,7 +124,7 @@ export interface ResponseActionItem {
   status: string;
   gates: string[];
   responseContent: string;
-  responseDocument: null;
+  responseDocument: { name: string } | null;
 }
 
 export interface Partner {
@@ -134,11 +134,14 @@ export interface Partner {
   website: string;
   repo: string;
   contact: string;
+  contactEmail: string;
   status: string;
   teamingAgreementSigned: boolean | null;
   accessTier: string | null;
   covers: string[];
   note: string;
+  summary: string;
+  createdAt: string;
 }
 
 export interface GraphData {
@@ -162,6 +165,9 @@ export interface GraphExperience {
   partners: string[];
   capabilities: string[];
   technologies: string[];
+  services: string[];
+  industry: string;
+  summary: string;
   status: string;
   updated: string;
 }
@@ -175,6 +181,8 @@ export interface GraphCredential {
   expiration: string;
   status: string;
   updated: string;
+  documentText: string;
+  documentFileName: string;
 }
 
 export interface GraphPerson {
@@ -182,12 +190,16 @@ export interface GraphPerson {
   name: string;
   partner: string;
   role: string;
+  roles: string[];
   skills: string[];
   technologies: string[];
   expertise: string;
+  industries: string[];
   projectHistory: string[];
   status: string;
   updated: string;
+  resumeText: string;
+  resumeFileName: string;
 }
 
 export interface SearchResult {
@@ -384,12 +396,12 @@ export const pursuits: Record<string, Pursuit> = {
 };
 
 export const partnerDirectory: Partner[] = [
-  { id: "PTR-U", name: "Union Systems Group", type: "Consortium member", website: "https://unionsystemsgroup.com", repo: "https://drive.google.com/drive/folders/union-systems-shared", contact: "Priya Nandakumar", status: "Active", teamingAgreementSigned: null, accessTier: null, covers: [], note: "" },
-  { id: "PTR-M", name: "Meridian Analytics", type: "Consortium member", website: "https://meridiananalytics.io", repo: "https://drive.google.com/drive/folders/meridian-shared", contact: "Owen Fitzgerald", status: "Active", teamingAgreementSigned: null, accessTier: null, covers: [], note: "" },
-  { id: "PTR-H", name: "Harbor Digital", type: "Consortium member", website: "https://harbordigital.com", repo: "https://github.com/harbor-digital/shared-capability-docs", contact: "Ann Okafor", status: "Active", teamingAgreementSigned: null, accessTier: null, covers: [], note: "" },
-  { id: "PTR-CIRRUS", name: "Cirrus Federal Compliance Partners", type: "Teaming partner — Strategic", website: "https://cirrusfederal.com", repo: "—", contact: "—", status: "Active", teamingAgreementSigned: true, accessTier: "self_service_roster", covers: ["GAP-114"], note: "FedRAMP Moderate ATO, 4 production authorizations" },
-  { id: "PTR-NORTHPEAK", name: "NorthPeak Transit Systems", type: "Teaming partner — Qualified Bench", website: "https://northpeaktransit.com", repo: "—", contact: "—", status: "Active", teamingAgreementSigned: false, accessTier: "task_only", covers: ["GAP-089"], note: "GTFS-realtime / AVL integration, 3 prior transit deployments" },
-  { id: "PTR-ALLUVIA", name: "Alluvia Data Partners", type: "Teaming partner — Situational", website: "—", repo: "—", contact: "—", status: "Active", teamingAgreementSigned: false, accessTier: "task_only", covers: ["GAP-089"], note: "AVL integration, 1 prior deployment" },
+  { id: "PTR-U", name: "Union Systems Group", type: "Prime", website: "https://unionsystemsgroup.com", repo: "https://drive.google.com/drive/folders/union-systems-shared", contact: "Priya Nandakumar", contactEmail: "priya.nandakumar@unionsystemsgroup.com", status: "Active", teamingAgreementSigned: null, accessTier: null, covers: [], note: "", summary: "Consortium prime for public-sector modernization and claims platforms.", createdAt: "2025-11-04" },
+  { id: "PTR-M", name: "Meridian Analytics", type: "Prime", website: "https://meridiananalytics.io", repo: "https://drive.google.com/drive/folders/meridian-shared", contact: "Owen Fitzgerald", contactEmail: "owen.fitzgerald@meridiananalytics.io", status: "Active", teamingAgreementSigned: null, accessTier: null, covers: [], note: "", summary: "Analytics partner focused on fraud detection and financial reconciliation.", createdAt: "2025-12-12" },
+  { id: "PTR-H", name: "Harbor Digital", type: "Prime", website: "https://harbordigital.com", repo: "https://github.com/harbor-digital/shared-capability-docs", contact: "Ann Okafor", contactEmail: "ann.okafor@harbordigital.com", status: "Active", teamingAgreementSigned: null, accessTier: null, covers: [], note: "", summary: "Healthcare data and digital-experience delivery partner.", createdAt: "2026-01-18" },
+  { id: "PTR-CIRRUS", name: "Cirrus Federal Compliance Partners", type: "Subcontractor", website: "https://cirrusfederal.com", repo: "—", contact: "Lena Ortiz", contactEmail: "lena.ortiz@cirrusfederal.com", status: "Active", teamingAgreementSigned: true, accessTier: "self_service_roster", covers: ["GAP-114"], note: "FedRAMP Moderate ATO, 4 production authorizations", summary: "FedRAMP Moderate ATO, 4 production authorizations.", createdAt: "2026-03-02" },
+  { id: "PTR-NORTHPEAK", name: "NorthPeak Transit Systems", type: "Subcontractor", website: "https://northpeaktransit.com", repo: "—", contact: "Chris Vale", contactEmail: "chris.vale@northpeaktransit.com", status: "Active", teamingAgreementSigned: false, accessTier: "task_only", covers: ["GAP-089"], note: "GTFS-realtime / AVL integration, 3 prior transit deployments", summary: "GTFS-realtime / AVL integration, 3 prior transit deployments.", createdAt: "2026-04-21" },
+  { id: "PTR-ALLUVIA", name: "Alluvia Data Partners", type: "Subcontractor", website: "—", repo: "—", contact: "Maya Chen", contactEmail: "maya.chen@alluviadata.com", status: "Active", teamingAgreementSigned: false, accessTier: "task_only", covers: ["GAP-089"], note: "AVL integration, 1 prior deployment", summary: "AVL integration specialist with one prior transit deployment.", createdAt: "2026-06-09" },
 ];
 
 export const graphData: GraphData = {
@@ -402,22 +414,22 @@ export const graphData: GraphData = {
     { id: "CAP-0126", name: "Benefits Fraud Analytics", partners: ["PTR-M"], status: "Verified", updated: "2026-04-11" },
   ],
   experience: [
-    { id: "EXP-0512", name: "Commonwealth Dept. of Labor — Claims Migration (2022–2024)", partners: ["PTR-U"], capabilities: ["CAP-0018", "CAP-0044"], technologies: ["COBOL migration tooling", "AWS GovCloud", "PostgreSQL"], status: "Verified", updated: "2026-03-02" },
-    { id: "EXP-0513", name: "Commonwealth Dept. of Labor — Post-launch performance metrics", partners: ["PTR-U"], capabilities: ["CAP-0018"], technologies: ["AWS GovCloud", "Grafana"], status: "Verified", updated: "2026-03-02" },
-    { id: "EXP-0514", name: "State of Alder Bay — Legacy mainframe retirement", partners: ["PTR-U", "PTR-M"], capabilities: ["CAP-0018", "CAP-0117"], technologies: ["COBOL migration tooling", "Azure Government"], status: "Verified", updated: "2025-11-19" },
-    { id: "EXP-0515", name: "Fairhaven County — Benefits platform migration", partners: ["PTR-M"], capabilities: ["CAP-0117", "CAP-0126"], technologies: ["Databricks", "Azure Government"], status: "Pending re-validation", updated: "2025-08-30" },
+    { id: "EXP-0512", name: "Commonwealth Dept. of Labor — Claims Migration (2022–2024)", partners: ["PTR-U"], capabilities: ["CAP-0018", "CAP-0044"], technologies: ["COBOL migration tooling", "AWS GovCloud", "PostgreSQL"], services: ["Program Management", "Data Migration", "Testing"], industry: "Government — Labor & Workforce", summary: "Retired a 25-year COBOL claims mainframe, migrating 4.2M historical records to AWS GovCloud with a zero-downtime cutover across three regional processing centers.", status: "Verified", updated: "2026-03-02" },
+    { id: "EXP-0513", name: "Commonwealth Dept. of Labor — Post-launch performance metrics", partners: ["PTR-U"], capabilities: ["CAP-0018"], technologies: ["AWS GovCloud", "Grafana"], services: ["Change Management", "Performance Monitoring"], industry: "Government — Labor & Workforce", summary: "Stood up post-launch operational metrics and a Grafana performance dashboard used by the agency's claims operations team.", status: "Verified", updated: "2026-03-02" },
+    { id: "EXP-0514", name: "State of Alder Bay — Legacy mainframe retirement", partners: ["PTR-U", "PTR-M"], capabilities: ["CAP-0018", "CAP-0117"], technologies: ["COBOL migration tooling", "Azure Government"], services: ["Program Management", "Data Migration", "Financial Reconciliation"], industry: "Government", summary: "Joint retirement of a statewide mainframe with reconciliation of legacy financial ledgers onto Azure Government.", status: "Verified", updated: "2025-11-19" },
+    { id: "EXP-0515", name: "Fairhaven County — Benefits platform migration", partners: ["PTR-M"], capabilities: ["CAP-0117", "CAP-0126"], technologies: ["Databricks", "Azure Government"], services: ["Fraud Analytics", "Testing"], industry: "Government — Benefits", summary: "County benefits platform migration with fraud-analytics overlays on Databricks; pending re-validation of production metrics.", status: "Pending re-validation", updated: "2025-08-30" },
   ],
   credentials: [
-    { id: "CRED-021", name: "FedRAMP Moderate ATO", credType: "Certification", partner: "PTR-CIRRUS", scope: "Cloud hosting authorization, payments workloads", expiration: "2027-04-30", status: "Partner-contributed", updated: "2026-08-01" },
-    { id: "CRED-014", name: "CMMI Level 3 (Services)", credType: "Certification", partner: "PTR-U", scope: "Software services delivery maturity", expiration: "2027-01-15", status: "Verified", updated: "2026-01-15" },
-    { id: "CRED-030", name: "Errors & Omissions Insurance", credType: "Insurance", partner: "PTR-U", scope: "$5M per occurrence", expiration: "2027-02-01", status: "Verified", updated: "2026-02-01" },
-    { id: "CRED-031", name: "Cyber Liability Insurance", credType: "Insurance", partner: "PTR-M", scope: "$3M per occurrence", expiration: "2026-12-01", status: "Verified", updated: "2025-12-01" },
-    { id: "CRED-032", name: "Performance Bond Capacity", credType: "Bonding", partner: "PTR-U", scope: "Up to $10M per engagement", expiration: "2027-06-01", status: "Verified", updated: "2026-06-01" },
+    { id: "CRED-021", name: "FedRAMP Moderate ATO", credType: "Certification", partner: "PTR-CIRRUS", scope: "Cloud hosting authorization, payments workloads", expiration: "2027-04-30", status: "Partner-contributed", updated: "2026-08-01", documentFileName: "Cirrus_FedRAMP_Moderate_ATO.pdf", documentText: "Authorization to Operate at FedRAMP Moderate for Cirrus Federal cloud hosting of payments workloads. Four production authorizations on file. Expires 2027-04-30." },
+    { id: "CRED-014", name: "CMMI Level 3 (Services)", credType: "Certification", partner: "PTR-U", scope: "Software services delivery maturity", expiration: "2027-01-15", status: "Verified", updated: "2026-01-15", documentFileName: "USG_CMMI_L3_Services.pdf", documentText: "CMMI Institute appraisal confirming Union Systems Group at Maturity Level 3 for Services. Scope: software services delivery. Valid through 2027-01-15." },
+    { id: "CRED-030", name: "Errors & Omissions Insurance", credType: "Insurance", partner: "PTR-U", scope: "$5M per occurrence", expiration: "2027-02-01", status: "Verified", updated: "2026-02-01", documentFileName: "USG_EO_Certificate.pdf", documentText: "Errors & Omissions liability insurance certificate. Coverage: $5,000,000 per occurrence. Named insured: Union Systems Group. Expiration: 2027-02-01." },
+    { id: "CRED-031", name: "Cyber Liability Insurance", credType: "Insurance", partner: "PTR-M", scope: "$3M per occurrence", expiration: "2026-12-01", status: "Verified", updated: "2025-12-01", documentFileName: "Meridian_Cyber_Liability.pdf", documentText: "Cyber liability insurance certificate. Coverage: $3,000,000 per occurrence. Named insured: Meridian Analytics. Expiration: 2026-12-01." },
+    { id: "CRED-032", name: "Performance Bond Capacity", credType: "Bonding", partner: "PTR-U", scope: "Up to $10M per engagement", expiration: "2027-06-01", status: "Verified", updated: "2026-06-01", documentFileName: "USG_Performance_Bond_Capacity.pdf", documentText: "Surety letter confirming performance bond capacity up to $10,000,000 per engagement for Union Systems Group. Valid through 2027-06-01." },
   ],
   people: [
-    { id: "PPL-118", name: "Dana Whitfield, PMP", partner: "PTR-U", role: "Program Manager", skills: ["Program management", "Stakeholder management"], technologies: ["MS Project", "Jira", "AWS GovCloud"], expertise: "12 years leading public-sector modernization programs.", projectHistory: ["EXP-0512", "EXP-0513"], status: "Verified", updated: "2026-07-01" },
-    { id: "PPL-119", name: "Priya Nandakumar", partner: "PTR-U", role: "Lead Data Architect", skills: ["Data architecture", "Migration design", "ETL pipelines"], technologies: ["PostgreSQL", "Databricks", "AWS GovCloud"], expertise: "Architected the data migration approach on two completed legacy mainframe retirements.", projectHistory: ["EXP-0512", "EXP-0514"], status: "Verified", updated: "2026-06-20" },
-    { id: "PPL-120", name: "Marcus Webb", partner: "PTR-U", role: "QA & Compliance Lead", skills: ["Test automation", "Compliance validation"], technologies: ["Selenium", "WCAG tooling"], expertise: "Led certification testing for production release on the Commonwealth engagement.", projectHistory: ["EXP-0512"], status: "Verified", updated: "2026-06-20" },
+    { id: "PPL-118", name: "Dana Whitfield, PMP", partner: "PTR-U", role: "Program Manager", roles: ["Program Manager"], skills: ["Program management", "Stakeholder management"], technologies: ["MS Project", "Jira", "AWS GovCloud"], expertise: "12 years leading public-sector modernization programs.", industries: ["Government", "Public Benefits"], projectHistory: ["EXP-0512", "EXP-0513"], status: "Verified", updated: "2026-07-01", resumeFileName: "Dana_Whitfield_Resume.pdf", resumeText: "Dana Whitfield, PMP\nProgram Manager\n12 years leading public-sector modernization programs.\nRoles: Program Manager.\nExpertise: stakeholder management, schedule control, multi-vendor governance.\nIndustries: Government, Public Benefits.\nPrior: Commonwealth Dept. of Labor claims migration (PM)." },
+    { id: "PPL-119", name: "Priya Nandakumar", partner: "PTR-U", role: "Lead Data Architect", roles: ["Lead Data Architect"], skills: ["Data architecture", "Migration design", "ETL pipelines"], technologies: ["PostgreSQL", "Databricks", "AWS GovCloud"], expertise: "Architected the data migration approach on two completed legacy mainframe retirements.", industries: ["Government", "Public Benefits"], projectHistory: ["EXP-0512", "EXP-0514"], status: "Verified", updated: "2026-06-20", resumeFileName: "Priya_Nandakumar_Resume.pdf", resumeText: "Priya Nandakumar\nLead Data Architect\nArchitected the data migration approach on two completed legacy mainframe retirements.\nRoles: Lead Data Architect.\nExpertise: data architecture, ETL pipelines, COBOL-to-cloud migration.\nTechnologies: PostgreSQL, Databricks, AWS GovCloud.\nIndustries: Government, Public Benefits." },
+    { id: "PPL-120", name: "Marcus Webb", partner: "PTR-U", role: "QA & Compliance Lead", roles: ["QA & Compliance Lead"], skills: ["Test automation", "Compliance validation"], technologies: ["Selenium", "WCAG tooling"], expertise: "Led certification testing for production release on the Commonwealth engagement.", industries: ["Government"], projectHistory: ["EXP-0512"], status: "Verified", updated: "2026-06-20", resumeFileName: "Marcus_Webb_Resume.pdf", resumeText: "Marcus Webb\nQA & Compliance Lead\nLed certification testing for production release on the Commonwealth engagement.\nRoles: QA & Compliance Lead.\nExpertise: test automation, compliance validation, WCAG accessibility.\nIndustries: Government." },
   ],
 };
 
@@ -428,8 +440,21 @@ export const searchResults: SearchResult[] = [
   { id: "sr4", org: "Kestrel Grid Utilities", industry: "Utilities", signal: "Press release announcing $40M grid-modernization initiative", source: "Press release", score: 58, updated: "6 hours ago" },
 ];
 
-export function getPartner(id: string): Partner | undefined {
-  return partnerDirectory.find(p => p.id === id);
+export function getPartner(id: string, partners: Partner[] = partnerDirectory): Partner | undefined {
+  return partners.find(p => p.id === id);
+}
+
+export function isArchivedStatus(status: string): boolean {
+  return status === "Archived";
+}
+
+export function activeGraph(graph: GraphData): GraphData {
+  return {
+    capabilities: graph.capabilities.filter(item => !isArchivedStatus(item.status)),
+    experience: graph.experience.filter(item => !isArchivedStatus(item.status)),
+    credentials: graph.credentials.filter(item => !isArchivedStatus(item.status)),
+    people: graph.people.filter(item => !isArchivedStatus(item.status)),
+  };
 }
 
 export function getOrgPursuits(org: Organization): Pursuit[] {

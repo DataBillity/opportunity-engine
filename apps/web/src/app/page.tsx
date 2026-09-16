@@ -16,10 +16,14 @@ import { OperatorProvider } from "@/components/auth/operator-provider";
 import {
   organizations as initialOrgs,
   pursuits as initialPursuits,
+  partnerDirectory as initialPartners,
+  graphData as initialGraph,
   type Organization,
   type Pursuit,
+  type Partner,
+  type GraphData,
 } from "@/lib/mock-data";
-import { mergeLeadOrganizations } from "@/lib/create-lead";
+import { mergeLeadOrganizations, mergePipelineLeads } from "@/lib/create-lead";
 
 export type ViewId = "dashboard" | "search" | "pipeline" | "org" | "decision" | "draft" | "sources" | "settings";
 
@@ -41,6 +45,13 @@ export default function CommandCenter() {
 
   const [orgs, setOrgs] = useState<Organization[]>(() => [...initialOrgs]);
   const [allPursuits, setAllPursuits] = useState<Record<string, Pursuit>>(() => ({ ...initialPursuits }));
+  const [partners, setPartners] = useState<Partner[]>(() => [...initialPartners]);
+  const [graph, setGraph] = useState<GraphData>(() => ({
+    capabilities: [...initialGraph.capabilities],
+    experience: [...initialGraph.experience],
+    credentials: [...initialGraph.credentials],
+    people: [...initialGraph.people],
+  }));
 
   useEffect(() => {
     let cancelled = false;
@@ -174,6 +185,7 @@ export default function CommandCenter() {
   const handleRefreshAllScores = useCallback(
     () => {
       setOrgs(prev => prev.map(o => {
+        if (o.archived) return o;
         const delta = Math.floor(Math.random() * 6) - 2;
         const newScore = Math.max(0, Math.min(100, o.score + delta));
         return {
@@ -189,6 +201,33 @@ export default function CommandCenter() {
     []
   );
 
+  const handleMergeLeads = useCallback(
+    (keepId: string, sourceId: string, fields: { name: string; industry: string; summary: string; channel: string }) => {
+      setOrgs(prev => {
+        const keep = prev.find(org => org.id === keepId);
+        const source = prev.find(org => org.id === sourceId);
+        if (!keep || !source) return prev;
+        const pursuitIds = [...new Set([...keep.pursuits, ...source.pursuits])];
+        const activeScores = pursuitIds
+          .map(id => allPursuits[id])
+          .filter((pursuit): pursuit is Pursuit => pursuit !== undefined && !pursuit.closed)
+          .map(pursuit => pursuit.score);
+        const score = activeScores.length ? Math.max(...activeScores) : Math.max(keep.score, source.score);
+        const merged = mergePipelineLeads({ keep, source, ...fields, score });
+        return prev.filter(org => org.id !== sourceId).map(org => org.id === keepId ? merged : org);
+      });
+      setAllPursuits(prev => {
+        const next = { ...prev };
+        for (const pursuit of Object.values(next)) {
+          if (pursuit.orgId === sourceId) next[pursuit.id] = { ...pursuit, orgId: keepId };
+        }
+        return next;
+      });
+      if (currentOrgId === sourceId) setCurrentOrgId(keepId);
+    },
+    [allPursuits, currentOrgId]
+  );
+
   return (
     <OperatorProvider>
       <div className="flex flex-col h-dvh overflow-hidden">
@@ -201,6 +240,7 @@ export default function CommandCenter() {
         menuOpen={mobileNavOpen}
         onMenuToggle={() => setMobileNavOpen(open => !open)}
         currentOrgHasPursuits={currentOrgHasPursuits}
+        currentOrgId={currentOrgId}
       />
 
       <MobileNav
@@ -212,7 +252,7 @@ export default function CommandCenter() {
         laneFilter={laneFilter}
         onLaneFilter={setLaneFilter}
         onOrgSelect={handleOrgSelect}
-        orgs={orgs}
+        orgs={orgs.filter(o => !o.archived)}
         allPursuits={allPursuits}
       />
 
@@ -255,18 +295,21 @@ export default function CommandCenter() {
             {activeView === "org" && currentOrg && (
               <OrgDetailView
                 org={currentOrg}
+                orgs={orgs}
                 allPursuits={allPursuits}
                 onPursuitSelect={handlePursuitSelect}
                 onBack={() => setActiveView("pipeline")}
                 onAddPursuit={handleAddPursuit}
                 onArchiveOrg={handleArchiveOrg}
                 onUpdateOrg={handleUpdateOrg}
+                onMergeLeads={handleMergeLeads}
               />
             )}
             {activeView === "decision" && currentPursuit && currentOrg && (
               <OpportunityView
                 pursuit={currentPursuit}
                 org={currentOrg}
+                partners={partners}
                 onBack={() => setActiveView("org")}
                 onDraft={() => setActiveView("draft")}
                 onConfirmDecision={handleConfirmDecision}
@@ -277,6 +320,8 @@ export default function CommandCenter() {
               <ResponseBuilderView
                 key={currentPursuit.id}
                 pursuit={currentPursuit}
+                partners={partners}
+                people={graph.people}
                 onBack={() => setActiveView("decision")}
                 onUpdatePursuit={handleUpdatePursuit}
               />
@@ -287,7 +332,16 @@ export default function CommandCenter() {
                 onOpenOpportunity={() => setActiveView(currentPursuit && currentOrg ? "decision" : currentOrg ? "org" : "pipeline")}
               />
             )}
-            {activeView === "sources" && <SourcesView />}
+            {activeView === "sources" && (
+              <SourcesView
+                partners={partners}
+                graph={graph}
+                allPursuits={allPursuits}
+                onUpdatePartners={setPartners}
+                onUpdateGraph={setGraph}
+                onUpdatePursuit={handleUpdatePursuit}
+              />
+            )}
             {activeView === "settings" && <SettingsView />}
           </div>
         </main>

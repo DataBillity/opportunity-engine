@@ -95,6 +95,7 @@ export function TopBar({
   menuOpen,
   onMenuToggle,
   currentOrgHasPursuits = false,
+  currentOrgId,
 }: {
   activeView: ViewId;
   onNav: (v: ViewId) => void;
@@ -104,12 +105,18 @@ export function TopBar({
   menuOpen: boolean;
   onMenuToggle: () => void;
   currentOrgHasPursuits?: boolean;
+  currentOrgId?: string;
 }) {
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const newMenuRef = useRef<HTMLDivElement>(null);
   const [showNewPursuit, setShowNewPursuit] = useState(false);
   const [showNewLead, setShowNewLead] = useState(false);
-  const [npOrg, setNpOrg] = useState(orgs[0]?.id ?? "");
+  const activeOrgs = orgs.filter(org => !org.archived);
+  const orgOptions = activeOrgs
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(org => ({ value: org.id, label: org.name }));
+  const [npOrg, setNpOrg] = useState("");
   const [leadName, setLeadName] = useState("");
   const [leadIndustry, setLeadIndustry] = useState("");
   const [leadChannel, setLeadChannel] = useState("Direct inquiry");
@@ -276,7 +283,10 @@ export function TopBar({
                   role="menuitem"
                   onClick={() => {
                     setNewMenuOpen(false);
-                    setNpOrg(orgs[0]?.id ?? "");
+                    const selected = currentOrgId && activeOrgs.some(org => org.id === currentOrgId)
+                      ? currentOrgId
+                      : "";
+                    setNpOrg(selected);
                     setShowNewPursuit(true);
                   }}
                   className="w-full text-left px-4 py-2.5 text-xs text-foreground hover:bg-muted/40 cursor-pointer transition-all"
@@ -311,7 +321,7 @@ export function TopBar({
               <SelectInput
                 value={npOrg}
                 onChange={setNpOrg}
-                options={orgs.slice().sort((a, b) => a.name.localeCompare(b.name)).map(o => ({ value: o.id, label: o.name }))}
+                options={[{ value: "", label: "Select organization…" }, ...orgOptions]}
               />
             </FormField>
           }

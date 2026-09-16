@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { BrandMark } from "@/components/brand-mark";
 
 export const metadata: Metadata = {
-  title: "Sign in — Opportunity Engine",
+  title: "DataBillity | Opportunity Engine | Prospects, Partners & Projects",
   description: "Sign in to the Opportunity Engine command center",
 };
 

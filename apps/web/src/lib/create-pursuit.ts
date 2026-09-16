@@ -52,7 +52,7 @@ export async function createPursuitFromForm(input: {
   files: File[];
 }): Promise<{ pursuit: Pursuit; ingested: boolean; warning?: string }> {
   const id = `OPP-${Date.now().toString().slice(-4)}`;
-  const typeLabel = input.lane === "B" ? "Government RFP" : "Private SOW";
+  const typeLabel = input.lane === "B" ? "RFP" : "SOW";
   const fallbackRef = input.solicitationRef || (input.lane === "B" ? `RFP-${id.slice(-4)}` : "Direct SOW");
   const base = emptyPursuit({
     id,

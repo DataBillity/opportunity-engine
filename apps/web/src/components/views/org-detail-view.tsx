@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Organization, Pursuit, Contact } from "@/lib/mock-data";
-import { Modal, FormField, TextInput, TextArea, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
+import { Modal, FormField, TextInput, TextArea, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { OutreachComposer } from "@/components/outreach/outreach-composer";
 import { AddPursuitForm } from "@/components/pursuit/add-pursuit-form";
@@ -35,20 +35,24 @@ function RecPill({ rec, closed }: { rec: string; closed?: boolean }) {
 
 export function OrgDetailView({
   org,
+  orgs = [],
   allPursuits,
   onPursuitSelect,
   onBack,
   onAddPursuit,
   onArchiveOrg,
   onUpdateOrg,
+  onMergeLeads,
 }: {
   org: Organization;
+  orgs?: Organization[];
   allPursuits: Record<string, Pursuit>;
   onPursuitSelect: (id: string) => void;
   onBack: () => void;
   onAddPursuit: (pursuit: Pursuit) => void;
   onArchiveOrg?: (orgId: string) => void;
   onUpdateOrg?: (orgId: string, updates: Partial<Organization>) => void;
+  onMergeLeads?: (keepId: string, sourceId: string, fields: { name: string; industry: string; summary: string; channel: string }) => void;
 }) {
   const pursuits = getOrgPursuits(org, allPursuits);
   const score = getOrgTopScore(org, allPursuits);
@@ -63,6 +67,12 @@ export function OrgDetailView({
   const [localNotes, setLocalNotes] = useState(org.notes);
 
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeSourceId, setMergeSourceId] = useState("");
+  const [mergeName, setMergeName] = useState("");
+  const [mergeIndustry, setMergeIndustry] = useState("");
+  const [mergeSummary, setMergeSummary] = useState("");
+  const [mergeChannel, setMergeChannel] = useState("");
 
   // Contact CRUD state
   const [addContactOpen, setAddContactOpen] = useState(false);
@@ -148,7 +158,6 @@ export function OrgDetailView({
       name: contactName.trim(),
       title: contactTitle.trim(),
       email: contactEmail.trim(),
-      company: contactCompany.trim() || undefined,
     };
     if (onUpdateOrg) {
       onUpdateOrg(org.id, { contacts: [...org.contacts, newContact] });
@@ -223,6 +232,21 @@ export function OrgDetailView({
             )}
           </div>
           <div className="flex gap-2 shrink-0 flex-wrap">
+            {onMergeLeads && (
+              <button
+                onClick={() => {
+                  setMergeSourceId("");
+                  setMergeName(org.name);
+                  setMergeIndustry(org.industry);
+                  setMergeSummary(org.summary);
+                  setMergeChannel(org.channel);
+                  setMergeOpen(true);
+                }}
+                className="text-xs font-medium px-3.5 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+              >
+                Merge Lead
+              </button>
+            )}
             <button
               onClick={handleRefreshScore}
               className="text-xs font-medium px-3.5 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
@@ -537,9 +561,109 @@ export function OrgDetailView({
         </div>
       </Modal>
 
+      <Modal open={mergeOpen} onClose={() => setMergeOpen(false)} title="Merge Lead" wide>
+        {(() => {
+          const candidates = orgs.filter(item => item.id !== org.id && !item.archived);
+          const source = candidates.find(item => item.id === mergeSourceId);
+          return (
+            <div className="space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Merge another pipeline lead into <strong className="text-foreground">{org.name}</strong>. Contacts from both records are kept. The combined score is refreshed from remaining open projects.
+              </p>
+              <FormField label="Lead to merge in">
+                <SelectInput
+                  value={mergeSourceId}
+                  onChange={id => {
+                    setMergeSourceId(id);
+                    const next = candidates.find(item => item.id === id);
+                    if (!next) return;
+                    if (!mergeName) setMergeName(org.name);
+                    if (!mergeIndustry) setMergeIndustry(org.industry || next.industry);
+                    if (!mergeSummary) setMergeSummary(org.summary || next.summary);
+                    if (!mergeChannel) setMergeChannel(org.channel || next.channel);
+                  }}
+                  options={[{ value: "", label: "Select a lead…" }, ...candidates.map(item => ({ value: item.id, label: item.name }))]}
+                />
+              </FormField>
+              {source && (
+                <>
+                  {org.name !== source.name && (
+                    <FormField label="Keep this name">
+                      <SelectInput
+                        value={mergeName}
+                        onChange={setMergeName}
+                        options={[{ value: org.name, label: org.name }, { value: source.name, label: source.name }]}
+                      />
+                    </FormField>
+                  )}
+                  {org.industry !== source.industry && (org.industry || source.industry) && (
+                    <FormField label="Keep this industry">
+                      <SelectInput
+                        value={mergeIndustry}
+                        onChange={setMergeIndustry}
+                        options={[
+                          { value: org.industry, label: org.industry || "(blank)" },
+                          { value: source.industry, label: source.industry || "(blank)" },
+                        ]}
+                      />
+                    </FormField>
+                  )}
+                  {org.channel !== source.channel && (
+                    <FormField label="Keep this channel">
+                      <SelectInput
+                        value={mergeChannel}
+                        onChange={setMergeChannel}
+                        options={[
+                          { value: org.channel, label: org.channel },
+                          { value: source.channel, label: source.channel },
+                        ]}
+                      />
+                    </FormField>
+                  )}
+                  {org.summary !== source.summary && (org.summary || source.summary) && (
+                    <FormField label="Keep this summary">
+                      <SelectInput
+                        value={mergeSummary}
+                        onChange={setMergeSummary}
+                        options={[
+                          { value: org.summary, label: org.summary ? org.summary.slice(0, 80) : "(blank)" },
+                          { value: source.summary, label: source.summary ? source.summary.slice(0, 80) : "(blank)" },
+                        ]}
+                      />
+                    </FormField>
+                  )}
+                </>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <SecondaryButton onClick={() => setMergeOpen(false)}>Cancel</SecondaryButton>
+                <PrimaryButton
+                  disabled={!mergeSourceId || !onMergeLeads}
+                  onClick={() => {
+                    if (!onMergeLeads || !mergeSourceId) return;
+                    onMergeLeads(org.id, mergeSourceId, {
+                      name: mergeName || org.name,
+                      industry: mergeIndustry,
+                      summary: mergeSummary,
+                      channel: mergeChannel || org.channel,
+                    });
+                    toast(`Merged into "${mergeName || org.name}"`, "success");
+                    setMergeOpen(false);
+                  }}
+                >
+                  Merge leads
+                </PrimaryButton>
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
+
       {/* Add Contact Modal */}
       <Modal open={addContactOpen} onClose={() => setAddContactOpen(false)} title="Add Contact">
         <div className="space-y-4">
+          <div className="text-xs text-muted-foreground">
+            Lead: <strong className="text-foreground">{org.name}</strong>
+          </div>
           <FormField label="Name">
             <TextInput value={contactName} onChange={setContactName} placeholder="e.g. Jordan Hale" />
           </FormField>
@@ -548,9 +672,6 @@ export function OrgDetailView({
           </FormField>
           <FormField label="Email (optional)">
             <TextInput value={contactEmail} onChange={setContactEmail} placeholder="e.g. jhale@example.gov" type="email" />
-          </FormField>
-          <FormField label="Company (optional)">
-            <TextInput value={contactCompany} onChange={setContactCompany} placeholder="e.g. Cascade Transit" />
           </FormField>
           <div className="flex justify-end gap-2 pt-2">
             <SecondaryButton onClick={() => setAddContactOpen(false)}>Cancel</SecondaryButton>

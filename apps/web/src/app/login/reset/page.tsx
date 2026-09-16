@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { ResetPasswordForm } from "../reset-form";
 
 export const metadata: Metadata = {
-  title: "Set password — Opportunity Engine",
+  title: "DataBillity | Opportunity Engine | Prospects, Partners & Projects",
   description: "Choose a new Opportunity Engine password",
 };
 

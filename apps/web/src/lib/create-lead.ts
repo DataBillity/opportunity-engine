@@ -206,8 +206,45 @@ export function organizationsFromLinkedInBatch(batch: LinkedInBatchResult): Orga
     });
 }
 
-function contactKey(contact: Organization["contacts"][number]): string {
+export function contactKey(contact: Organization["contacts"][number]): string {
   return (contact.email || contact.linkedinUrl || contact.name).trim().toLowerCase();
+}
+
+export function mergePipelineLeads(input: {
+  keep: Organization;
+  source: Organization;
+  name: string;
+  industry: string;
+  summary: string;
+  channel: string;
+  score: number;
+}): Organization {
+  const seen = new Set(input.keep.contacts.map(contactKey));
+  const contacts = [...input.keep.contacts];
+  for (const contact of input.source.contacts) {
+    const key = contactKey(contact);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    contacts.push(contact);
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    ...input.keep,
+    name: input.name,
+    industry: input.industry,
+    summary: input.summary,
+    channel: input.channel,
+    contacts,
+    notes: [...input.keep.notes, ...input.source.notes],
+    scoreFactors: input.keep.scoreFactors.length ? input.keep.scoreFactors : input.source.scoreFactors,
+    whyGoodFit: input.keep.whyGoodFit || input.source.whyGoodFit,
+    pursuits: [...new Set([...input.keep.pursuits, ...input.source.pursuits])],
+    score: input.score,
+    scoreHistory: [
+      ...input.keep.scoreHistory,
+      { score: input.score, at: today, reason: `Merged with ${input.source.name}. Score refreshed.` },
+    ],
+  };
 }
 
 export function mergeLeadOrganizations(existing: Organization[], incoming: Organization[]): Organization[] {

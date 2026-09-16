@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import type { Pursuit } from "@/lib/mock-data";
-import { getPartner, graphData } from "@/lib/mock-data";
+import type { GraphPerson, Partner, Pursuit, ResponseActionItem } from "@/lib/mock-data";
+import { getPartner } from "@/lib/mock-data";
 import { Modal, FormField, TextInput, TextArea, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
+import { ActionItemResponseModal } from "@/components/action-items/action-item-response-modal";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
+import { rankPeopleForRole } from "@/lib/personnel-fit";
 
 interface SectionMeta {
   id: string;
@@ -129,10 +131,12 @@ export function ResponseBuilderEmptyState({
 }
 
 export function ResponseBuilderView({
-  pursuit, onBack, onUpdatePursuit,
+  pursuit, onBack, onUpdatePursuit, partners, people,
 }: {
   pursuit: Pursuit; onBack: () => void;
   onUpdatePursuit: (pursuitId: string, updates: Partial<Pursuit>) => void;
+  partners?: Partner[];
+  people?: GraphPerson[];
 }) {
   const { toast } = useToast();
   const [sections, setSections] = useState<SectionMeta[]>(() => sectionsForPursuit(pursuit));
@@ -168,6 +172,7 @@ export function ResponseBuilderView({
   const [addPersonName, setAddPersonName] = useState("");
   const [addPersonTitle, setAddPersonTitle] = useState("");
   const [addPersonPartner, setAddPersonPartner] = useState("");
+  const [actionItem, setActionItem] = useState<ResponseActionItem | null>(null);
 
   // Upload final
   const [uploadFinalOpen, setUploadFinalOpen] = useState(false);
@@ -292,8 +297,11 @@ export function ResponseBuilderView({
   const quickPrompts = ["Strengthen the fraud analytics paragraph", "Add a risk mitigation section", "Which claims aren't source-traced?"];
 
   const isKeyPersonnel = activeSection === "pers";
-  const allPeople = graphData.people;
+  const allPeople = (people ?? []).filter(person => person.status !== "Archived");
   const roleNames = Object.keys(personnelAssignments);
+  const referencedPeople = Object.values(personnelAssignments)
+    .map(id => allPeople.find(person => person.id === id))
+    .filter((person): person is GraphPerson => Boolean(person));
 
   return (
     <div className="space-y-4">
@@ -387,20 +395,22 @@ export function ResponseBuilderView({
                 {roleNames.map(role => {
                   const assignedId = personnelAssignments[role];
                   const person = allPeople.find(p => p.id === assignedId);
+                  const ranked = rankPeopleForRole(role, allPeople);
+                  const options = person && !ranked.some(p => p.id === person.id) ? [person, ...ranked] : ranked;
                   return (
                     <div key={role} className="px-5 py-3 flex items-center justify-between gap-4">
                       <div className="min-w-0">
                         <div className="text-xs font-semibold text-foreground">{role}</div>
-                        <div className="text-[11px] text-muted-foreground">{person ? `${person.name} (${getPartner(person.partner)?.name ?? person.partner})` : "Unassigned"}</div>
+                        <div className="text-[11px] text-muted-foreground">{person ? `${person.name} (${getPartner(person.partner, partners)?.name ?? person.partner})` : "Unassigned"}</div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <select
                           value={assignedId ?? ""}
                           onChange={e => setPersonnelAssignments(prev => ({ ...prev, [role]: e.target.value }))}
-                          className="oe-select text-[10px] w-40"
+                          className="oe-select text-[10px] w-48"
                         >
                           <option value="">Unassigned</option>
-                          {allPeople.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          {options.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                         <button
                           onClick={() => { setAddPersonForRole(role); setAddPersonRoleOpen(true); }}
@@ -418,12 +428,12 @@ export function ResponseBuilderView({
           {!isKeyPersonnel && (
             <div className="bg-card rounded-xl border shadow-sm px-5 py-3 flex items-center gap-3 flex-wrap">
               <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Referenced personnel</span>
-              {["Priya Nandakumar", "Marcus Webb", "Dana Whitfield"].map(name => (
-                <span key={name} className="inline-flex items-center gap-1.5 border border-primary/20 bg-accent px-2.5 py-1 rounded-full text-[11px] text-accent-foreground font-medium">
+              {referencedPeople.map(person => (
+                <span key={person.id} className="inline-flex items-center gap-1.5 border border-primary/20 bg-accent px-2.5 py-1 rounded-full text-[11px] text-accent-foreground font-medium">
                   <div className="w-4 h-4 rounded-full bg-primary/10 flex items-center justify-center text-[8px] font-bold text-primary">
-                    {name.split(" ").map(n => n[0]).join("")}
+                    {person.name.split(" ").map(n => n[0]).join("")}
                   </div>
-                  {name}
+                  {person.name}
                 </span>
               ))}
             </div>
@@ -512,9 +522,13 @@ export function ResponseBuilderView({
                   </thead>
                   <tbody>
                     {pursuit.responseActionItems.map(item => (
-                      <tr key={item.id} className="oe-table-row border-b border-border last:border-b-0">
+                      <tr
+                        key={item.id}
+                        className="oe-table-row border-b border-border last:border-b-0 cursor-pointer"
+                        onClick={() => setActionItem(item)}
+                      >
                         <td className="px-4 py-3 text-foreground">{item.description}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{item.assignedPartnerId ? getPartner(item.assignedPartnerId)?.name : item.assignedInternal}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{item.assignedPartnerId ? getPartner(item.assignedPartnerId, partners)?.name : item.assignedInternal}</td>
                         <td className="px-4 py-3 text-muted-foreground font-mono">{item.dueAt}</td>
                         <td className="px-4 py-3">
                           <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-md", item.status === "Open" ? "oe-status-cond" : "oe-status-go")}>{item.status}</span>
@@ -653,6 +667,23 @@ export function ResponseBuilderView({
           </div>
         </div>
       </Modal>
+
+      <ActionItemResponseModal
+        open={actionItem !== null}
+        item={actionItem}
+        pursuitName={pursuit.name}
+        assigneeLabel={actionItem?.assignedPartnerId ? getPartner(actionItem.assignedPartnerId, partners)?.name : actionItem?.assignedInternal ?? undefined}
+        onClose={() => setActionItem(null)}
+        onSave={updates => {
+          if (!actionItem) return;
+          onUpdatePursuit(pursuit.id, {
+            responseActionItems: (pursuit.responseActionItems ?? []).map(item =>
+              item.id === actionItem.id ? { ...item, ...updates } : item
+            ),
+          });
+          toast("Action item updated", "success");
+        }}
+      />
 
       {/* Upload Final Modal */}
       <Modal open={uploadFinalOpen} onClose={() => setUploadFinalOpen(false)} title="Upload Final Submitted Document">

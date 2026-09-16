@@ -74,8 +74,8 @@ export function AddPursuitForm({
           value={lane}
           onChange={v => setLane(v as "B" | "C")}
           options={[
-            { value: "B", label: "Government RFP" },
-            { value: "C", label: "Private SOW" },
+            { value: "B", label: "RFP" },
+            { value: "C", label: "SOW" },
           ]}
         />
       </FormField>
