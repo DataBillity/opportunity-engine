@@ -48,20 +48,70 @@ export interface PartnerIngestResult {
 }
 
 const TECH = [
-  "aws govcloud", "aws", "azure government", "azure", "gcp", "postgresql", "postgres",
-  "databricks", "snowflake", "kafka", "spark", "cobol", "jira", "ms project", "grafana",
-  "selenium", "salesforce", "oracle", "sql server", "kubernetes", "terraform",
+  // Cloud platforms
+  "aws govcloud", "aws", "azure government", "azure", "gcp", "google cloud",
+  // Languages
+  "python", "java", "javascript", "typescript", "c#", "c++", "go", "golang", "rust",
+  "ruby", "php", "scala", "kotlin", "swift", "r ", "cobol", "perl", "bash",
+  // Frontend frameworks
+  "react", "angular", "vue", "next.js", "nextjs", "nuxt", "svelte", "remix",
+  "tailwind", "bootstrap", "material ui",
+  // Backend frameworks
+  "node.js", "nodejs", "express", "django", "flask", "fastapi", "spring",
+  ".net", "dotnet", "rails", "laravel",
+  // Databases
+  "postgresql", "postgres", "mysql", "mongodb", "dynamodb", "cosmosdb",
+  "sql server", "oracle", "redis", "elasticsearch", "neo4j", "cassandra",
+  "sqlite", "supabase", "firebase",
+  // Data & analytics
+  "databricks", "snowflake", "kafka", "spark", "airflow", "dbt", "looker",
+  "power bi", "tableau", "redshift", "bigquery", "pandas", "numpy",
+  // DevOps & infra
+  "kubernetes", "docker", "terraform", "ansible", "jenkins", "github actions",
+  "gitlab ci", "circleci", "pulumi", "cloudformation", "helm", "argo",
+  // ML & AI
+  "tensorflow", "pytorch", "scikit-learn", "openai", "langchain",
+  "hugging face", "sagemaker", "bedrock", "vertex ai",
+  // Testing & QA
+  "selenium", "cypress", "playwright", "jest", "pytest", "junit",
+  "sonarqube", "postman",
+  // Project & workflow
+  "jira", "ms project", "confluence", "grafana", "datadog", "splunk",
+  "new relic", "pagerduty", "servicenow",
+  // CRM & platforms
+  "salesforce", "hubspot", "dynamics 365", "sap", "workday",
+  // Security
+  "okta", "auth0", "vault", "crowdstrike",
+  // Messaging & streaming
+  "rabbitmq", "pulsar", "nats", "sqs", "sns", "eventbridge",
+  // Version control
+  "git", "github", "gitlab", "bitbucket",
 ];
 
 const SERVICES = [
-  "program management", "change management", "testing", "data migration",
+  "program management", "project management", "change management",
+  "testing", "quality assurance", "data migration", "data engineering",
   "financial reconciliation", "fraud analytics", "performance monitoring",
-  "quality assurance", "compliance", "architecture", "training",
+  "compliance", "architecture", "training", "devops", "cloud migration",
+  "system integration", "application development", "staff augmentation",
+  "business intelligence", "data analytics", "cybersecurity",
+  "risk management", "agile coaching", "product management",
+  "ux design", "ui design", "accessibility", "infrastructure management",
+  "database administration", "api development", "microservices",
+  "legacy modernization", "digital transformation",
 ];
 
 const INDUSTRIES = [
-  "government", "healthcare", "insurance", "public transit", "utilities",
-  "financial services", "public benefits", "labor", "workforce",
+  "government", "federal government", "state government", "local government",
+  "healthcare", "health information", "insurance", "public transit",
+  "transportation", "utilities", "energy", "financial services",
+  "banking", "fintech", "payments", "public benefits", "labor", "workforce",
+  "education", "higher education", "retail", "e-commerce",
+  "technology", "telecommunications", "defense", "aerospace",
+  "manufacturing", "pharmaceutical", "hospitality", "travel",
+  "real estate", "construction", "media", "entertainment",
+  "nonprofit", "consulting", "professional services", "legal",
+  "agriculture", "logistics", "supply chain",
 ];
 
 function today(): string {
@@ -114,6 +164,42 @@ function nextId(prefix: string, existing: { id: string }[], pad = 4): string {
   return `${prefix}-${String(n).padStart(pad, "0")}`;
 }
 
+function splitMultiPersonDocument(text: string): string[] {
+  const namePattern = /^(?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\s*$/;
+  const separatorPattern = /^(?:[-=_]{3,}|page\s+\d+|resume\s*[:—-]?\s*\d*)/i;
+
+  const lines = text.split(/\r?\n/);
+  const breakpoints: number[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i]!.trim();
+    const prevLine = lines[i - 1]?.trim() ?? "";
+
+    if (!line) continue;
+
+    const isSeparator = separatorPattern.test(prevLine) || !prevLine;
+    const isNameLine = namePattern.test(line) && line.length < 60;
+
+    if (isNameLine && isSeparator && i > 10) {
+      breakpoints.push(i);
+    }
+  }
+
+  if (breakpoints.length === 0) return [text];
+
+  const sections: string[] = [];
+  let start = 0;
+  for (const bp of breakpoints) {
+    const section = lines.slice(start, bp).join("\n").trim();
+    if (section.length > 50) sections.push(section);
+    start = bp;
+  }
+  const last = lines.slice(start).join("\n").trim();
+  if (last.length > 50) sections.push(last);
+
+  return sections.length ? sections : [text];
+}
+
 export function parsePartnerDocument(kind: PartnerIngestKind, text: string, filename: string): PartnerIngestResult {
   const empty: PartnerIngestResult = { kind, capabilities: [], experience: [], credentials: [], people: [] };
   const body = text.trim();
@@ -124,8 +210,8 @@ export function parsePartnerDocument(kind: PartnerIngestKind, text: string, file
   if (kind === "capabilities") {
     const names = uniqueStrings([
       ...bullets(body),
-      ...linesOf(body).filter(line => line.length > 8 && line.length < 80 && !/[.]{2,}/.test(line)).slice(0, 8),
-    ]).slice(0, 8);
+      ...linesOf(body).filter(line => line.length > 8 && line.length < 200 && !/[.]{2,}/.test(line)),
+    ]);
     return {
       ...empty,
       capabilities: (names.length ? names : [titleFromFilename(filename)]).map(name => ({ name })),
@@ -168,24 +254,27 @@ export function parsePartnerDocument(kind: PartnerIngestKind, text: string, file
     };
   }
 
-  const firstLines = linesOf(body);
-  const name = firstLines[0]?.replace(/^name:\s*/i, "") || titleFromFilename(filename);
-  const roleLine = firstLines.find(line => /role|manager|architect|lead|analyst|engineer/i.test(line)) ?? "";
-  const roles = uniqueStrings(
-    roleLine.split(/[,;/]/).map(part => part.replace(/^roles?:\s*/i, "").trim()).filter(part => part.length > 2)
-  );
-  return {
-    ...empty,
-    people: [{
+  const personSections = splitMultiPersonDocument(body);
+
+  const people: ParsedPerson[] = personSections.map(section => {
+    const sectionLines = linesOf(section);
+    const name = sectionLines[0]?.replace(/^name:\s*/i, "") || titleFromFilename(filename);
+    const roleLine = sectionLines.find(line => /role|manager|architect|lead|analyst|engineer|developer|designer|director|consultant|specialist/i.test(line)) ?? "";
+    const roles = uniqueStrings(
+      roleLine.split(/[,;/]/).map(part => part.replace(/^roles?:\s*/i, "").trim()).filter(part => part.length > 2)
+    );
+    return {
       name,
       roles: roles.length ? roles : ["Contributor"],
       expertise: "",
-      technologies: uniqueStrings(matchesFromList(body, TECH)),
-      industries: uniqueStrings(matchesFromList(body, INDUSTRIES)),
-      resumeText: body,
+      technologies: uniqueStrings(matchesFromList(section, TECH)),
+      industries: uniqueStrings(matchesFromList(section, INDUSTRIES)),
+      resumeText: section,
       resumeFileName: filename,
-    }],
-  };
+    };
+  });
+
+  return { ...empty, people };
 }
 
 export function applyPartnerIngest(

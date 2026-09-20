@@ -441,8 +441,42 @@ export function SourcesView({
       setIngestBusy(true);
       try {
         const result = await ingestPartnerDocuments("people", resumeFiles);
-        const parsed = result.people[0];
-        if (parsed) nextPerson = applyResumeReplacement(nextPerson, parsed);
+        if (result.people.length > 0) {
+          nextPerson = applyResumeReplacement(nextPerson, result.people[0]!);
+        }
+        if (result.people.length > 1) {
+          const additionalPeople = result.people.slice(1);
+          onUpdateGraph(prev => {
+            const stamp = new Date().toISOString().slice(0, 10);
+            const existingIds = new Set(prev.people.map(p => p.id));
+            let maxNum = prev.people
+              .map(p => Number(p.id.replace(/\D/g, "")))
+              .filter(n => Number.isFinite(n))
+              .reduce((a, b) => Math.max(a, b), 100);
+            const newPeople = additionalPeople.map(parsed => {
+              maxNum += 1;
+              const newPerson: GraphPerson = {
+                id: `PPL-${String(maxNum).padStart(3, "0")}`,
+                name: parsed.name,
+                partner: editPerson.partner,
+                role: parsed.roles[0] ?? "Contributor",
+                roles: parsed.roles,
+                skills: [],
+                technologies: parsed.technologies,
+                expertise: parsed.expertise,
+                industries: parsed.industries,
+                projectHistory: [],
+                status: "Pending",
+                updated: stamp,
+                resumeText: parsed.resumeText,
+                resumeFileName: parsed.resumeFileName,
+              };
+              return newPerson;
+            });
+            return { ...prev, people: [...prev.people, ...newPeople] };
+          });
+          toast(`Found ${result.people.length} people in the document — ${result.people.length - 1} additional added to the graph`, "success");
+        }
         if (result.warning) toast(result.warning, "warning");
       } catch (error) {
         toast(error instanceof Error ? error.message : "Resume parse failed", "warning");
