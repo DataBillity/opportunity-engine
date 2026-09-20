@@ -12,16 +12,15 @@ export function toPursuitBrief(pursuit: Pursuit): OutreachPursuitBrief {
     status: pursuit.status,
     closed: pursuit.closed,
     docSummary: {
-      objective: pursuit.docSummary.objective.slice(0, 8),
-      services: pursuit.docSummary.services.slice(0, 8),
-      deliverables: pursuit.docSummary.deliverables.slice(0, 8),
+      objective: pursuit.docSummary.objective,
+      services: pursuit.docSummary.services,
+      deliverables: pursuit.docSummary.deliverables,
     },
-    rationale: pursuit.rationale.slice(0, 8),
+    rationale: pursuit.rationale,
     mappedRequirements: pursuit.reqmap
       .filter(item => item.status === "mapped")
-      .slice(0, 8)
       .map(item => `${item.req}${item.node ? ` — ${item.node}` : ""}`),
-    gaps: pursuit.gaps.slice(0, 8).map(item => `${item.title} (${item.crit})`),
+    gaps: pursuit.gaps.map(item => `${item.title} (${item.crit})`),
   };
 }
 
@@ -52,8 +51,8 @@ export function buildOutreachBriefing(input: {
       summary: input.org.summary || undefined,
       whyGoodFit: input.org.whyGoodFit || undefined,
       score: input.org.score,
-      scoreFactors: input.org.scoreFactors.slice(0, 8),
-      notes: input.org.notes.map(note => note.text).slice(0, 6),
+      scoreFactors: input.org.scoreFactors,
+      notes: input.org.notes.map(note => note.text),
       contact: contact
         ? { name: contact.name, title: contact.title, email: contact.email }
         : undefined,

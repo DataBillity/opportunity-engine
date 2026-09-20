@@ -318,7 +318,7 @@ export function initiativeIntentFromText(text: string): boolean {
 
 function excerptAround(text: string, pattern: RegExp): string {
   const match = pattern.exec(text.toLowerCase());
-  if (!match || match.index === undefined) return text.slice(0, 160);
+  if (!match || match.index === undefined) return text;
   const start = Math.max(0, match.index - 60);
   const end = Math.min(text.length, match.index + 120);
   return text.slice(start, end).replace(/\s+/g, " ").trim();

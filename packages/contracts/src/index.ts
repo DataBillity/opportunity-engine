@@ -70,83 +70,143 @@ export const DecisionEnvelopeInput = z.object({
 });
 
 export const OutreachContact = z.object({
-  name: z.string().min(1).max(200),
-  title: z.string().max(200).optional(),
-  email: z.string().max(320).optional(),
+  name: z.string().min(1),
+  title: z.string().optional(),
+  email: z.string().optional(),
 });
 
 export const OutreachPursuitBrief = z.object({
-  id: z.string().max(80),
-  name: z.string().min(1).max(300),
-  typeLabel: z.string().max(80),
-  solicitationRef: z.string().max(120).optional(),
-  dueDate: z.string().max(40).nullable().optional(),
-  rec: z.string().max(40).optional(),
-  status: z.string().max(200).optional(),
+  id: z.string(),
+  name: z.string().min(1),
+  typeLabel: z.string(),
+  solicitationRef: z.string().optional(),
+  dueDate: z.string().nullable().optional(),
+  rec: z.string().optional(),
+  status: z.string().optional(),
   closed: z.boolean().optional(),
   docSummary: z.object({
-    objective: z.array(z.string().max(500)).max(8),
-    services: z.array(z.string().max(500)).max(8),
-    deliverables: z.array(z.string().max(500)).max(8),
+    objective: z.array(z.string()).default([]),
+    services: z.array(z.string()).default([]),
+    deliverables: z.array(z.string()).default([]),
   }).optional(),
-  rationale: z.array(z.string().max(500)).max(8).default([]),
-  mappedRequirements: z.array(z.string().max(400)).max(8).default([]),
-  gaps: z.array(z.string().max(400)).max(8).default([]),
+  rationale: z.array(z.string()).default([]),
+  mappedRequirements: z.array(z.string()).default([]),
+  gaps: z.array(z.string()).default([]),
 });
 
 export const OutreachBriefing = z.object({
-  senderName: z.string().min(1).max(120),
-  senderTitle: z.string().max(120).optional(),
-  senderCompany: z.string().max(120).default("DataBillity"),
+  senderName: z.string().min(1),
+  senderTitle: z.string().optional(),
+  senderCompany: z.string().default("DataBillity"),
   organization: z.object({
-    id: z.string().max(80),
-    name: z.string().min(1).max(300),
-    industry: z.string().max(200).optional(),
-    channel: z.string().max(80).optional(),
-    summary: z.string().max(2000).optional(),
-    whyGoodFit: z.string().max(1000).optional(),
+    id: z.string(),
+    name: z.string().min(1),
+    industry: z.string().optional(),
+    channel: z.string().optional(),
+    summary: z.string().optional(),
+    whyGoodFit: z.string().optional(),
     score: z.number().min(0).max(100).optional(),
-    scoreFactors: z.array(z.string().max(500)).max(8).default([]),
-    notes: z.array(z.string().max(800)).max(6).default([]),
+    scoreFactors: z.array(z.string()).default([]),
+    notes: z.array(z.string()).default([]),
     contact: OutreachContact.optional(),
   }),
   pursuit: OutreachPursuitBrief.nullable().optional(),
 });
 
 export const OutreachDraftOutput = z.object({
-  subject: z.string().min(1).max(200),
-  body: z.string().min(1).max(4000),
-  usedInsightIds: z.array(z.string().max(12)).max(16).default([]),
+  subject: z.string().min(1),
+  body: z.string().min(1),
+  usedInsightIds: z.array(z.string()).default([]),
+});
+
+export const ResponseDraftPerson = z.object({
+  name: z.string().min(1),
+  role: z.string().optional(),
+  roles: z.array(z.string()).default([]),
+  expertise: z.string().optional(),
+  technologies: z.array(z.string()).default([]),
+  industries: z.array(z.string()).default([]),
+  assignedRole: z.string().optional(),
+  resumeText: z.string().optional(),
+});
+
+export const ResponseDraftExperience = z.object({
+  name: z.string().min(1),
+  industry: z.string().optional(),
+  technologies: z.array(z.string()).default([]),
+  services: z.array(z.string()).default([]),
+  summary: z.string().optional(),
+});
+
+export const ResponseDraftBriefing = z.object({
+  section: z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    ref: z.string().optional(),
+  }),
+  instructions: z.string().optional(),
+  existingDraft: z.string().optional(),
+  organization: z.object({
+    name: z.string().min(1),
+    industry: z.string().optional(),
+    summary: z.string().optional(),
+  }),
+  pursuit: z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    typeLabel: z.string(),
+    solicitationRef: z.string().optional(),
+    dueDate: z.string().nullable().optional(),
+    rec: z.string().optional(),
+    documents: z.array(z.string()).default([]),
+    docSummary: z.object({
+      objective: z.array(z.string()).default([]),
+      services: z.array(z.string()).default([]),
+      deliverables: z.array(z.string()).default([]),
+    }).optional(),
+    mappedRequirements: z.array(z.string()).default([]),
+    unmappedRequirements: z.array(z.string()).default([]),
+    gaps: z.array(z.string()).default([]),
+    rationale: z.array(z.string()).default([]),
+    sourceExcerpt: z.string().optional(),
+  }),
+  people: z.array(ResponseDraftPerson).default([]),
+  experience: z.array(ResponseDraftExperience).default([]),
+});
+
+export const ResponseDraftOutput = z.object({
+  body: z.string().min(1),
+  usedInsightIds: z.array(z.string()).default([]),
 });
 
 export const SolicitationRequirement = z.object({
-  requirementText: z.string().min(1).max(600),
-  sectionRef: z.string().max(80).optional(),
+  requirementText: z.string().min(1),
+  sectionRef: z.string().optional(),
   passFail: z.boolean().default(false),
   weight: z.number().min(0).max(100).optional(),
 });
 
 export const SolicitationExtraction = z.object({
-  inferredName: z.string().max(300).default(""),
-  solicitationRef: z.string().max(120).optional(),
-  dueDate: z.string().max(40).nullable().optional(),
-  issuer: z.string().max(200).optional(),
-  objective: z.array(z.string().max(500)).max(8).default([]),
-  services: z.array(z.string().max(500)).max(8).default([]),
-  deliverables: z.array(z.string().max(500)).max(8).default([]),
-  requirements: z.array(SolicitationRequirement).max(24).default([]),
+  inferredName: z.string().default(""),
+  solicitationRef: z.string().optional(),
+  dueDate: z.string().nullable().optional(),
+  issuer: z.string().optional(),
+  objective: z.array(z.string()).default([]),
+  services: z.array(z.string()).default([]),
+  deliverables: z.array(z.string()).default([]),
+  requirements: z.array(SolicitationRequirement).default([]),
   responseSections: z.array(z.object({
-    ref: z.string().max(80),
-    title: z.string().max(160),
-    sectionId: z.string().max(40).optional(),
-  })).max(12).default([]),
-  constraints: z.array(z.string().max(400)).max(12).default([]),
+    ref: z.string(),
+    title: z.string(),
+    sectionId: z.string().optional(),
+  })).default([]),
+  constraints: z.array(z.string()).default([]),
 });
 
 export const PursuitDocumentMeta = z.object({
-  name: z.string().min(1).max(260),
+  name: z.string().min(1),
   kind: z.enum(["solicitation", "sow", "addendum", "other"]),
-  mime: z.string().max(120),
+  mime: z.string(),
   sizeBytes: z.number().int().nonnegative(),
   extractedChars: z.number().int().nonnegative(),
   parseStatus: z.enum(["extracted", "empty", "unsupported"]),
@@ -156,45 +216,45 @@ export const PursuitTriageView = z.object({
   score: z.number().min(0).max(100),
   rec: z.enum(["go", "nogo", "cond", "pending"]),
   confidence: z.number().min(0).max(100),
-  status: z.string().max(200),
-  rationale: z.array(z.string().max(500)).max(10),
+  status: z.string(),
+  rationale: z.array(z.string()),
   reqmap: z.array(z.object({
-    req: z.string().max(600),
+    req: z.string(),
     status: z.enum(["mapped", "unmapped"]),
-    node: z.string().max(200).nullable(),
-    evidence: z.string().max(400),
-  })).max(24),
+    node: z.string().nullable(),
+    evidence: z.string(),
+  })),
   gaps: z.array(z.object({
-    id: z.string().max(40),
-    title: z.string().max(300),
-    crit: z.string().max(120),
-    demand: z.string().max(200),
-    closure: z.string().max(200),
-  })).max(16),
+    id: z.string(),
+    title: z.string(),
+    crit: z.string(),
+    demand: z.string(),
+    closure: z.string(),
+  })),
   rfund: z.object({
-    lane: z.string().max(8),
-    tier: z.string().max(40),
+    lane: z.string(),
+    tier: z.string(),
     score: z.number().min(0).max(100),
-    note: z.string().max(500),
+    note: z.string(),
   }),
   complianceMatrix: z.array(z.object({
-    ref: z.string().max(80),
-    title: z.string().max(160),
-    sectionId: z.string().max(40),
-  })).max(12).default([]),
-  decisionAction: z.string().max(300),
-  modelVersion: z.string().max(120),
+    ref: z.string(),
+    title: z.string(),
+    sectionId: z.string(),
+  })).default([]),
+  decisionAction: z.string(),
+  modelVersion: z.string(),
   provider: z.enum(["claude", "gemini", "heuristic"]),
 });
 
 export const PursuitIngestResult = z.object({
-  documents: z.array(PursuitDocumentMeta).max(5),
+  documents: z.array(PursuitDocumentMeta),
   extraction: SolicitationExtraction,
   triage: PursuitTriageView,
-  sourceText: z.string().max(40000),
+  sourceText: z.string(),
   sourceTextTruncated: z.boolean(),
   usedModel: z.boolean(),
-  warning: z.string().max(400).optional(),
+  warning: z.string().optional(),
 });
 
 export type OpportunityAlignmentWeights = z.infer<typeof OpportunityAlignmentWeights>;
@@ -205,6 +265,10 @@ export type PursuitInput = z.infer<typeof PursuitInput>;
 export type OutreachBriefing = z.infer<typeof OutreachBriefing>;
 export type OutreachPursuitBrief = z.infer<typeof OutreachPursuitBrief>;
 export type OutreachDraftOutput = z.infer<typeof OutreachDraftOutput>;
+export type ResponseDraftPerson = z.infer<typeof ResponseDraftPerson>;
+export type ResponseDraftExperience = z.infer<typeof ResponseDraftExperience>;
+export type ResponseDraftBriefing = z.infer<typeof ResponseDraftBriefing>;
+export type ResponseDraftOutput = z.infer<typeof ResponseDraftOutput>;
 export type SolicitationRequirement = z.infer<typeof SolicitationRequirement>;
 export type SolicitationExtraction = z.infer<typeof SolicitationExtraction>;
 export type PursuitDocumentMeta = z.infer<typeof PursuitDocumentMeta>;

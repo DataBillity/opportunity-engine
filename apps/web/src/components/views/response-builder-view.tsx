@@ -1,13 +1,16 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import type { GraphPerson, Partner, Pursuit, ResponseActionItem } from "@/lib/mock-data";
+import type { GraphExperience, GraphPerson, Organization, Partner, Pursuit, ResponseActionItem } from "@/lib/mock-data";
 import { getPartner } from "@/lib/mock-data";
 import { Modal, FormField, TextInput, TextArea, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
 import { ActionItemResponseModal } from "@/components/action-items/action-item-response-modal";
+import { RichTextEditor, RichTextHtml } from "@/components/ui/rich-text-editor";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { rankPeopleForRole } from "@/lib/personnel-fit";
+import { buildResponseDraftBriefing } from "@/lib/response-draft-briefing";
+import { escapeHtml, htmlToPlainText, isEmptyRichText, plainTextToHtml, sanitizeRichText } from "@/lib/rich-text";
 
 interface SectionMeta {
   id: string;
@@ -45,7 +48,11 @@ function sectionsForPursuit(pursuit: Pursuit): SectionMeta[] {
 }
 
 function draftsForPursuit(pursuit: Pursuit, sections: SectionMeta[]): Record<string, string> {
-  if (pursuit.id === "OPP-2219") return { ...seedDraftContent };
+  if (pursuit.id === "OPP-2219") {
+    return Object.fromEntries(
+      Object.entries(seedDraftContent).map(([id, text]) => [id, plainTextToHtml(text)]),
+    );
+  }
   return Object.fromEntries(sections.map(section => [section.id, ""]));
 }
 
@@ -98,6 +105,27 @@ The subcontracting plan ensures clear accountability across all consortium membe
 
 interface ChatMessage { role: "system" | "user" | "assistant"; text: string; }
 
+interface DraftApiResponse {
+  body?: string;
+  provider?: "claude" | "gemini";
+  modelVersion?: string;
+  insights?: { id: string }[];
+  error?: string;
+  hint?: string;
+}
+
+const defaultPersonnelAssignments: Record<string, string> = {
+  "Program Manager": "",
+  "Lead Data Architect": "",
+  "QA & Compliance Lead": "",
+};
+
+const demoPersonnelAssignments: Record<string, string> = {
+  "Program Manager": "PPL-118",
+  "Lead Data Architect": "PPL-119",
+  "QA & Compliance Lead": "PPL-120",
+};
+
 const copilotResponses: Record<string, string> = {
   "Strengthen the fraud analytics paragraph": "I've enhanced the fraud analytics paragraph with specific metrics and methodology details.",
   "Add a risk mitigation section": "I've added a risk mitigation section addressing three key areas.",
@@ -131,12 +159,15 @@ export function ResponseBuilderEmptyState({
 }
 
 export function ResponseBuilderView({
-  pursuit, onBack, onUpdatePursuit, partners, people,
+  pursuit, org, onBack, onUpdatePursuit, partners, people, experience,
 }: {
-  pursuit: Pursuit; onBack: () => void;
+  pursuit: Pursuit;
+  org?: Organization;
+  onBack: () => void;
   onUpdatePursuit: (pursuitId: string, updates: Partial<Pursuit>) => void;
   partners?: Partner[];
   people?: GraphPerson[];
+  experience?: GraphExperience[];
 }) {
   const { toast } = useToast();
   const [sections, setSections] = useState<SectionMeta[]>(() => sectionsForPursuit(pursuit));
@@ -160,11 +191,9 @@ export function ResponseBuilderView({
   const [insertAfter, setInsertAfter] = useState("");
 
   // Key Personnel roles
-  const [personnelAssignments, setPersonnelAssignments] = useState<Record<string, string>>({
-    "Program Manager": "PPL-118",
-    "Lead Data Architect": "PPL-119",
-    "QA & Compliance Lead": "PPL-120",
-  });
+  const [personnelAssignments, setPersonnelAssignments] = useState<Record<string, string>>(
+    () => pursuit.id === "OPP-2219" ? { ...demoPersonnelAssignments } : { ...defaultPersonnelAssignments },
+  );
   const [addRoleOpen, setAddRoleOpen] = useState(false);
   const [newRoleName, setNewRoleName] = useState("");
   const [addPersonRoleOpen, setAddPersonRoleOpen] = useState(false);
@@ -202,37 +231,91 @@ export function ResponseBuilderView({
     toast(`Outcome set to ${newOutcome}`, "success");
   }
 
-  function handleGenerateDraft() {
+  async function requestSectionDraft(options: { regenerate: boolean }) {
     const section = sections.find(item => item.id === activeSection);
     if (!section) return;
     setGenerating(true);
-    setTimeout(() => {
-      const content = pursuit.id === "OPP-2219" && activeSection === "mgmt" ? generatedMgmtDraft : outlineSection(pursuit, section);
-      setDrafts(prev => ({ ...prev, [activeSection]: content }));
-      setSections(prev => prev.map(s => s.id === activeSection ? { ...s, trace: "partial", tracePct: pursuit.sourceText ? "packet" : "78%" } : s));
-      setMessages(prev => [...prev, { role: "system", text: `Draft generated for "${section.name}".` }]);
+    const briefing = buildResponseDraftBriefing({
+      pursuit,
+      org,
+      section,
+      assignments: personnelAssignments,
+      people: people ?? [],
+      experience,
+      existingDraft: options.regenerate ? htmlToPlainText(drafts[activeSection] ?? "") : undefined,
+    });
+
+    try {
+      const res = await fetch("/api/response/generate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ briefing }),
+      });
+      const data = await res.json() as DraftApiResponse;
+      if (!res.ok || !data.body?.trim()) {
+        if (!options.regenerate) {
+          const fallback = pursuit.id === "OPP-2219" && activeSection === "mgmt"
+            ? generatedMgmtDraft
+            : outlineSection(pursuit, section);
+          setDrafts(prev => ({ ...prev, [activeSection]: plainTextToHtml(fallback) }));
+        }
+        setSections(prev => prev.map(s => s.id === activeSection ? { ...s, trace: "partial", tracePct: "outline" } : s));
+        setMessages(prev => [...prev, {
+          role: "system",
+          text: data.error || data.hint || "Model draft unavailable. Used the solicitation outline.",
+        }]);
+        toast(data.error || "Model draft unavailable — showing the packet outline", "warning");
+        return;
+      }
+
+      setDrafts(prev => ({ ...prev, [activeSection]: plainTextToHtml(data.body!.trim()) }));
+      setSections(prev => {
+        const next = prev.map(s => s.id === activeSection
+          ? { ...s, trace: "partial" as const, tracePct: data.provider ?? "model" }
+          : options.regenerate && s.id !== activeSection && !isEmptyRichText(drafts[s.id])
+            ? { ...s, reviewNeeded: true }
+            : s);
+        return next;
+      });
+      const factCount = data.insights?.length ?? 0;
+      setMessages(prev => [...prev, {
+        role: "system",
+        text: `${options.regenerate ? "Section regenerated" : "Draft generated"} for "${section.name}"${
+          data.provider ? ` via ${data.provider}` : ""
+        }${factCount ? ` (${factCount} grounded facts)` : ""}.`,
+      }]);
+      toast(
+        options.regenerate
+          ? "Section regenerated from the solicitation packet and team graph"
+          : "Draft generated from the solicitation packet and team graph",
+        "success",
+      );
+    } catch (err) {
+      if (!options.regenerate) {
+        setDrafts(prev => ({ ...prev, [activeSection]: plainTextToHtml(outlineSection(pursuit, section)) }));
+      }
+      const message = err instanceof Error ? err.message : "Unable to generate draft";
+      setMessages(prev => [...prev, { role: "system", text: message }]);
+      toast(message, "warning");
+    } finally {
       setGenerating(false);
-      toast("Draft generated from the solicitation packet and capability map", "success");
-    }, 1500);
+    }
+  }
+
+  function handleGenerateDraft() {
+    void requestSectionDraft({ regenerate: false });
   }
 
   function handleRegenerate() {
-    setGenerating(true);
-    setTimeout(() => {
-      const current = drafts[activeSection] || "";
-      setDrafts(prev => ({ ...prev, [activeSection]: current + "\n\n[Regenerated passage] Additional detail incorporated." }));
-      // Flag other sections for review
-      setSections(prev => prev.map(s => s.id !== activeSection && drafts[s.id] ? { ...s, reviewNeeded: true } : s));
-      setGenerating(false);
-      toast("Section regenerated — other sections flagged for review", "success");
-    }, 1200);
+    void requestSectionDraft({ regenerate: true });
   }
 
   function handleCheckAssertions() {
     setChecking(true);
     setAssertionResults(null);
     setTimeout(() => {
-      const content = drafts[activeSection] || "";
+      const content = htmlToPlainText(drafts[activeSection] || "");
       const sentences = content.split(/\.\s+/).filter(s => s.length > 20).slice(0, 8);
       const results = sentences.map((s, i) => ({ text: s.slice(0, 80) + (s.length > 80 ? "…" : ""), traced: i < sentences.length - 2 || Math.random() > 0.4 }));
       setAssertionResults(results);
@@ -267,15 +350,23 @@ export function ResponseBuilderView({
   }
 
   function handleExportWord() {
-    const allText = sections.map(s => `# ${s.name} (${s.ref})\n\n${drafts[s.id] || "[Not drafted]"}`).join("\n\n---\n\n");
-    const blob = new Blob([allText], { type: "text/plain;charset=utf-8" });
+    const body = sections.map(s => {
+      const content = isEmptyRichText(drafts[s.id])
+        ? "<p><em>Not drafted</em></p>"
+        : sanitizeRichText(drafts[s.id] ?? "");
+      return `<h1>${escapeHtml(s.name)}</h1><p><strong>${escapeHtml(s.ref)}</strong></p>${content}`;
+    }).join("");
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(pursuit.name)} — Response Draft</title>
+<style>body{font-family:Georgia,serif;max-width:720px;margin:40px auto;line-height:1.65;color:#111}h1{font-family:Calibri,sans-serif;font-size:20px;margin:28px 0 8px}h2{font-size:16px}ul,ol{padding-left:1.4em}</style>
+</head><body><p style="color:#555;font-size:13px">${escapeHtml(pursuit.solicitationRef || pursuit.typeLabel)}</p><h1>${escapeHtml(pursuit.name)} — Response Draft</h1>${body}</body></html>`;
+    const blob = new Blob(["\ufeff", html], { type: "application/msword" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${pursuit.name.replace(/[^a-zA-Z0-9]/g, "_")}_Draft.txt`;
+    a.download = `${pursuit.name.replace(/[^a-zA-Z0-9]/g, "_")}_Draft.doc`;
     a.click();
     URL.revokeObjectURL(url);
-    toast("Draft exported as text document", "success");
+    toast("Draft exported as Word document", "success");
   }
 
   function sendChatMessage(text: string) {
@@ -297,6 +388,8 @@ export function ResponseBuilderView({
   const quickPrompts = ["Strengthen the fraud analytics paragraph", "Add a risk mitigation section", "Which claims aren't source-traced?"];
 
   const isKeyPersonnel = activeSection === "pers";
+  const activeMeta = sections.find(s => s.id === activeSection);
+  const hasDraft = !isEmptyRichText(drafts[activeSection]);
   const allPeople = (people ?? []).filter(person => person.status !== "Archived");
   const roleNames = Object.keys(personnelAssignments);
   const referencedPeople = Object.values(personnelAssignments)
@@ -373,10 +466,10 @@ export function ResponseBuilderView({
           <div className="px-4 py-3 bg-muted/20 border-t border-border xl:border-t-0">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">Completion</div>
             <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${(sections.filter(s => drafts[s.id]).length / sections.length) * 100}%` }} />
+              <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${(sections.filter(s => !isEmptyRichText(drafts[s.id])).length / sections.length) * 100}%` }} />
             </div>
             <div className="text-[10px] text-muted-foreground mt-1.5">
-              {sections.filter(s => drafts[s.id]).length} of {sections.length} sections drafted
+              {sections.filter(s => !isEmptyRichText(drafts[s.id])).length} of {sections.length} sections drafted
               {reviewedSections.size > 0 && ` · ${reviewedSections.size} reviewed`}
             </div>
           </div>
@@ -440,27 +533,24 @@ export function ResponseBuilderView({
           )}
 
           {/* Document editor */}
-          <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-            <div className="p-5 sm:p-8 min-h-[200px] sm:min-h-[260px]">
-              <h4 className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-4">
-                {sections.find(s => s.id === activeSection)?.name}
-                {sections.find(s => s.id === activeSection)?.mandatory && <span className="text-destructive ml-1">* Required</span>}
-              </h4>
-              {generating ? (
-                <div className="flex items-center gap-3 py-12 justify-center">
+          <div className="bg-card rounded-xl border shadow-sm overflow-hidden relative">
+            <RichTextEditor
+              key={activeSection}
+              value={drafts[activeSection] ?? ""}
+              onChange={html => setDrafts(prev => ({ ...prev, [activeSection]: html }))}
+              disabled={generating}
+              label={activeMeta?.name}
+              required={activeMeta?.mandatory}
+              placeholder={`Write the ${activeMeta?.name ?? "section"}, or generate a grounded first pass.`}
+            />
+            {generating && (
+              <div className="absolute inset-0 bg-card/80 backdrop-blur-[1px] flex items-center justify-center z-10">
+                <div className="flex items-center gap-3">
                   <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                  <span className="text-sm text-muted-foreground">Generating draft from capability graph…</span>
+                  <span className="text-sm text-muted-foreground">Generating draft from the solicitation packet and team graph…</span>
                 </div>
-              ) : drafts[activeSection] ? (
-                <div className="text-[15px] leading-[1.75] text-foreground whitespace-pre-wrap font-[400]" style={{ fontFamily: "'Charter', 'Iowan Old Style', Georgia, 'Times New Roman', serif" }}>
-                  {drafts[activeSection]}
-                </div>
-              ) : (
-                <div className="text-muted-foreground italic text-sm">
-                  This section has not been drafted yet. Click <strong className="text-foreground">"Generate draft"</strong> to produce a grounded first pass.
-                </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Assertion check results */}
@@ -483,16 +573,16 @@ export function ResponseBuilderView({
 
           {/* Actions */}
           <div className="flex gap-2.5 flex-wrap">
-            {!drafts[activeSection] && (
+            {!hasDraft && (
               <button onClick={handleGenerateDraft} disabled={generating} className="text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm disabled:opacity-50">Generate draft</button>
             )}
-            {drafts[activeSection] && (
+            {hasDraft && (
               <button onClick={handleRegenerate} disabled={generating} className="text-xs font-medium px-4 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary disabled:opacity-50">{generating ? "Regenerating…" : "Regenerate section"}</button>
             )}
-            {drafts[activeSection] && (
+            {hasDraft && (
               <button onClick={handleCheckAssertions} disabled={checking} className="text-xs font-medium px-4 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary disabled:opacity-50">{checking ? "Checking…" : "Check assertions"}</button>
             )}
-            {drafts[activeSection] && !reviewedSections.has(activeSection) && (
+            {hasDraft && !reviewedSections.has(activeSection) && (
               <button onClick={handleMarkReviewed} className="text-xs font-semibold px-4 py-2 rounded-md bg-go text-white cursor-pointer transition-all hover:opacity-90 shadow-sm">Mark as reviewed</button>
             )}
             {reviewedSections.has(activeSection) && (
@@ -603,8 +693,8 @@ export function ResponseBuilderView({
                 {s.ref} — {s.name}
                 {s.mandatory && <span className="text-destructive ml-1 text-[10px]">* Required</span>}
               </h3>
-              <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed" style={{ fontFamily: "'Charter', Georgia, serif" }}>
-                {drafts[s.id] || <span className="text-muted-foreground italic">Not yet drafted.</span>}
+              <div className="text-sm text-foreground leading-relaxed">
+                <RichTextHtml html={drafts[s.id]} />
               </div>
             </div>
           ))}

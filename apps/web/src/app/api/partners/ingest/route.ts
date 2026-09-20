@@ -38,12 +38,12 @@ async function enhanceWithModel(kind: PartnerIngestKind, text: string, filename:
       redactionProfile: "partner-document",
       jsonMode: true,
       temperature: 0,
-      maxTokens: 1200,
-      systemPrompt: "Extract structured partner-graph records from the document. Return JSON only.",
+      maxTokens: 4000,
+      systemPrompt: "Extract structured partner-graph records from the document. Return JSON only. Do not echo the full resume or document body; the caller already has the source text.",
       prompt: `Kind: ${kind}\nFilename: ${filename}\nReturn JSON shaped as:
-{"capabilities":[{"name":""}],"experience":[{"name":"","industry":"","technologies":[],"services":[],"summary":""}],"credentials":[{"name":"","credType":"Certification|Insurance|Bonding|License","expiration":"","documentText":"","documentFileName":""}],"people":[{"name":"","roles":[],"expertise":"","technologies":[],"industries":[],"resumeText":"","resumeFileName":""}]}
-Fill only the array that matches kind=${kind}. Use the document text:
-${text.slice(0, 12000)}`,
+{"capabilities":[{"name":""}],"experience":[{"name":"","industry":"","technologies":[],"services":[],"summary":""}],"credentials":[{"name":"","credType":"Certification|Insurance|Bonding|License","expiration":"","documentText":"","documentFileName":""}],"people":[{"name":"","roles":[],"expertise":"","technologies":[],"industries":[]}]}
+Fill only the array that matches kind=${kind}. Leave documentText and resumeText empty. Use the full document text:
+${text}`,
     });
     const parsed = parseModelJson(result.content) as Partial<PartnerIngestResult>;
     return {
@@ -52,12 +52,12 @@ ${text.slice(0, 12000)}`,
       experience: parsed.experience?.length ? parsed.experience : fallback.experience,
       credentials: (parsed.credentials?.length ? parsed.credentials : fallback.credentials).map(item => ({
         ...item,
-        documentText: item.documentText || text.slice(0, 8000),
+        documentText: text,
         documentFileName: item.documentFileName || filename,
       })),
       people: (parsed.people?.length ? parsed.people : fallback.people).map(item => ({
         ...item,
-        resumeText: item.resumeText || text.slice(0, 12000),
+        resumeText: text,
         resumeFileName: item.resumeFileName || filename,
       })),
     };
