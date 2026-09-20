@@ -142,7 +142,7 @@ export function parsePartnerDocument(kind: PartnerIngestKind, text: string, file
         industry,
         technologies: uniqueStrings(matchesFromList(body, TECH)),
         services: uniqueStrings(matchesFromList(body, SERVICES)),
-        summary: body.slice(0, 1200),
+        summary: body,
       }],
     };
   }
@@ -162,7 +162,7 @@ export function parsePartnerDocument(kind: PartnerIngestKind, text: string, file
         name: linesOf(body)[0] || titleFromFilename(filename),
         credType,
         expiration,
-        documentText: body.slice(0, 8000),
+        documentText: body,
         documentFileName: filename,
       }],
     };
@@ -172,17 +172,17 @@ export function parsePartnerDocument(kind: PartnerIngestKind, text: string, file
   const name = firstLines[0]?.replace(/^name:\s*/i, "") || titleFromFilename(filename);
   const roleLine = firstLines.find(line => /role|manager|architect|lead|analyst|engineer/i.test(line)) ?? "";
   const roles = uniqueStrings(
-    roleLine.split(/[,;/]/).map(part => part.replace(/^roles?:\s*/i, "").trim()).filter(part => part.length > 2 && part.length < 60)
+    roleLine.split(/[,;/]/).map(part => part.replace(/^roles?:\s*/i, "").trim()).filter(part => part.length > 2)
   );
   return {
     ...empty,
     people: [{
       name,
       roles: roles.length ? roles : ["Contributor"],
-      expertise: body.slice(0, 400),
+      expertise: "",
       technologies: uniqueStrings(matchesFromList(body, TECH)),
       industries: uniqueStrings(matchesFromList(body, INDUSTRIES)),
-      resumeText: body.slice(0, 12000),
+      resumeText: body,
       resumeFileName: filename,
     }],
   };

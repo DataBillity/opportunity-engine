@@ -87,7 +87,7 @@ export function collectGroundingFacts(briefing: OutreachBriefingType): Grounding
     for (const item of pursuit.rationale) pushRfp(`Triage: ${item}`);
   }
 
-  return facts.slice(0, 22);
+  return facts;
 }
 
 export function buildOutreachPrompt(briefing: OutreachBriefingType, facts: GroundingFact[]): string {

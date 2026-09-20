@@ -184,6 +184,88 @@ body.oe-nav-locked {
   touch-action: none;
 }
 
+/* ---- Response draft WYSIWYG ---- */
+.oe-prose {
+  font-family: "Charter", "Iowan Old Style", Georgia, "Times New Roman", serif;
+  font-size: 15px;
+  line-height: 1.75;
+  color: hsl(var(--foreground));
+  word-break: break-word;
+}
+.oe-prose :where(p) {
+  margin: 0 0 1em;
+}
+.oe-prose :where(p:last-child) {
+  margin-bottom: 0;
+}
+.oe-prose :where(h2) {
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 1.15em;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 1.35em 0 0.45em;
+  line-height: 1.35;
+}
+.oe-prose :where(h3) {
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 1.02em;
+  font-weight: 700;
+  margin: 1.15em 0 0.35em;
+  line-height: 1.4;
+}
+.oe-prose :where(h2:first-child),
+.oe-prose :where(h3:first-child) {
+  margin-top: 0;
+}
+.oe-prose :where(ul) {
+  list-style: disc;
+  padding-left: 1.35em;
+  margin: 0 0 1em;
+}
+.oe-prose :where(ol) {
+  list-style: decimal;
+  padding-left: 1.35em;
+  margin: 0 0 1em;
+}
+.oe-prose :where(li) {
+  margin: 0.15em 0;
+}
+.oe-prose :where(li p) {
+  margin: 0;
+}
+.oe-prose :where(blockquote) {
+  border-left: 3px solid hsl(var(--primary) / 0.35);
+  padding-left: 0.9em;
+  margin: 0 0 1em;
+  color: hsl(var(--muted-foreground));
+}
+.oe-prose :where(a) {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.oe-prose :where(hr) {
+  border: 0;
+  border-top: 1px solid hsl(var(--border));
+  margin: 1.25em 0;
+}
+.oe-prose-editor {
+  outline: none;
+  min-height: 200px;
+  white-space: pre-wrap;
+}
+.oe-prose-editor p.is-editor-empty:first-child::before {
+  color: hsl(var(--muted-foreground));
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  font-style: italic;
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 14px;
+  line-height: 1.75;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-drawer-in,
   .animate-drawer-out,

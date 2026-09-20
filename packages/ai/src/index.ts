@@ -20,3 +20,10 @@ export {
   buildSolicitationExtractPrompt,
   SOLICITATION_EXTRACT_PROMPT_VERSION,
 } from "./solicitation";
+export {
+  generateResponseDraft,
+  collectResponseFacts,
+  buildResponseDraftPrompt,
+  RESPONSE_DRAFT_PROMPT_VERSION,
+} from "./response-draft";
+export type { ResponseGroundingFact, ResponseSectionDraft } from "./response-draft";

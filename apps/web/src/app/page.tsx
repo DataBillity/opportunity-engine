@@ -320,8 +320,10 @@ export default function CommandCenter() {
               <ResponseBuilderView
                 key={currentPursuit.id}
                 pursuit={currentPursuit}
+                org={currentOrg}
                 partners={partners}
                 people={graph.people}
+                experience={graph.experience}
                 onBack={() => setActiveView("decision")}
                 onUpdatePursuit={handleUpdatePursuit}
               />

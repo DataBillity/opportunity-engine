@@ -21,13 +21,11 @@ export interface OrgTriageContext {
   summary?: string;
 }
 
-const SOURCE_TEXT_CAP = 24_000;
 const PASS_FAIL = /\b(pass[\s/-]*fail|mandatory|must have|shall possess|fedramp|ato\b|performance bond|bonding capacity)\b/i;
 
 export function capSourceText(text: string): { text: string; truncated: boolean } {
   const normalized = text.replace(/\u0000/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-  if (normalized.length <= SOURCE_TEXT_CAP) return { text: normalized, truncated: false };
-  return { text: normalized.slice(0, SOURCE_TEXT_CAP), truncated: true };
+  return { text: normalized, truncated: false };
 }
 
 export function mergeSolicitationExtractions(
@@ -37,7 +35,7 @@ export function mergeSolicitationExtractions(
   if (!overlay) return base;
   const pickList = (preferred?: string[], fallback?: string[]) => {
     const next = (preferred ?? []).map(s => s.trim()).filter(Boolean);
-    return next.length ? next.slice(0, 8) : (fallback ?? []).slice(0, 8);
+    return next.length ? next : (fallback ?? []);
   };
   const overlayReqs = (overlay.requirements ?? []).filter(r => r.requirementText?.trim());
   return {
@@ -48,9 +46,9 @@ export function mergeSolicitationExtractions(
     objective: pickList(overlay.objective, base.objective),
     services: pickList(overlay.services, base.services),
     deliverables: pickList(overlay.deliverables, base.deliverables),
-    requirements: overlayReqs.length ? overlayReqs.slice(0, 24) : base.requirements,
-    responseSections: (overlay.responseSections?.length ? overlay.responseSections : base.responseSections).slice(0, 12),
-    constraints: pickList(overlay.constraints, base.constraints).slice(0, 12),
+    requirements: overlayReqs.length ? overlayReqs : base.requirements,
+    responseSections: overlay.responseSections?.length ? overlay.responseSections : base.responseSections,
+    constraints: pickList(overlay.constraints, base.constraints),
   };
 }
 
@@ -65,14 +63,14 @@ export function extractSolicitationHeuristic(text: string, filename: string): So
     dueDate: due,
     issuer: extractIssuer(text),
     objective: sectionBullets(text, /(?:purpose|objective|overview|background)\b/i) ||
-      sentencesMatching(text, /moderniz|replace|implement|retire|redesign|deploy/i, 4),
+      sentencesMatching(text, /moderniz|replace|implement|retire|redesign|deploy/i),
     services: sectionBullets(text, /(?:scope of (?:work|services)|services required|statement of work)\b/i) ||
-      sentencesMatching(text, /integrat|platform|pipeline|analytics|payment|portal|migrat/i, 5),
+      sentencesMatching(text, /integrat|platform|pipeline|analytics|payment|portal|migrat/i),
     deliverables: sectionBullets(text, /deliverables?\b/i) ||
-      sentencesMatching(text, /deliver|production|dashboard|training|cutover|rollout/i, 4),
+      sentencesMatching(text, /deliver|production|dashboard|training|cutover|rollout/i),
     requirements,
     responseSections: extractResponseSections(text),
-    constraints: sentencesMatching(text, /fedramp|hipaa|soc 2|iso 27001|bonding|ato\b|wcag|zero[- ]downtime/i, 6),
+    constraints: sentencesMatching(text, /fedramp|hipaa|soc 2|iso 27001|bonding|ato\b|wcag|zero[- ]downtime/i),
   };
 }
 
@@ -89,7 +87,7 @@ export function scorePursuitTriage(input: {
     ? extraction.requirements
     : fallbackRequirements(extraction);
   const docMatches = matchBillityCapabilities(sourceText, "solicitation", "public_web");
-  const reqmap = reqs.slice(0, 24).map(req => mapRequirement(req, docMatches));
+  const reqmap = reqs.map(req => mapRequirement(req, docMatches));
   const mapped = reqmap.filter(r => r.status === "mapped");
   const passFailUnmapped = reqs.some((req, i) => {
     const row = reqmap[i];
@@ -192,7 +190,7 @@ function mapRequirement(req: SolicitationRequirement, docMatches: CapabilityMatc
       req: req.requirementText,
       status: "mapped" as const,
       node: hit.label,
-      evidence: hit.evidence.slice(0, 180) || "Matched DataBillity capability taxonomy",
+      evidence: hit.evidence || "Matched DataBillity capability taxonomy",
     };
   }
   return {
@@ -216,13 +214,13 @@ function buildGaps(
     const passFail = Boolean(req?.passFail || PASS_FAIL.test(row.req));
     gaps.push({
       id: `GAP-${120 + gaps.length}`,
-      title: row.req.slice(0, 180),
+      title: row.req,
       crit: passFail ? "Pass/fail criterion" : "Unmapped requirement",
       demand: "From uploaded solicitation",
       closure: passFail ? "Partner coverage or No-Go" : "Partner, hire, or scoped exception",
     });
   });
-  return gaps.slice(0, 8);
+  return gaps;
 }
 
 function buildRationale(input: {
@@ -265,7 +263,7 @@ function buildRationale(input: {
   if (input.provider === "heuristic") {
     lines.push("Extraction used the heuristic parser (no model key). Re-run with Gemini/Claude for a denser requirement shred.");
   }
-  return lines.slice(0, 8);
+  return lines;
 }
 
 function rfundFromText(text: string, lane: "B" | "C"): PursuitTriageView["rfund"] {
@@ -287,7 +285,7 @@ function rfundFromText(text: string, lane: "B" | "C"): PursuitTriageView["rfund"
 
 function fallbackRequirements(extraction: SolicitationExtraction): SolicitationRequirement[] {
   const fromLists = [...extraction.services, ...extraction.deliverables, ...extraction.constraints];
-  return fromLists.slice(0, 10).map(requirementText => ({
+  return fromLists.map(requirementText => ({
     requirementText,
     passFail: PASS_FAIL.test(requirementText),
   }));
@@ -355,7 +353,7 @@ function extractRequirements(text: string): SolicitationRequirement[] {
   const out: SolicitationRequirement[] = [];
   const seen = new Set<string>();
   const push = (raw: string, sectionRef?: string) => {
-    const requirementText = raw.replace(/\s+/g, " ").trim().slice(0, 500);
+    const requirementText = raw.replace(/\s+/g, " ").trim();
     const key = requirementText.toLowerCase();
     if (requirementText.length < 28 || seen.has(key)) return;
     seen.add(key);
@@ -374,23 +372,21 @@ function extractRequirements(text: string): SolicitationRequirement[] {
     } else if (/^(?:the\s+)?(?:contractor|vendor|offeror|respondent)\s+shall\b/i.test(trimmed)) {
       push(trimmed);
     }
-    if (out.length >= 24) return out;
   }
 
   if (out.length < 4) {
     for (const sentence of text.split(/(?<=[.!?])\s+/)) {
       if (/\b(shall|must)\b/i.test(sentence)) push(sentence);
-      if (out.length >= 16) break;
     }
   }
-  return out.slice(0, 24);
+  return out;
 }
 
 function extractResponseSections(text: string): SolicitationExtraction["responseSections"] {
   const found: SolicitationExtraction["responseSections"] = [];
-  const re = /(?:volume|vol\.?|section|attachment)\s+([IVX0-9.]+)[:\s]+([A-Z][^\n]{6,80})/gi;
+  const re = /(?:volume|vol\.?|section|attachment)\s+([IVX0-9.]+)[:\s]+([A-Z][^\n]{6,})/gi;
   let match: RegExpExecArray | null;
-  while ((match = re.exec(text)) && found.length < 8) {
+  while ((match = re.exec(text))) {
     const title = match[2]!.replace(/[.]+$/, "").trim();
     found.push({
       ref: `${/vol/i.test(match[0]) ? "Vol" : "§"} ${match[1]}`.trim(),
@@ -411,22 +407,21 @@ function sectionBullets(text: string, heading: RegExp): string[] {
   if (!match || match.index === undefined) return [];
   const rest = text.slice(match.index + match[0].length);
   const nextHeading = rest.search(/\n[A-Z][A-Za-z0-9 /&]{6,40}\n/);
-  const body = rest.slice(0, nextHeading > 80 ? nextHeading : 1400);
+  const body = nextHeading >= 0 ? rest.slice(0, nextHeading) : rest;
   const items = body
     .split(/\n+/)
     .map(line => line.replace(/^[\s\-•*0-9.)]+/, "").trim())
-    .filter(line => line.length > 24 && line.length < 280 && !heading.test(line));
-  return items.slice(0, 5);
+    .filter(line => line.length > 24 && !heading.test(line));
+  return items;
 }
 
-function sentencesMatching(text: string, pattern: RegExp, limit: number): string[] {
+function sentencesMatching(text: string, pattern: RegExp): string[] {
   const items: string[] = [];
   for (const sentence of text.split(/(?<=[.!?])\s+/)) {
     const trimmed = sentence.replace(/\s+/g, " ").trim();
-    if (trimmed.length > 28 && trimmed.length < 280 && pattern.test(trimmed)) {
+    if (trimmed.length > 28 && pattern.test(trimmed)) {
       items.push(trimmed);
     }
-    if (items.length >= limit) break;
   }
   return items;
 }
