@@ -27,23 +27,60 @@ function mergeResults(kind: PartnerIngestKind, parts: PartnerIngestResult[]): Pa
   };
 }
 
+const PARTNER_INGEST_SYSTEM_PROMPT = `You extract structured partner-graph records from uploaded documents. Return JSON only.
+
+Hard rules:
+- A single file may contain MULTIPLE people (e.g. team rosters, multi-person resumes). Emit one record per person.
+- Distinguish job TITLES (e.g. "Senior Software Engineer at Amazon") from delivery ROLES (e.g. "Lead Data Architect", "QA Lead"). Put delivery roles in the "roles" array.
+- For technologies, be comprehensive: capture programming languages (Python, Java, TypeScript, JavaScript, Go, Rust, C#, etc.), frameworks (React, Angular, Next.js, Node.js, Django, Spring, .NET, etc.), cloud platforms (AWS, Azure, GCP), databases (PostgreSQL, MongoDB, DynamoDB, SQL Server, Oracle, Snowflake, Databricks, Redis), DevOps tools (Kubernetes, Docker, Terraform, Jenkins, GitHub Actions), data tools (Kafka, Spark, Airflow, dbt), and any other technical tools mentioned.
+- For industries, infer from employer names and project descriptions. Common mappings: government agencies → Government, hospitals/clinics → Healthcare, insurance companies → Insurance, banks/fintechs → Financial Services, airlines/hotels → Travel & Hospitality, retailers → Retail, consultancies → Professional Services, universities → Education, transit authorities → Public Transit.
+- For expertise, write a concise 1-2 sentence summary of the person's core competencies. Do NOT copy the entire resume or document header.
+- For capabilities, extract each distinct service offering or capability as a separate item. Dense prose paragraphs should be broken into individual capabilities.
+- Leave documentText and resumeText empty; the caller already has the source text.
+- Do not echo the full document body.`;
+
+function buildPartnerIngestPrompt(kind: PartnerIngestKind, text: string, filename: string): string {
+  const schema: Record<PartnerIngestKind, string> = {
+    capabilities: '{"capabilities":[{"name":"<distinct service or capability>"}]}',
+    experience: '{"experience":[{"name":"<project or engagement name>","industry":"","technologies":[],"services":[],"summary":"<1-2 sentence summary>"}]}',
+    credentials: '{"credentials":[{"name":"","credType":"Certification|Insurance|Bonding|License","expiration":"YYYY-MM-DD or TBD","documentText":"","documentFileName":""}]}',
+    people: '{"people":[{"name":"<full name>","roles":["<delivery role, not job title>"],"expertise":"<1-2 sentence summary>","technologies":["<comprehensive list>"],"industries":["<inferred from employers/projects>"]}]}',
+  };
+
+  const kindInstructions: Record<PartnerIngestKind, string> = {
+    capabilities: "Extract each distinct capability or service offering. Break dense prose into individual items.",
+    experience: "Extract each project, engagement, or past performance item. Infer industry from client names.",
+    credentials: "Extract each certification, insurance policy, bond, or license. Find expiration dates.",
+    people: `Extract EVERY person in the document. A file may contain 1 or many people.
+For each person: identify their full name, delivery roles (not job titles), a concise expertise summary, ALL technologies mentioned in their section, and industries inferred from their employers and project descriptions.`,
+  };
+
+  return `Kind: ${kind}
+Filename: ${filename}
+Task: ${kindInstructions[kind]}
+Return JSON shaped as: ${schema[kind]}
+Fill only the "${kind}" array.
+
+Document text:
+${text}`;
+}
+
 async function enhanceWithModel(kind: PartnerIngestKind, text: string, filename: string, fallback: PartnerIngestResult): Promise<PartnerIngestResult> {
   const providers = getAvailableProviders();
-  if (!providers.claude && !providers.gemini) return fallback;
+  if (!providers.claude && !providers.gemini) {
+    return { ...fallback, warning: [fallback.warning, "No AI model key configured — used heuristic parser only."].filter(Boolean).join(" ") };
+  }
   try {
     const result = await callModel({
       tier: "extraction",
-      promptVersion: "partner-ingest-v1",
+      promptVersion: "partner-ingest-v2",
       classification: "internal",
       redactionProfile: "partner-document",
       jsonMode: true,
       temperature: 0,
       maxTokens: 4000,
-      systemPrompt: "Extract structured partner-graph records from the document. Return JSON only. Do not echo the full resume or document body; the caller already has the source text.",
-      prompt: `Kind: ${kind}\nFilename: ${filename}\nReturn JSON shaped as:
-{"capabilities":[{"name":""}],"experience":[{"name":"","industry":"","technologies":[],"services":[],"summary":""}],"credentials":[{"name":"","credType":"Certification|Insurance|Bonding|License","expiration":"","documentText":"","documentFileName":""}],"people":[{"name":"","roles":[],"expertise":"","technologies":[],"industries":[]}]}
-Fill only the array that matches kind=${kind}. Leave documentText and resumeText empty. Use the full document text:
-${text}`,
+      systemPrompt: PARTNER_INGEST_SYSTEM_PROMPT,
+      prompt: buildPartnerIngestPrompt(kind, text, filename),
     });
     const parsed = parseModelJson(result.content) as Partial<PartnerIngestResult>;
     return {
@@ -62,8 +99,11 @@ ${text}`,
       })),
     };
   } catch (error) {
-    if (error instanceof ModelGatewayError) return fallback;
-    return fallback;
+    const heuristicWarning = `AI model failed for ${filename} — used heuristic parser. Profiles may be incomplete.`;
+    if (error instanceof ModelGatewayError) {
+      return { ...fallback, warning: [fallback.warning, heuristicWarning].filter(Boolean).join(" ") };
+    }
+    return { ...fallback, warning: [fallback.warning, heuristicWarning].filter(Boolean).join(" ") };
   }
 }
 
