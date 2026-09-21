@@ -8,7 +8,7 @@ import { AddPursuitForm } from "@/components/pursuit/add-pursuit-form";
 import { createPursuitFromForm, recLabel } from "@/lib/create-pursuit";
 import { createSalesLead, LEAD_CHANNELS } from "@/lib/create-lead";
 import { useToast } from "@/components/ui/toast";
-import { navItems } from "@/components/layout/nav-items";
+import { navItems, utilityNavItems, type NavItem } from "@/components/layout/nav-items";
 import { BrandMark } from "@/components/brand-mark";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { useOperator } from "@/components/auth/operator-provider";
@@ -86,6 +86,48 @@ function UserMenu({ onNav }: { onNav: (v: ViewId) => void }) {
   );
 }
 
+function navItemIsActive(item: NavItem, activeView: ViewId, leadReturnView: "pipeline" | "archive"): boolean {
+  if (activeView === item.id) return true;
+  if (activeView === "org" && item.id === "pipeline" && leadReturnView === "pipeline") return true;
+  if (activeView === "org" && item.id === "archive" && leadReturnView === "archive") return true;
+  return false;
+}
+
+function NavButton({
+  item,
+  isActive,
+  isDisabled,
+  onNav,
+}: {
+  item: NavItem;
+  isActive: boolean;
+  isDisabled: boolean;
+  onNav: (v: ViewId) => void;
+}) {
+  return (
+    <button
+      onClick={() => !isDisabled && onNav(item.id)}
+      disabled={isDisabled}
+      title={isDisabled ? "Select an opportunity on this lead first" : undefined}
+      className={cn(
+        "relative px-2.5 xl:px-3 py-1.5 rounded-md text-[12px] xl:text-[13px] font-medium transition-all whitespace-nowrap",
+        isDisabled
+          ? "text-white/30 cursor-not-allowed"
+          : "cursor-pointer hover:bg-white/10 hover:text-white",
+        isActive
+          ? "bg-white/[0.12] text-white font-semibold shadow-sm"
+          : !isDisabled && "text-white/70"
+      )}
+    >
+      <span className="xl:hidden">{item.shortLabel}</span>
+      <span className="hidden xl:inline">{item.label}</span>
+      {isActive && (
+        <span className="absolute bottom-0 left-2.5 right-2.5 xl:left-3 xl:right-3 h-[2px] rounded-full bg-[var(--billity-bright)]" />
+      )}
+    </button>
+  );
+}
+
 export function TopBar({
   activeView,
   onNav,
@@ -96,6 +138,7 @@ export function TopBar({
   onMenuToggle,
   currentOrgHasPursuits = false,
   currentOrgId,
+  leadReturnView = "pipeline",
 }: {
   activeView: ViewId;
   onNav: (v: ViewId) => void;
@@ -106,6 +149,7 @@ export function TopBar({
   onMenuToggle: () => void;
   currentOrgHasPursuits?: boolean;
   currentOrgId?: string;
+  leadReturnView?: "pipeline" | "archive";
 }) {
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const newMenuRef = useRef<HTMLDivElement>(null);
@@ -212,33 +256,25 @@ export function TopBar({
         {/* Navigation */}
         <nav className="hidden lg:flex items-center gap-1 flex-1 min-w-0 overflow-x-auto oe-touch-scroll lg:pl-3">
           {navItems.map((item, i) => {
-            const isActive = activeView === item.id || (item.id === "pipeline" && activeView === "org");
-            const isDisabled = item.requiresPursuit && !currentOrgHasPursuits;
+            const isActive = navItemIsActive(item, activeView, leadReturnView);
+            const isDisabled = Boolean(item.requiresPursuit && !currentOrgHasPursuits);
             return (
               <span key={item.id} className="contents">
                 {i > 0 && navItems[i - 1]!.group !== item.group && (
                   <span className="w-px h-5 bg-white/15 mx-1.5 shrink-0" />
                 )}
-                <button
-                  onClick={() => !isDisabled && onNav(item.id)}
-                  disabled={isDisabled}
-                  className={cn(
-                    "relative px-2.5 xl:px-3 py-1.5 rounded-md text-[12px] xl:text-[13px] font-medium transition-all whitespace-nowrap",
-                    isDisabled
-                      ? "text-white/30 cursor-not-allowed"
-                      : "cursor-pointer hover:bg-white/10 hover:text-white",
-                    isActive
-                      ? "bg-white/[0.12] text-white font-semibold shadow-sm"
-                      : !isDisabled && "text-white/70"
-                  )}
-                >
-                  <span className="xl:hidden">{item.shortLabel}</span>
-                  <span className="hidden xl:inline">{item.label}</span>
-                  {isActive && (
-                    <span className="absolute bottom-0 left-2.5 right-2.5 xl:left-3 xl:right-3 h-[2px] rounded-full bg-[var(--billity-bright)]" />
-                  )}
-                </button>
+                <NavButton item={item} isActive={isActive} isDisabled={isDisabled} onNav={onNav} />
               </span>
+            );
+          })}
+        </nav>
+
+        <nav className="hidden lg:flex items-center gap-1 shrink-0">
+          <span className="w-px h-5 bg-white/15 mx-1.5 shrink-0" />
+          {utilityNavItems.map(item => {
+            const isActive = navItemIsActive(item, activeView, leadReturnView);
+            return (
+              <NavButton key={item.id} item={item} isActive={isActive} isDisabled={false} onNav={onNav} />
             );
           })}
         </nav>

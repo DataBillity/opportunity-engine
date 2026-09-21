@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import type { ViewId } from "@/app/page";
 import type { Organization, Pursuit } from "@/lib/mock-data";
 import { Sidebar } from "@/components/layout/sidebar";
-import { navItems } from "@/components/layout/nav-items";
+import { navItems, utilityNavItems } from "@/components/layout/nav-items";
 import { BrandMark } from "@/components/brand-mark";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { cn } from "@/lib/cn";
@@ -20,6 +20,8 @@ export function MobileNav({
   onOrgSelect,
   orgs,
   allPursuits,
+  pursuitNavEnabled = false,
+  leadReturnView = "pipeline",
 }: {
   open: boolean;
   onClose: () => void;
@@ -31,6 +33,8 @@ export function MobileNav({
   onOrgSelect: (id: string) => void;
   orgs: Organization[];
   allPursuits: Record<string, Pursuit>;
+  pursuitNavEnabled?: boolean;
+  leadReturnView?: "pipeline" | "archive";
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -113,23 +117,35 @@ export function MobileNav({
             Navigate
           </div>
           <div className="flex flex-col gap-0.5">
-            {navItems.map(item => (
-              <button
-                key={item.id}
-                onClick={() => onNav(item.id)}
-                className={cn(
-                  "flex items-center justify-between w-full text-left px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all cursor-pointer min-h-11",
-                  activeView === item.id
-                    ? "bg-accent text-accent-foreground font-semibold"
-                    : "text-foreground hover:bg-muted/50"
-                )}
-              >
-                {item.label}
-                {activeView === item.id && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--billity-bright)] shrink-0" />
-                )}
-              </button>
-            ))}
+            {[...navItems, ...utilityNavItems].map(item => {
+              const isActive =
+                activeView === item.id
+                || (item.id === "pipeline" && activeView === "org" && leadReturnView === "pipeline")
+                || (item.id === "archive" && activeView === "org" && leadReturnView === "archive");
+              const isDisabled = Boolean(item.requiresPursuit && !pursuitNavEnabled);
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => !isDisabled && onNav(item.id)}
+                  disabled={isDisabled}
+                  title={isDisabled ? "Select an opportunity on this lead first" : undefined}
+                  className={cn(
+                    "flex items-center justify-between w-full text-left px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all min-h-11",
+                    isDisabled
+                      ? "text-muted-foreground/50 cursor-not-allowed"
+                      : "cursor-pointer",
+                    isActive
+                      ? "bg-accent text-accent-foreground font-semibold"
+                      : !isDisabled && "text-foreground hover:bg-muted/50"
+                  )}
+                >
+                  {item.label}
+                  {isActive && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--billity-bright)] shrink-0" />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </nav>
 

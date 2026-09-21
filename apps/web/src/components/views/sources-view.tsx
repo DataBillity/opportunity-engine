@@ -18,10 +18,10 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import {
   applyPartnerIngest,
-    applyResumeReplacement,
-    ingestPartnerDocuments,
-    type PartnerIngestKind,
-    type PartnerIngestResult,
+  applyResumeReplacement,
+  ingestPartnerDocuments,
+  type PartnerIngestKind,
+  type PartnerIngestResult,
 } from "@/lib/partner-ingest";
 
 type TabId = "capabilities" | "experience" | "credentials" | "people" | "partners";
@@ -31,6 +31,46 @@ const PARTNER_TYPES = [
   { value: "JV", label: "JV (Joint Venture)" },
   { value: "Subcontractor", label: "Subcontractor" },
 ];
+
+const TEAMING_OPTIONS: { value: "na" | "pending" | "signed"; label: string; flag: boolean | null }[] = [
+  { value: "na", label: "N/A", flag: null },
+  { value: "pending", label: "Pending", flag: false },
+  { value: "signed", label: "Signed", flag: true },
+];
+
+function teamingValue(flag: boolean | null): "na" | "pending" | "signed" {
+  if (flag === true) return "signed";
+  if (flag === false) return "pending";
+  return "na";
+}
+
+function TeamingToggle({
+  value,
+  onChange,
+}: {
+  value: boolean | null;
+  onChange: (next: boolean | null) => void;
+}) {
+  return (
+    <div className="inline-flex p-1 rounded-lg bg-muted/60 gap-0.5">
+      {TEAMING_OPTIONS.map(option => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => onChange(option.flag)}
+          className={cn(
+            "px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer",
+            teamingValue(value) === option.value
+              ? "bg-card text-foreground shadow-sm font-semibold"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function PartnerMultiSelect({
   selected,
@@ -67,6 +107,8 @@ export function SourcesView({
   onUpdatePartners,
   onUpdateGraph,
   onUpdatePursuit,
+  onArchivePartner,
+  onReinstatePartner,
 }: {
   partners: Partner[];
   graph: GraphData;
@@ -74,6 +116,8 @@ export function SourcesView({
   onUpdatePartners: (next: Partner[] | ((prev: Partner[]) => Partner[])) => void;
   onUpdateGraph: (next: GraphData | ((prev: GraphData) => GraphData)) => void;
   onUpdatePursuit: (pursuitId: string, updates: Partial<Pursuit>) => void;
+  onArchivePartner?: (partnerId: string) => void;
+  onReinstatePartner?: (partnerId: string) => void;
 }) {
   const { toast } = useToast();
   const [tab, setTab] = useState<TabId>("capabilities");
@@ -118,6 +162,7 @@ export function SourcesView({
   const [partnerEmail, setPartnerEmail] = useState("");
   const [partnerSummary, setPartnerSummary] = useState("");
   const [partnerSourceLink, setPartnerSourceLink] = useState("");
+  const [partnerTeaming, setPartnerTeaming] = useState<boolean | null>(null);
   const [capFiles, setCapFiles] = useState<File[]>([]);
   const [expFiles, setExpFiles] = useState<File[]>([]);
   const [credFiles, setCredFiles] = useState<File[]>([]);
@@ -132,6 +177,7 @@ export function SourcesView({
   const [editPartnerContact, setEditPartnerContact] = useState("");
   const [editPartnerEmail, setEditPartnerEmail] = useState("");
   const [editPartnerSummary, setEditPartnerSummary] = useState("");
+  const [editPartnerTeaming, setEditPartnerTeaming] = useState<boolean | null>(null);
   const [editCapFiles, setEditCapFiles] = useState<File[]>([]);
   const [editExpFiles, setEditExpFiles] = useState<File[]>([]);
   const [editCredFiles, setEditCredFiles] = useState<File[]>([]);
@@ -292,7 +338,7 @@ export function SourcesView({
       contact: partnerContact.trim() || "—",
       contactEmail: partnerEmail.trim(),
       status: "Active",
-      teamingAgreementSigned: false,
+      teamingAgreementSigned: partnerTeaming,
       accessTier: null,
       covers: [],
       note: partnerSummary.trim(),
@@ -316,27 +362,22 @@ export function SourcesView({
     }
     setAddPartnerOpen(false);
     setPartnerName(""); setPartnerWebsite(""); setPartnerSourceLink(""); setPartnerContact(""); setPartnerEmail(""); setPartnerSummary("");
+    setPartnerTeaming(null);
     setCapFiles([]); setExpFiles([]); setCredFiles([]); setPeopleFiles([]);
   }
 
   function handleArchivePartner(partnerId: string) {
-    onUpdatePartners(prev => prev.map(p => p.id === partnerId ? { ...p, status: "Archived" } : p));
-    onUpdateGraph(prev => ({
-      capabilities: prev.capabilities.map(c => {
-        if (!c.partners.includes(partnerId)) return c;
-        const remaining = c.partners.filter(pid => pid !== partnerId);
-        return remaining.length === 0 ? { ...c, partners: remaining, status: "Archived" } : { ...c, partners: remaining };
-      }),
-      experience: prev.experience.map(e => {
-        if (!e.partners.includes(partnerId)) return e;
-        const remaining = e.partners.filter(pid => pid !== partnerId);
-        return remaining.length === 0 ? { ...e, partners: remaining, status: "Archived" } : { ...e, partners: remaining };
-      }),
-      credentials: prev.credentials.map(c => c.partner === partnerId ? { ...c, status: "Archived" } : c),
-      people: prev.people.map(p => p.partner === partnerId ? { ...p, status: "Archived" } : p),
-    }));
+    if (onArchivePartner) onArchivePartner(partnerId);
+    else {
+      onUpdatePartners(prev => prev.map(p => p.id === partnerId ? { ...p, status: "Archived" } : p));
+    }
     toast("Partner archived — sole-associated items archived as well", "success");
     setDetailPartnerId(null);
+  }
+
+  function handleReinstatePartner(partnerId: string) {
+    if (onReinstatePartner) onReinstatePartner(partnerId);
+    toast("Partner reinstated with full history", "success");
   }
 
   function openEditPartner(p: Partner) {
@@ -347,6 +388,7 @@ export function SourcesView({
     setEditPartnerContact(p.contact === "—" ? "" : p.contact);
     setEditPartnerEmail(p.contactEmail ?? "");
     setEditPartnerSummary(p.summary || p.note);
+    setEditPartnerTeaming(p.teamingAgreementSigned);
     setEditCapFiles([]); setEditExpFiles([]); setEditCredFiles([]); setEditPeopleFiles([]);
   }
 
@@ -363,6 +405,7 @@ export function SourcesView({
             contactEmail: editPartnerEmail.trim(),
             summary: editPartnerSummary.trim(),
             note: editPartnerSummary.trim(),
+            teamingAgreementSigned: editPartnerTeaming,
           }
         : p
     ));
@@ -569,7 +612,6 @@ export function SourcesView({
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">ID</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Capability</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Partners</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Updated</th>
                 </tr>
               </thead>
@@ -579,11 +621,6 @@ export function SourcesView({
                     <td className="px-4 py-3 font-mono text-[11px] text-primary">{c.id}</td>
                     <td className="px-4 py-3 font-semibold text-foreground">{c.name}</td>
                     <td className="px-4 py-3 text-muted-foreground">{c.partners.map(id => partnerName2(id)).join(", ") || "—"}</td>
-                    <td className="px-4 py-3">
-                      <span className={cn("inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md",
-                        c.status === "Verified" ? "oe-status-go" : c.status === "Archived" ? "oe-status-closed" : "oe-status-cond"
-                      )}>{c.status}</span>
-                    </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{c.updated}</td>
                   </tr>
                 ))}
@@ -603,7 +640,6 @@ export function SourcesView({
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Experience</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Industry</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Partners</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -613,11 +649,6 @@ export function SourcesView({
                     <td className="px-4 py-3 font-semibold text-foreground">{e.name}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{e.industry || "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground">{e.partners.map(id => partnerName2(id)).join(", ") || "—"}</td>
-                    <td className="px-4 py-3">
-                      <span className={cn("inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md",
-                        e.status === "Verified" ? "oe-status-go" : e.status === "Archived" ? "oe-status-closed" : "oe-status-cond"
-                      )}>{e.status}</span>
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -637,7 +668,6 @@ export function SourcesView({
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Type</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Partner</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Expiration</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -648,12 +678,6 @@ export function SourcesView({
                     <td className="px-4 py-3 text-xs text-muted-foreground">{c.credType}</td>
                     <td className="px-4 py-3 text-muted-foreground">{partnerName2(c.partner)}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{c.expiration}</td>
-                    <td className="px-4 py-3">
-                      <span className={cn("inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md",
-                        c.status === "Verified" ? "oe-status-go" : c.status === "Archived" ? "oe-status-closed" :
-                        c.status.includes("Partner") ? "oe-status-trace" : "oe-status-cond"
-                      )}>{c.status}</span>
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -673,7 +697,6 @@ export function SourcesView({
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Partner</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Role</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5 hidden xl:table-cell">Expertise</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -684,11 +707,6 @@ export function SourcesView({
                     <td className="px-4 py-3 text-muted-foreground">{partnerName2(p.partner)}</td>
                     <td className="px-4 py-3 text-muted-foreground">{(p.roles ?? [p.role]).filter(Boolean).join(", ") || p.role}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground max-w-[400px] truncate hidden xl:table-cell">{p.expertise}</td>
-                    <td className="px-4 py-3">
-                      <span className={cn("inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md",
-                        p.status === "Verified" ? "oe-status-go" : p.status === "Archived" ? "oe-status-closed" : "oe-status-cond"
-                      )}>{p.status}</span>
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -734,7 +752,9 @@ export function SourcesView({
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                       <div className="flex gap-1.5">
                         <button onClick={() => openEditPartner(p)} className="text-[10px] font-medium px-2 py-1 rounded border border-input bg-card text-foreground cursor-pointer hover:bg-secondary">Edit</button>
-                        {p.status !== "Archived" && (
+                        {p.status === "Archived" ? (
+                          <button onClick={() => handleReinstatePartner(p.id)} className="text-[10px] font-medium px-2 py-1 rounded border border-input bg-card text-foreground cursor-pointer hover:bg-secondary">Reinstate</button>
+                        ) : (
                           <button onClick={() => handleArchivePartner(p.id)} className="text-[10px] font-medium px-2 py-1 rounded border border-input bg-card text-destructive cursor-pointer hover:bg-destructive/10">Archive</button>
                         )}
                       </div>
@@ -753,6 +773,7 @@ export function SourcesView({
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div><span className="text-muted-foreground">Type:</span> <strong>{detailPartner.type}</strong></div>
               <div><span className="text-muted-foreground">Status:</span> <strong>{detailPartner.status}</strong></div>
+              <div><span className="text-muted-foreground">Teaming agreement:</span> <strong>{detailPartner.teamingAgreementSigned === true ? "Signed" : detailPartner.teamingAgreementSigned === false ? "Pending" : "N/A"}</strong></div>
               <div><span className="text-muted-foreground">Website:</span> {detailPartner.website !== "—" ? <a href={detailPartner.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{detailPartner.website}</a> : "—"}</div>
               <div><span className="text-muted-foreground">Date added:</span> {detailPartner.createdAt || "—"}</div>
               <div><span className="text-muted-foreground">Contact:</span> {detailPartner.contact}</div>
@@ -804,7 +825,6 @@ export function SourcesView({
           <div className="space-y-3 text-xs">
             <div><span className="text-muted-foreground">ID:</span> <span className="font-mono">{liveCap.id}</span></div>
             <div><span className="text-muted-foreground">Partners:</span> {liveCap.partners.map(id => partnerName2(id)).join(", ") || "—"}</div>
-            <div><span className="text-muted-foreground">Status:</span> {liveCap.status}</div>
             <div className="flex justify-between pt-2">
               <button onClick={() => { handleDeleteItem("capability", liveCap.id); setDetailCap(null); }} className="text-xs text-destructive cursor-pointer hover:underline">Delete</button>
               <div className="flex gap-2">
@@ -942,7 +962,7 @@ export function SourcesView({
             <TextInput value={editPersonIndustries} onChange={setEditPersonIndustries} />
           </FormField>
           <FormField label="Replace resume" hint="A new resume re-sets roles, expertise, and industries from the parsed document.">
-            <DocumentDropzone files={resumeFiles} onChange={setResumeFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={resumeFiles} onChange={setResumeFiles} disabled={ingestBusy} dropLabel="Drop your Resumes here" />
           </FormField>
           <div className="flex justify-end gap-2">
             <SecondaryButton onClick={() => setEditPerson(null)}>Cancel</SecondaryButton>
@@ -971,17 +991,20 @@ export function SourcesView({
           <FormField label="Summary">
             <TextArea value={editPartnerSummary} onChange={setEditPartnerSummary} rows={3} />
           </FormField>
+          <FormField label="Teaming agreement">
+            <TeamingToggle value={editPartnerTeaming} onChange={setEditPartnerTeaming} />
+          </FormField>
           <FormField label="Capability documents">
-            <DocumentDropzone files={editCapFiles} onChange={setEditCapFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={editCapFiles} onChange={setEditCapFiles} disabled={ingestBusy} dropLabel="Drop the Capability Statements here" />
           </FormField>
           <FormField label="Experience documents">
-            <DocumentDropzone files={editExpFiles} onChange={setEditExpFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={editExpFiles} onChange={setEditExpFiles} disabled={ingestBusy} dropLabel="Drop the Experience/Project Summaries here" />
           </FormField>
           <FormField label="Credential documents">
-            <DocumentDropzone files={editCredFiles} onChange={setEditCredFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={editCredFiles} onChange={setEditCredFiles} disabled={ingestBusy} dropLabel="Drop your Certification, Insurance, Bonding, and Other Credential documents here" />
           </FormField>
           <FormField label="People / resume documents">
-            <DocumentDropzone files={editPeopleFiles} onChange={setEditPeopleFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={editPeopleFiles} onChange={setEditPeopleFiles} disabled={ingestBusy} dropLabel="Drop your Resumes here" />
           </FormField>
           <div className="flex justify-end gap-2 pt-2">
             <SecondaryButton onClick={() => setEditPartner(null)}>Cancel</SecondaryButton>
@@ -1103,17 +1126,20 @@ export function SourcesView({
           <FormField label="Source link (optional)">
             <TextInput value={partnerSourceLink} onChange={setPartnerSourceLink} />
           </FormField>
+          <FormField label="Teaming agreement">
+            <TeamingToggle value={partnerTeaming} onChange={setPartnerTeaming} />
+          </FormField>
           <FormField label="Capability documents">
-            <DocumentDropzone files={capFiles} onChange={setCapFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={capFiles} onChange={setCapFiles} disabled={ingestBusy} dropLabel="Drop the Capability Statements here" />
           </FormField>
           <FormField label="Experience documents">
-            <DocumentDropzone files={expFiles} onChange={setExpFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={expFiles} onChange={setExpFiles} disabled={ingestBusy} dropLabel="Drop the Experience/Project Summaries here" />
           </FormField>
           <FormField label="Credential documents">
-            <DocumentDropzone files={credFiles} onChange={setCredFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={credFiles} onChange={setCredFiles} disabled={ingestBusy} dropLabel="Drop your Certification, Insurance, Bonding, and Other Credential documents here" />
           </FormField>
           <FormField label="People / resume documents">
-            <DocumentDropzone files={peopleFiles} onChange={setPeopleFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={peopleFiles} onChange={setPeopleFiles} disabled={ingestBusy} dropLabel="Drop your Resumes here" />
           </FormField>
           <div className="flex justify-end gap-2 pt-2">
             <SecondaryButton onClick={() => setAddPartnerOpen(false)}>Cancel</SecondaryButton>

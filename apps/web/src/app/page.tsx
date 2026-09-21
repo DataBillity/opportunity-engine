@@ -12,7 +12,9 @@ import { SourcesView } from "@/components/views/sources-view";
 import { ResponseBuilderEmptyState, ResponseBuilderView } from "@/components/views/response-builder-view";
 import { SettingsView } from "@/components/views/settings-view";
 import { DashboardView } from "@/components/views/dashboard-view";
+import { ArchiveView } from "@/components/views/archive-view";
 import { OperatorProvider } from "@/components/auth/operator-provider";
+import { applyPartnerArchive, applyPartnerReinstate, setPartnerArchived } from "@/lib/partner-archive";
 import {
   organizations as initialOrgs,
   pursuits as initialPursuits,
@@ -25,21 +27,22 @@ import {
 } from "@/lib/mock-data";
 import { mergeLeadOrganizations, mergePipelineLeads } from "@/lib/create-lead";
 
-export type ViewId = "dashboard" | "search" | "pipeline" | "org" | "decision" | "draft" | "sources" | "settings";
+export type ViewId = "dashboard" | "search" | "pipeline" | "org" | "decision" | "draft" | "sources" | "archive" | "settings";
 
 function getOrgPursuitsFromState(org: Organization, allPursuits: Record<string, Pursuit>): Pursuit[] {
   return org.pursuits.map(pid => allPursuits[pid]).filter(Boolean) as Pursuit[];
 }
 
-function findDraftablePursuit(org: Organization | undefined, allPursuits: Record<string, Pursuit>): Pursuit | undefined {
-  if (!org) return undefined;
-  return getOrgPursuitsFromState(org, allPursuits).find(p => !p.closed && p.rec === "go");
+function orgPursuitsFromState(org: Organization | undefined, allPursuits: Record<string, Pursuit>): Pursuit[] {
+  if (!org) return [];
+  return getOrgPursuitsFromState(org, allPursuits);
 }
 
 export default function CommandCenter() {
   const [activeView, setActiveView] = useState<ViewId>("dashboard");
   const [currentOrgId, setCurrentOrgId] = useState("ORG-01");
-  const [currentPursuitId, setCurrentPursuitId] = useState("OPP-2201");
+  const [currentPursuitId, setCurrentPursuitId] = useState<string | null>(null);
+  const [leadReturnView, setLeadReturnView] = useState<"pipeline" | "archive">("pipeline");
   const [laneFilter, setLaneFilter] = useState("all");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -72,15 +75,26 @@ export default function CommandCenter() {
   }, []);
 
   const currentOrg = orgs.find(o => o.id === currentOrgId);
-  const currentPursuit = allPursuits[currentPursuitId];
-  const currentOrgHasPursuits = currentOrg
-    ? getOrgPursuitsFromState(currentOrg, allPursuits).filter(p => !p.closed).length > 0
-    : false;
+  const currentPursuit = currentPursuitId ? allPursuits[currentPursuitId] : undefined;
+  const selectedPursuit = currentPursuit?.orgId === currentOrgId ? currentPursuit : undefined;
+  const orgPursuits = orgPursuitsFromState(currentOrg, allPursuits);
+  const singlePursuitId = orgPursuits.length === 1 ? orgPursuits[0]!.id : null;
+  const pursuitNavEnabled =
+    orgPursuits.length === 1 || (orgPursuits.length > 1 && !!selectedPursuit);
 
-  function handleOrgSelect(orgId: string) {
+  useEffect(() => {
+    if (singlePursuitId && currentPursuitId !== singlePursuitId) {
+      setCurrentPursuitId(singlePursuitId);
+    }
+  }, [singlePursuitId, currentPursuitId]);
+
+  function handleOrgSelect(orgId: string, returnView: "pipeline" | "archive" = "pipeline") {
     setCurrentOrgId(orgId);
+    setLeadReturnView(returnView);
     const org = orgs.find(o => o.id === orgId);
     if (!org) return;
+    const orgPursuits = orgPursuitsFromState(org, allPursuits);
+    setCurrentPursuitId(orgPursuits.length === 1 ? orgPursuits[0]!.id : null);
     setActiveView("org");
     setMobileNavOpen(false);
   }
@@ -91,15 +105,7 @@ export default function CommandCenter() {
   }
 
   function handleNav(view: ViewId) {
-    if (view === "draft") {
-      const current = allPursuits[currentPursuitId];
-      const currentIsDraftable =
-        current?.rec === "go" && !current.closed && current.orgId === currentOrgId;
-      if (!currentIsDraftable) {
-        const draftable = findDraftablePursuit(currentOrg, allPursuits);
-        if (draftable) setCurrentPursuitId(draftable.id);
-      }
-    }
+    if ((view === "decision" || view === "draft") && !pursuitNavEnabled) return;
     setActiveView(view);
     setMobileNavOpen(false);
   }
@@ -138,6 +144,7 @@ export default function CommandCenter() {
       );
       setCurrentOrgId(pursuit.orgId);
       setCurrentPursuitId(pursuit.id);
+      setLeadReturnView("pipeline");
       setActiveView("decision");
     },
     []
@@ -146,13 +153,6 @@ export default function CommandCenter() {
   const handleAddOrg = useCallback(
     (org: Organization) => {
       setOrgs(prev => mergeLeadOrganizations(prev, [org]));
-    },
-    []
-  );
-
-  const handleAddOrgs = useCallback(
-    (incoming: Organization[]) => {
-      setOrgs(prev => mergeLeadOrganizations(prev, incoming));
     },
     []
   );
@@ -171,6 +171,34 @@ export default function CommandCenter() {
   const handleArchiveOrg = useCallback(
     (orgId: string) => {
       setOrgs(prev => prev.map(o => o.id === orgId ? { ...o, archived: true } : o));
+      setCurrentPursuitId(prev => {
+        const pursuit = prev ? allPursuits[prev] : undefined;
+        return pursuit?.orgId === orgId ? null : prev;
+      });
+    },
+    [allPursuits]
+  );
+
+  const handleReinstateOrg = useCallback(
+    (orgId: string) => {
+      setOrgs(prev => prev.map(o => o.id === orgId ? { ...o, archived: false } : o));
+      setLeadReturnView(prev => (currentOrgId === orgId ? "pipeline" : prev));
+    },
+    [currentOrgId]
+  );
+
+  const handleArchivePartner = useCallback(
+    (partnerId: string) => {
+      setPartners(prev => setPartnerArchived(prev, partnerId, true));
+      setGraph(prev => applyPartnerArchive(prev, partnerId));
+    },
+    []
+  );
+
+  const handleReinstatePartner = useCallback(
+    (partnerId: string) => {
+      setPartners(prev => setPartnerArchived(prev, partnerId, false));
+      setGraph(prev => applyPartnerReinstate(prev, partnerId));
     },
     []
   );
@@ -239,8 +267,9 @@ export default function CommandCenter() {
         onAddOrg={handleAddOrg}
         menuOpen={mobileNavOpen}
         onMenuToggle={() => setMobileNavOpen(open => !open)}
-        currentOrgHasPursuits={currentOrgHasPursuits}
+        currentOrgHasPursuits={pursuitNavEnabled}
         currentOrgId={currentOrgId}
+        leadReturnView={leadReturnView}
       />
 
       <MobileNav
@@ -254,6 +283,8 @@ export default function CommandCenter() {
         onOrgSelect={handleOrgSelect}
         orgs={orgs.filter(o => !o.archived)}
         allPursuits={allPursuits}
+        pursuitNavEnabled={pursuitNavEnabled}
+        leadReturnView={leadReturnView}
       />
 
       <div className="flex flex-1 min-h-0">
@@ -274,11 +305,6 @@ export default function CommandCenter() {
             {activeView === "search" && (
               <SearchView
                 onAddOrg={handleAddOrg}
-                onAddOrgs={handleAddOrgs}
-                onImportedLeads={() => {
-                  setLaneFilter("A");
-                  handleNav("pipeline");
-                }}
               />
             )}
             {activeView === "pipeline" && (
@@ -298,16 +324,17 @@ export default function CommandCenter() {
                 orgs={orgs}
                 allPursuits={allPursuits}
                 onPursuitSelect={handlePursuitSelect}
-                onBack={() => setActiveView("pipeline")}
+                onBack={() => setActiveView(leadReturnView)}
                 onAddPursuit={handleAddPursuit}
                 onArchiveOrg={handleArchiveOrg}
+                onReinstateOrg={handleReinstateOrg}
                 onUpdateOrg={handleUpdateOrg}
                 onMergeLeads={handleMergeLeads}
               />
             )}
-            {activeView === "decision" && currentPursuit && currentOrg && (
+            {activeView === "decision" && selectedPursuit && currentOrg && (
               <OpportunityView
-                pursuit={currentPursuit}
+                pursuit={selectedPursuit}
                 org={currentOrg}
                 partners={partners}
                 onBack={() => setActiveView("org")}
@@ -316,10 +343,27 @@ export default function CommandCenter() {
                 onUpdatePursuit={handleUpdatePursuit}
               />
             )}
-            {activeView === "draft" && currentPursuit?.rec === "go" && (
+            {activeView === "decision" && (!selectedPursuit || !currentOrg) && (
+              <div className="bg-card rounded-xl border shadow-sm px-6 py-16 text-center">
+                <h2 className="text-base font-semibold text-foreground">Opportunity</h2>
+                <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
+                  {currentOrg
+                    ? `Select an opportunity on ${currentOrg.name} to open Opportunity and Response Builder.`
+                    : "Select a lead, then choose an opportunity."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveView(currentOrg ? "org" : "pipeline")}
+                  className="mt-6 text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm"
+                >
+                  {currentOrg ? "Open Lead →" : "Open Pipeline →"}
+                </button>
+              </div>
+            )}
+            {activeView === "draft" && selectedPursuit?.rec === "go" && (
               <ResponseBuilderView
-                key={currentPursuit.id}
-                pursuit={currentPursuit}
+                key={selectedPursuit.id}
+                pursuit={selectedPursuit}
                 org={currentOrg}
                 partners={partners}
                 people={graph.people}
@@ -328,10 +372,10 @@ export default function CommandCenter() {
                 onUpdatePursuit={handleUpdatePursuit}
               />
             )}
-            {activeView === "draft" && currentPursuit?.rec !== "go" && (
+            {activeView === "draft" && selectedPursuit?.rec !== "go" && (
               <ResponseBuilderEmptyState
                 orgName={currentOrg?.name}
-                onOpenOpportunity={() => setActiveView(currentPursuit && currentOrg ? "decision" : currentOrg ? "org" : "pipeline")}
+                onOpenOpportunity={() => setActiveView(selectedPursuit && currentOrg ? "decision" : currentOrg ? "org" : "pipeline")}
               />
             )}
             {activeView === "sources" && (
@@ -342,6 +386,18 @@ export default function CommandCenter() {
                 onUpdatePartners={setPartners}
                 onUpdateGraph={setGraph}
                 onUpdatePursuit={handleUpdatePursuit}
+                onArchivePartner={handleArchivePartner}
+                onReinstatePartner={handleReinstatePartner}
+              />
+            )}
+            {activeView === "archive" && (
+              <ArchiveView
+                orgs={orgs}
+                partners={partners}
+                allPursuits={allPursuits}
+                onOrgSelect={(id) => handleOrgSelect(id, "archive")}
+                onReinstateOrg={handleReinstateOrg}
+                onReinstatePartner={handleReinstatePartner}
               />
             )}
             {activeView === "settings" && <SettingsView />}

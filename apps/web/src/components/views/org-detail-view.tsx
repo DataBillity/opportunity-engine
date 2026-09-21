@@ -41,6 +41,7 @@ export function OrgDetailView({
   onBack,
   onAddPursuit,
   onArchiveOrg,
+  onReinstateOrg,
   onUpdateOrg,
   onMergeLeads,
 }: {
@@ -51,6 +52,7 @@ export function OrgDetailView({
   onBack: () => void;
   onAddPursuit: (pursuit: Pursuit) => void;
   onArchiveOrg?: (orgId: string) => void;
+  onReinstateOrg?: (orgId: string) => void;
   onUpdateOrg?: (orgId: string, updates: Partial<Organization>) => void;
   onMergeLeads?: (keepId: string, sourceId: string, fields: { name: string; industry: string; summary: string; channel: string }) => void;
 }) {
@@ -144,6 +146,13 @@ export function OrgDetailView({
     setArchiveConfirmOpen(false);
   }
 
+  function handleReinstate() {
+    if (onReinstateOrg) {
+      onReinstateOrg(org.id);
+      toast(`"${org.name}" reinstated with full history`, "success");
+    }
+  }
+
   // Contact handlers
   function resetContactForm() {
     setContactName("");
@@ -204,7 +213,7 @@ export function OrgDetailView({
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
         <button onClick={onBack} className="text-primary font-medium cursor-pointer hover:underline bg-transparent border-none shrink-0">
-          Pipeline
+          {org.archived ? "Archive" : "Pipeline"}
         </button>
         <span>/</span>
         <span className="text-foreground font-medium truncate">{org.name}</span>
@@ -228,6 +237,11 @@ export function OrgDetailView({
             {pursuits.some(p => p.draftStatus) && (
               <div className="mt-1 text-xs text-muted-foreground">
                 Draft status: <strong className="text-foreground">{pursuits.find(p => p.draftStatus)?.draftStatus}</strong>
+              </div>
+            )}
+            {org.archived && (
+              <div className="mt-2 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Archived — history retained
               </div>
             )}
           </div>
@@ -265,14 +279,21 @@ export function OrgDetailView({
             >
               + Add Project
             </button>
-            {onArchiveOrg && (
+            {org.archived && onReinstateOrg ? (
+              <button
+                onClick={handleReinstate}
+                className="text-xs font-semibold px-3.5 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm"
+              >
+                Reinstate
+              </button>
+            ) : onArchiveOrg ? (
               <button
                 onClick={() => setArchiveConfirmOpen(true)}
                 className="text-xs font-medium px-3.5 py-2 rounded-md border border-destructive text-destructive bg-card cursor-pointer transition-all hover:bg-destructive/10"
               >
                 Archive
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
