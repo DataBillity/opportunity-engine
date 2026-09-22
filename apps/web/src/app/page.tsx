@@ -68,26 +68,33 @@ export default function CommandCenter() {
   const [laneFilter, setLaneFilter] = useState("all");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const [orgs, setOrgs] = useState<Organization[]>(() =>
-    loadFromStorage(STORAGE_KEYS.orgs, () => [...initialOrgs])
-  );
-  const [allPursuits, setAllPursuits] = useState<Record<string, Pursuit>>(() =>
-    loadFromStorage(STORAGE_KEYS.pursuits, () => ({ ...initialPursuits }))
-  );
-  const [partners, setPartners] = useState<Partner[]>(() =>
-    loadFromStorage(STORAGE_KEYS.partners, () => [...initialPartners])
-  );
-  const [graph, setGraph] = useState<GraphData>(() =>
-    loadFromStorage(STORAGE_KEYS.graph, () => ({
+  const [hydrated, setHydrated] = useState(false);
+  const [orgs, setOrgs] = useState<Organization[]>(() => [...initialOrgs]);
+  const [allPursuits, setAllPursuits] = useState<Record<string, Pursuit>>(() => ({ ...initialPursuits }));
+  const [partners, setPartners] = useState<Partner[]>(() => [...initialPartners]);
+  const [graph, setGraph] = useState<GraphData>(() => ({
+    capabilities: [...initialGraph.capabilities],
+    experience: [...initialGraph.experience],
+    credentials: [...initialGraph.credentials],
+    people: [...initialGraph.people],
+  }));
+
+  useEffect(() => {
+    setOrgs(loadFromStorage(STORAGE_KEYS.orgs, () => [...initialOrgs]));
+    setAllPursuits(loadFromStorage(STORAGE_KEYS.pursuits, () => ({ ...initialPursuits })));
+    setPartners(loadFromStorage(STORAGE_KEYS.partners, () => [...initialPartners]));
+    setGraph(loadFromStorage(STORAGE_KEYS.graph, () => ({
       capabilities: [...initialGraph.capabilities],
       experience: [...initialGraph.experience],
       credentials: [...initialGraph.credentials],
       people: [...initialGraph.people],
-    }))
-  );
+    })));
+    setHydrated(true);
+  }, []);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    if (!hydrated) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       saveToStorage(STORAGE_KEYS.orgs, orgs);
@@ -96,9 +103,10 @@ export default function CommandCenter() {
       saveToStorage(STORAGE_KEYS.graph, graph);
     }, 300);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [orgs, allPursuits, partners, graph]);
+  }, [hydrated, orgs, allPursuits, partners, graph]);
 
   useEffect(() => {
+    if (!hydrated) return;
     let cancelled = false;
     fetch("/api/pipeline/orgs")
       .then((res) => (res.ok ? res.json() : null))
@@ -114,7 +122,7 @@ export default function CommandCenter() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [hydrated]);
 
   const currentOrg = orgs.find(o => o.id === currentOrgId);
   const currentPursuit = currentPursuitId ? allPursuits[currentPursuitId] : undefined;
