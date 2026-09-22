@@ -14,7 +14,9 @@ import { SettingsView } from "@/components/views/settings-view";
 import { DashboardView } from "@/components/views/dashboard-view";
 import { ArchiveView } from "@/components/views/archive-view";
 import { OperatorProvider } from "@/components/auth/operator-provider";
+import { useToast } from "@/components/ui/toast";
 import { applyPartnerArchive, applyPartnerReinstate, setPartnerArchived } from "@/lib/partner-archive";
+import { mergeWorkspace, sameWorkspace, type SharedWorkspace, type WorkspaceState } from "@/lib/shared-workspace";
 import {
   organizations as initialOrgs,
   pursuits as initialPursuits,
@@ -29,26 +31,15 @@ import { mergeLeadOrganizations, mergePipelineLeads } from "@/lib/create-lead";
 
 export type ViewId = "dashboard" | "search" | "pipeline" | "org" | "decision" | "draft" | "sources" | "archive" | "settings";
 
-const STORAGE_KEYS = {
-  orgs: "oe_orgs",
-  pursuits: "oe_pursuits",
-  partners: "oe_partners",
-  graph: "oe_graph",
-} as const;
+const LEGACY_BROWSER_KEYS = ["oe_orgs", "oe_pursuits", "oe_partners", "oe_graph"];
 
-function loadFromStorage<T>(key: string, fallback: () => T): T {
-  if (typeof window === "undefined") return fallback();
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw) return JSON.parse(raw) as T;
-  } catch {}
-  return fallback();
-}
-
-function saveToStorage(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
+function workspaceFrom(
+  organizations: Organization[],
+  pursuits: Record<string, Pursuit>,
+  partners: Partner[],
+  graph: GraphData,
+): WorkspaceState {
+  return { organizations, pursuits, partners, graph };
 }
 
 function getOrgPursuitsFromState(org: Organization, allPursuits: Record<string, Pursuit>): Pursuit[] {
@@ -61,6 +52,7 @@ function orgPursuitsFromState(org: Organization | undefined, allPursuits: Record
 }
 
 export default function CommandCenter() {
+  const { toast } = useToast();
   const [activeView, setActiveView] = useState<ViewId>("pipeline");
   const [currentOrgId, setCurrentOrgId] = useState("ORG-01");
   const [currentPursuitId, setCurrentPursuitId] = useState<string | null>(null);
@@ -68,7 +60,7 @@ export default function CommandCenter() {
   const [laneFilter, setLaneFilter] = useState("all");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const [hydrated, setHydrated] = useState(false);
+  const [ready, setReady] = useState(false);
   const [orgs, setOrgs] = useState<Organization[]>(() => [...initialOrgs]);
   const [allPursuits, setAllPursuits] = useState<Record<string, Pursuit>>(() => ({ ...initialPursuits }));
   const [partners, setPartners] = useState<Partner[]>(() => [...initialPartners]);
@@ -79,34 +71,124 @@ export default function CommandCenter() {
     people: [...initialGraph.people],
   }));
 
-  useEffect(() => {
-    setOrgs(loadFromStorage(STORAGE_KEYS.orgs, () => [...initialOrgs]));
-    setAllPursuits(loadFromStorage(STORAGE_KEYS.pursuits, () => ({ ...initialPursuits })));
-    setPartners(loadFromStorage(STORAGE_KEYS.partners, () => [...initialPartners]));
-    setGraph(loadFromStorage(STORAGE_KEYS.graph, () => ({
-      capabilities: [...initialGraph.capabilities],
-      experience: [...initialGraph.experience],
-      credentials: [...initialGraph.credentials],
-      people: [...initialGraph.people],
-    })));
-    setHydrated(true);
-  }, []);
+  const revisionRef = useRef(0);
+  const baselineRef = useRef<WorkspaceState | null>(null);
+  const stateRef = useRef<WorkspaceState>(workspaceFrom(initialOrgs, initialPursuits, initialPartners, {
+    capabilities: [...initialGraph.capabilities],
+    experience: [...initialGraph.experience],
+    credentials: [...initialGraph.credentials],
+    people: [...initialGraph.people],
+  }));
+  const saveGen = useRef(0);
+  const saveWarned = useRef(false);
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!hydrated) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      saveToStorage(STORAGE_KEYS.orgs, orgs);
-      saveToStorage(STORAGE_KEYS.pursuits, allPursuits);
-      saveToStorage(STORAGE_KEYS.partners, partners);
-      saveToStorage(STORAGE_KEYS.graph, graph);
-    }, 300);
-    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [hydrated, orgs, allPursuits, partners, graph]);
+  function applyWorkspace(next: WorkspaceState, revision: number, baseline: WorkspaceState) {
+    revisionRef.current = revision;
+    baselineRef.current = baseline;
+    stateRef.current = next;
+    setOrgs(next.organizations);
+    setAllPursuits(next.pursuits);
+    setPartners(next.partners);
+    setGraph(next.graph);
+  }
 
   useEffect(() => {
-    if (!hydrated) return;
+    let cancelled = false;
+    fetch("/api/workspace")
+      .then(async (res) => {
+        if (!res.ok) throw new Error("load failed");
+        return res.json() as Promise<SharedWorkspace>;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        const loaded = workspaceFrom(data.organizations, data.pursuits, data.partners, data.graph);
+        applyWorkspace(loaded, data.revision, loaded);
+        setReady(true);
+        try {
+          for (const key of LEGACY_BROWSER_KEYS) localStorage.removeItem(key);
+        } catch {
+          /* older browser copies are unused once the shared record loads */
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        toast("Shared leads and partners could not be loaded. Changes on this screen will not reach other people until the connection recovers.", "error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [toast]);
+
+  useEffect(() => {
+    const current = workspaceFrom(orgs, allPursuits, partners, graph);
+    stateRef.current = current;
+    if (!ready) return;
+    if (baselineRef.current && sameWorkspace(current, baselineRef.current)) return;
+
+    const gen = ++saveGen.current;
+    const timer = setTimeout(() => {
+      void flushWorkspace(gen);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [ready, orgs, allPursuits, partners, graph]);
+
+  async function flushWorkspace(gen: number, isRetry = false) {
+    const sent = stateRef.current;
+    const sentRevision = revisionRef.current;
+    let res: Response;
+    try {
+      res = await fetch("/api/workspace", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...sent, revision: sentRevision }),
+      });
+    } catch {
+      if (!saveWarned.current) {
+        toast("Changes could not be saved for other people yet. They are still on this screen.", "error");
+        saveWarned.current = true;
+      }
+      return;
+    }
+
+    if (res.status === 409 && !isRetry) {
+      const server = await res.json() as SharedWorkspace;
+      const serverState = workspaceFrom(server.organizations, server.pursuits, server.partners, server.graph);
+      const merged = mergeWorkspace(sent, baselineRef.current ?? sent, serverState);
+      revisionRef.current = server.revision;
+      baselineRef.current = serverState;
+      if (!sameWorkspace(merged, stateRef.current)) {
+        applyWorkspace(merged, server.revision, serverState);
+        return;
+      }
+      stateRef.current = merged;
+      await flushWorkspace(gen, true);
+      return;
+    }
+
+    if (!res.ok) {
+      if (!saveWarned.current) {
+        toast("Changes could not be saved for other people yet. They are still on this screen.", "error");
+        saveWarned.current = true;
+      }
+      return;
+    }
+
+    const saved = await res.json() as SharedWorkspace;
+    if (gen !== saveGen.current) {
+      if (saved.revision > revisionRef.current) revisionRef.current = saved.revision;
+      return;
+    }
+    revisionRef.current = saved.revision;
+    baselineRef.current = sent;
+    saveWarned.current = false;
+    if (gen === saveGen.current && !sameWorkspace(sent, stateRef.current)) {
+      const follow = ++saveGen.current;
+      void flushWorkspace(follow);
+    }
+  }
+
+  useEffect(() => {
+    if (!ready) return;
     let cancelled = false;
     fetch("/api/pipeline/orgs")
       .then((res) => (res.ok ? res.json() : null))
@@ -122,7 +204,7 @@ export default function CommandCenter() {
     return () => {
       cancelled = true;
     };
-  }, [hydrated]);
+  }, [ready]);
 
   const currentOrg = orgs.find(o => o.id === currentOrgId);
   const currentPursuit = currentPursuitId ? allPursuits[currentPursuitId] : undefined;

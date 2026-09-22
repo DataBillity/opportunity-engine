@@ -12,3 +12,4 @@ export * from "./cluster-h-consent";
 export * from "./cluster-j-outcomes";
 export * from "./cluster-k-operations";
 export * from "./operator-auth";
+export * from "./operator-workspace";

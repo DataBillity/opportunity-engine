@@ -9,6 +9,7 @@ export type StoredSearchSession = {
   addedIds: string[];
 };
 
+/** Search candidates stay on this browser for this operator. Partners and leads do not. */
 const STORAGE_PREFIX = "oe.search.candidates.";
 
 function storageKey(email: string): string {
