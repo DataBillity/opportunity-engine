@@ -12,11 +12,13 @@ export function applyPartnerArchive(graph: GraphData, partnerId: string): GraphD
   return {
     capabilities: graph.capabilities.map(item => {
       if (!item.partners.includes(partnerId)) return item;
-      return soleOwned(item.partners, partnerId) ? { ...item, status: "Archived" } : item;
+      if (soleOwned(item.partners, partnerId)) return { ...item, status: "Archived" };
+      return { ...item, partners: item.partners.filter(id => id !== partnerId) };
     }),
     experience: graph.experience.map(item => {
       if (!item.partners.includes(partnerId)) return item;
-      return soleOwned(item.partners, partnerId) ? { ...item, status: "Archived" } : item;
+      if (soleOwned(item.partners, partnerId)) return { ...item, status: "Archived" };
+      return { ...item, partners: item.partners.filter(id => id !== partnerId) };
     }),
     credentials: graph.credentials.map(item =>
       item.partner === partnerId ? { ...item, status: "Archived" } : item
@@ -30,12 +32,18 @@ export function applyPartnerArchive(graph: GraphData, partnerId: string): GraphD
 export function applyPartnerReinstate(graph: GraphData, partnerId: string): GraphData {
   return {
     capabilities: graph.capabilities.map(item => {
-      if (!item.partners.includes(partnerId) || !isArchivedStatus(item.status)) return item;
-      return soleOwned(item.partners, partnerId) ? { ...item, status: restoreArchivedStatus(item.status) } : item;
+      if (!item.partners.includes(partnerId) && !isArchivedStatus(item.status)) return item;
+      if (item.partners.includes(partnerId) && isArchivedStatus(item.status) && soleOwned(item.partners, partnerId)) {
+        return { ...item, status: restoreArchivedStatus(item.status) };
+      }
+      return item;
     }),
     experience: graph.experience.map(item => {
-      if (!item.partners.includes(partnerId) || !isArchivedStatus(item.status)) return item;
-      return soleOwned(item.partners, partnerId) ? { ...item, status: restoreArchivedStatus(item.status) } : item;
+      if (!item.partners.includes(partnerId) && !isArchivedStatus(item.status)) return item;
+      if (item.partners.includes(partnerId) && isArchivedStatus(item.status) && soleOwned(item.partners, partnerId)) {
+        return { ...item, status: restoreArchivedStatus(item.status) };
+      }
+      return item;
     }),
     credentials: graph.credentials.map(item =>
       item.partner === partnerId && isArchivedStatus(item.status)

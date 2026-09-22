@@ -813,6 +813,24 @@ export function SourcesView({
                 <div key={e.id} className="text-xs text-foreground">{e.id} — {e.name}</div>
               ))}</div>
             </div>
+            <div className="border-t border-border pt-3">
+              <h4 className="text-xs font-semibold mb-2">Credentials</h4>
+              {credentials.filter(c => c.partner === detailPartner.id).length === 0 && (
+                <div className="text-xs text-muted-foreground italic">None</div>
+              )}
+              <div className="space-y-1">{credentials.filter(c => c.partner === detailPartner.id).map(c => (
+                <div key={c.id} className="text-xs text-foreground">{c.id} — {c.name} <span className="text-muted-foreground">({c.credType}{c.expiration ? `, expires ${c.expiration}` : ""})</span></div>
+              ))}</div>
+            </div>
+            <div className="border-t border-border pt-3">
+              <h4 className="text-xs font-semibold mb-2">People</h4>
+              {people.filter(p => p.partner === detailPartner.id).length === 0 && (
+                <div className="text-xs text-muted-foreground italic">None</div>
+              )}
+              <div className="space-y-1">{people.filter(p => p.partner === detailPartner.id).map(p => (
+                <div key={p.id} className="text-xs text-foreground">{p.id} — {p.name} <span className="text-muted-foreground">({(p.roles ?? [p.role]).filter(Boolean).join(", ") || p.role})</span></div>
+              ))}</div>
+            </div>
             <div className="flex justify-end pt-3 border-t border-border">
               <SecondaryButton onClick={() => setDetailPartnerId(null)}>Close</SecondaryButton>
             </div>

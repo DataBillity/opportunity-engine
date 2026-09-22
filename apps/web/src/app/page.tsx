@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { TopBar } from "@/components/layout/top-bar";
 import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
@@ -29,6 +29,28 @@ import { mergeLeadOrganizations, mergePipelineLeads } from "@/lib/create-lead";
 
 export type ViewId = "dashboard" | "search" | "pipeline" | "org" | "decision" | "draft" | "sources" | "archive" | "settings";
 
+const STORAGE_KEYS = {
+  orgs: "oe_orgs",
+  pursuits: "oe_pursuits",
+  partners: "oe_partners",
+  graph: "oe_graph",
+} as const;
+
+function loadFromStorage<T>(key: string, fallback: () => T): T {
+  if (typeof window === "undefined") return fallback();
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) return JSON.parse(raw) as T;
+  } catch {}
+  return fallback();
+}
+
+function saveToStorage(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+
 function getOrgPursuitsFromState(org: Organization, allPursuits: Record<string, Pursuit>): Pursuit[] {
   return org.pursuits.map(pid => allPursuits[pid]).filter(Boolean) as Pursuit[];
 }
@@ -39,22 +61,42 @@ function orgPursuitsFromState(org: Organization | undefined, allPursuits: Record
 }
 
 export default function CommandCenter() {
-  const [activeView, setActiveView] = useState<ViewId>("dashboard");
+  const [activeView, setActiveView] = useState<ViewId>("pipeline");
   const [currentOrgId, setCurrentOrgId] = useState("ORG-01");
   const [currentPursuitId, setCurrentPursuitId] = useState<string | null>(null);
   const [leadReturnView, setLeadReturnView] = useState<"pipeline" | "archive">("pipeline");
   const [laneFilter, setLaneFilter] = useState("all");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const [orgs, setOrgs] = useState<Organization[]>(() => [...initialOrgs]);
-  const [allPursuits, setAllPursuits] = useState<Record<string, Pursuit>>(() => ({ ...initialPursuits }));
-  const [partners, setPartners] = useState<Partner[]>(() => [...initialPartners]);
-  const [graph, setGraph] = useState<GraphData>(() => ({
-    capabilities: [...initialGraph.capabilities],
-    experience: [...initialGraph.experience],
-    credentials: [...initialGraph.credentials],
-    people: [...initialGraph.people],
-  }));
+  const [orgs, setOrgs] = useState<Organization[]>(() =>
+    loadFromStorage(STORAGE_KEYS.orgs, () => [...initialOrgs])
+  );
+  const [allPursuits, setAllPursuits] = useState<Record<string, Pursuit>>(() =>
+    loadFromStorage(STORAGE_KEYS.pursuits, () => ({ ...initialPursuits }))
+  );
+  const [partners, setPartners] = useState<Partner[]>(() =>
+    loadFromStorage(STORAGE_KEYS.partners, () => [...initialPartners])
+  );
+  const [graph, setGraph] = useState<GraphData>(() =>
+    loadFromStorage(STORAGE_KEYS.graph, () => ({
+      capabilities: [...initialGraph.capabilities],
+      experience: [...initialGraph.experience],
+      credentials: [...initialGraph.credentials],
+      people: [...initialGraph.people],
+    }))
+  );
+
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      saveToStorage(STORAGE_KEYS.orgs, orgs);
+      saveToStorage(STORAGE_KEYS.pursuits, allPursuits);
+      saveToStorage(STORAGE_KEYS.partners, partners);
+      saveToStorage(STORAGE_KEYS.graph, graph);
+    }, 300);
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+  }, [orgs, allPursuits, partners, graph]);
 
   useEffect(() => {
     let cancelled = false;
