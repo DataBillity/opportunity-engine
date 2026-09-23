@@ -2,15 +2,29 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { Organization, Pursuit } from "@/lib/mock-data";
+import { recShortLabel } from "@opportunity-engine/core";
 import { cn } from "@/lib/cn";
 
 const lanes = [
   { key: "all", label: "All" },
   { key: "A", label: "Prospects" },
   { key: "B", label: "RFPs" },
+  { key: "RFI", label: "RFIs" },
   { key: "C", label: "SOWs" },
   { key: "D", label: "Partner" },
 ];
+
+function pursuitType(p: Pursuit): "rfp" | "rfi" | "sow" {
+  return p.projectType ?? (p.lane === "C" ? "sow" : "rfp");
+}
+
+function orgMatchesLane(org: Organization, allPursuits: Record<string, Pursuit>, laneFilter: string): boolean {
+  if (laneFilter === "A") return org.pursuits.length === 0;
+  const pursuits = org.pursuits.map(pid => allPursuits[pid]).filter(Boolean) as Pursuit[];
+  if (laneFilter === "RFI") return pursuits.some(p => pursuitType(p) === "rfi");
+  if (laneFilter === "B") return pursuits.some(p => pursuitType(p) === "rfp");
+  return pursuits.some(p => p.lane === laneFilter);
+}
 
 function getOrgPursuits(org: Organization, allPursuits: Record<string, Pursuit>): Pursuit[] {
   return org.pursuits.map(pid => allPursuits[pid]).filter(Boolean) as Pursuit[];
@@ -22,7 +36,7 @@ function getOrgTopScore(org: Organization, allPursuits: Record<string, Pursuit>)
   return org.score;
 }
 
-function RecPill({ rec, closed }: { rec: string; closed?: boolean }) {
+function RecPill({ rec, closed, projectType = "rfp" }: { rec: string; closed?: boolean; projectType?: "rfp" | "rfi" | "sow" }) {
   if (closed) {
     return (
       <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md oe-status-closed">
@@ -30,16 +44,11 @@ function RecPill({ rec, closed }: { rec: string; closed?: boolean }) {
       </span>
     );
   }
-  const map: Record<string, [string, string]> = {
-    go: ["GO", "oe-status-go"],
-    nogo: ["NO-GO", "oe-status-nogo"],
-    cond: ["CONDITIONS", "oe-status-cond"],
-    pending: ["PENDING", "oe-status-pending"],
-  };
-  const [label, cls] = map[rec] ?? map.pending!;
+  const typed = rec === "go" || rec === "nogo" || rec === "cond" || rec === "pending" ? rec : "pending";
+  const cls = { go: "oe-status-go", nogo: "oe-status-nogo", cond: "oe-status-cond", pending: "oe-status-pending" }[typed];
   return (
     <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md ${cls}`}>
-      {label}
+      {recShortLabel(typed, projectType)}
     </span>
   );
 }
@@ -67,13 +76,7 @@ export function Sidebar({
 
   const filteredOrgs = orgs.filter(org => {
     if (search && !org.name.toLowerCase().includes(search.toLowerCase())) return false;
-    if (laneFilter && laneFilter !== "all") {
-      if (laneFilter === "A") {
-        if (org.pursuits.length !== 0) return false;
-      } else {
-        if (!getOrgPursuits(org, allPursuits).some(p => p.lane === laneFilter)) return false;
-      }
-    }
+    if (laneFilter && laneFilter !== "all" && !orgMatchesLane(org, allPursuits, laneFilter)) return false;
     return true;
   });
 
@@ -125,9 +128,7 @@ export function Sidebar({
             {lanes.map(l => {
               const count = l.key === "all"
                 ? orgs.length
-                : l.key === "A"
-                  ? orgs.filter(o => o.pursuits.length === 0).length
-                  : orgs.filter(o => getOrgPursuits(o, allPursuits).some(p => p.lane === l.key)).length;
+                : orgs.filter(o => orgMatchesLane(o, allPursuits, l.key)).length;
               return (
                 <button
                   key={l.key}
@@ -151,9 +152,11 @@ export function Sidebar({
       <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto oe-touch-scroll">
         {filteredOrgs.map(org => {
           const active = getOrgPursuits(org, allPursuits).filter(p => !p.closed);
-          const headlineRec = active.length > 0
-            ? active.sort((a, b) => b.score - a.score)[0]!.rec
-            : "pending";
+          const headline = active.length > 0
+            ? active.slice().sort((a, b) => b.score - a.score)[0]!
+            : null;
+          const headlineRec = headline?.rec ?? "pending";
+          const headlineType = headline ? pursuitType(headline) : "rfp";
           const isSelected = org.id === currentOrgId;
 
           return (
@@ -181,7 +184,7 @@ export function Sidebar({
                 {org.industry || org.channel}
               </div>
               <div className="flex gap-1.5 items-center flex-wrap">
-                <RecPill rec={headlineRec} />
+                <RecPill rec={headlineRec} closed={headline?.closed} projectType={headlineType} />
                 {active.length > 1 && (
                   <span className="inline-flex items-center gap-1 text-[10px] bg-accent text-accent-foreground px-2 py-0.5 rounded-full font-semibold">
                     {active.length} active

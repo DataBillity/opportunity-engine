@@ -4,6 +4,7 @@ import {
   capSourceText,
   extractSolicitationHeuristic,
   mergeSolicitationExtractions,
+  resolveProjectType,
   scorePursuitTriage,
 } from "@opportunity-engine/core";
 import {
@@ -68,7 +69,11 @@ export async function POST(request: Request) {
   }
 
   const laneRaw = String(form.get("lane") ?? "B");
-  const lane = laneRaw === "C" ? "C" : "B";
+  const projectTypeRaw = String(form.get("projectType") ?? "").trim().toLowerCase();
+  const selectedType = projectTypeRaw === "rfi" || projectTypeRaw === "sow" || projectTypeRaw === "rfp"
+    ? projectTypeRaw
+    : undefined;
+  const lane = selectedType === "sow" || laneRaw === "C" ? "C" : "B";
   const organizationName = String(form.get("organizationName") ?? "").trim() || "Unknown account";
   const organizationIndustry = String(form.get("organizationIndustry") ?? "").trim() || undefined;
   const organizationChannel = String(form.get("organizationChannel") ?? "").trim() || undefined;
@@ -99,7 +104,14 @@ export async function POST(request: Request) {
     .trim();
   const capped = capSourceText(combined);
   const primaryName = extracted[0]?.name || "solicitation.txt";
-  let extraction = extractSolicitationHeuristic(capped.text, primaryName);
+  const resolvedType = resolveProjectType({
+    selected: selectedType,
+    lane,
+    text: capped.text,
+    filename: primaryName,
+  });
+  const projectType = resolvedType.projectType;
+  let extraction = extractSolicitationHeuristic(capped.text, primaryName, projectType);
   let provider: "claude" | "gemini" | "heuristic" = "heuristic";
   let modelVersion = "heuristic-triage-v1";
   let usedModel = false;
@@ -116,6 +128,7 @@ export async function POST(request: Request) {
         const model = await extractSolicitationWithModel({
           filename: primaryName,
           lane,
+          projectType,
           organizationName,
           organizationIndustry,
           documentText: capped.text,
@@ -136,6 +149,8 @@ export async function POST(request: Request) {
     extraction,
     sourceText: capped.text,
     lane,
+    projectType,
+    filename: primaryName,
     org: {
       name: organizationName,
       industry: organizationIndustry,

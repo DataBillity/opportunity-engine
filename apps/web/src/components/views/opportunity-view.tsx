@@ -9,20 +9,20 @@ import { useToast } from "@/components/ui/toast";
 import { OutreachComposer } from "@/components/outreach/outreach-composer";
 import { DocumentDropzone } from "@/components/pursuit/document-dropzone";
 import { applyIngestToPursuit, ingestPursuitDocuments, recLabel } from "@/lib/create-pursuit";
+import { recShortLabel } from "@opportunity-engine/core";
 import { useOperator } from "@/components/auth/operator-provider";
 import { operatorReviewerLabel } from "@/lib/operator-profile";
 import { cn } from "@/lib/cn";
 
-function RecBig({ rec, closed }: { rec: string; closed?: boolean }) {
+function projectTypeOf(pursuit: Pursuit): "rfp" | "rfi" | "sow" {
+  return pursuit.projectType ?? (pursuit.lane === "C" ? "sow" : "rfp");
+}
+
+function RecBig({ rec, closed, projectType }: { rec: string; closed?: boolean; projectType: "rfp" | "rfi" | "sow" }) {
   if (closed) return <div className="text-xl font-extrabold text-closed">CLOSED</div>;
-  const map: Record<string, [string, string]> = {
-    go: ["GO", "text-go"],
-    nogo: ["NO-GO", "text-nogo"],
-    cond: ["CONDITIONS", "text-cond"],
-    pending: ["PENDING", "text-muted-foreground"],
-  };
-  const [label, cls] = map[rec] ?? map.pending!;
-  return <div className={`text-xl font-extrabold ${cls}`}>{label}</div>;
+  const typed = rec === "go" || rec === "nogo" || rec === "cond" || rec === "pending" ? rec : "pending";
+  const cls = { go: "text-go", nogo: "text-nogo", cond: "text-cond", pending: "text-muted-foreground" }[typed];
+  return <div className={`text-xl font-extrabold ${cls}`}>{recShortLabel(typed, projectType)}</div>;
 }
 
 function StatusBadge({ status, label }: { status: string; label: string }) {
@@ -110,10 +110,11 @@ export function OpportunityView({
   function handleConfirm() {
     if (!confirmOpen) return;
     onConfirmDecision(pursuit.id, confirmOpen);
+    const isRfi = projectTypeOf(pursuit) === "rfi";
     toast(
       confirmOpen === "go"
-        ? `Project "${pursuit.name}" confirmed GO — ready for response drafting`
-        : `Project "${pursuit.name}" confirmed NO-GO — project closed`,
+        ? `Project "${pursuit.name}" confirmed ${isRfi ? "RESPOND" : "GO"} — ready for response drafting`
+        : `Project "${pursuit.name}" confirmed ${isRfi ? "PASS" : "NO-GO"} — project closed`,
       confirmOpen === "go" ? "success" : "warning"
     );
     setConfirmOpen(null);
@@ -127,6 +128,7 @@ export function OpportunityView({
       const result = await ingestPursuitDocuments({
         org,
         lane: pursuit.lane,
+        projectType: projectTypeOf(pursuit),
         files: uploadFiles,
         priorText: pursuit.sourceText,
       });
@@ -135,7 +137,7 @@ export function OpportunityView({
       toast(
         result.warning
           ? result.warning
-          : `Attached ${result.documents.length} file${result.documents.length === 1 ? "" : "s"} — scored ${next.score} (${recLabel(next.rec)})`,
+          : `Attached ${result.documents.length} file${result.documents.length === 1 ? "" : "s"} — scored ${next.score} (${recLabel(next.rec, next.projectType)})`,
         result.warning || next.rec === "nogo" ? "warning" : "success",
       );
       setUploadFiles([]);
@@ -146,6 +148,11 @@ export function OpportunityView({
       setUploading(false);
     }
   }
+
+  const projectType = projectTypeOf(pursuit);
+  const isRfi = projectType === "rfi";
+  const breakdown = pursuit.scoreBreakdown;
+  const mappedCount = pursuit.reqmap.filter(r => r.status === "mapped").length;
 
   return (
     <div className="space-y-4">
@@ -173,6 +180,12 @@ export function OpportunityView({
               <span className="font-mono">{pursuit.solicitationRef}</span>
               <span>·</span>
               <span>Score <strong className="text-foreground">{pursuit.score}</strong>/100</span>
+              {breakdown && (
+                <>
+                  <span>·</span>
+                  <span>{breakdown.mappedCount}/{breakdown.totalRequirements} {isRfi ? "topics" : "reqs"}</span>
+                </>
+              )}
               {pursuit.dueDate && <><span>·</span><span>Due {pursuit.dueDate}</span></>}
             </div>
             <div className="flex gap-2 mt-3">
@@ -201,10 +214,40 @@ export function OpportunityView({
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">
               Recommendation
             </div>
-            <RecBig rec={pursuit.rec} closed={pursuit.closed} />
+            <RecBig rec={pursuit.rec} closed={pursuit.closed} projectType={projectType} />
             <div className="text-[11px] text-muted-foreground mt-1">
               Confidence: <span className="font-mono font-semibold text-foreground">{pursuit.confidence}%</span>
             </div>
+          </div>
+        </div>
+
+        <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+            <h3 className="oe-card-title">How this was scored</h3>
+            <span className="text-[11px] text-muted-foreground font-mono">{isRfi ? "RFI" : "RFP-03"}</span>
+          </div>
+          <div className="p-5 space-y-3 text-sm text-foreground">
+            <p>
+              <strong>Score ({pursuit.score}/100)</strong> is opportunity alignment:
+              {" "}40% capability, 35% intent/timing, 25% account value
+              {breakdown ? ` — capability ${breakdown.capabilityAlignment}, intent ${breakdown.intentTiming}, account ${breakdown.accountValueFit}${breakdown.inboundIntentUplift ? `, inbound +${breakdown.inboundIntentUplift}` : ""}` : ""}.
+              It is not a {isRfi ? "Respond" : "Go"} cutoff.
+            </p>
+            <p>
+              <strong>Confidence ({pursuit.confidence}%)</strong>{" "}
+              {pursuit.confidenceNote
+                ?? "is extraction and mapping certainty, not the opportunity score. Thin requirement mapping keeps confidence near 50% even when intent and account value lift the score."}
+            </p>
+            <p>
+              <strong>Recommendation ({recLabel(pursuit.rec, projectType)})</strong>{" "}
+              {isRfi
+                ? "uses topical fit — whether we can speak to the information requests — not whether we have already answered them."
+                : `uses coverage gates, not “score ≥ 75”. ${recLabel("go", projectType)} needs ≥ ${breakdown?.goCoverageFloor ?? 75}% requirement coverage and score ≥ ${breakdown?.goScoreFloor ?? 68}.`}
+              {breakdown && !isRfi && (
+                <> Coverage here is {breakdown.mappedCount} of {breakdown.totalRequirements} ({breakdown.coveragePct}%).{breakdown.passFailBlocked ? " An unmapped pass/fail requirement also blocks Go." : ""}{breakdown.documentOverlapCount > 0 ? ` Document language overlap (${breakdown.documentOverlapCount} topics) can lift the score without counting as mapped requirements.` : ""}</>
+              )}
+              {breakdown?.recRule ? ` ${breakdown.recRule}` : ""}
+            </p>
           </div>
         </div>
 
@@ -282,7 +325,9 @@ export function OpportunityView({
                 </div>
               ))}
               {pursuit.documents.length === 0 && (
-                <p className="text-xs text-muted-foreground italic">No solicitation files yet. Upload the RFP or SOW to parse and score.</p>
+                <p className="text-xs text-muted-foreground italic">
+                  No solicitation files yet. Upload the {isRfi ? "RFI" : pursuit.lane === "C" ? "SOW" : "RFP or SOW"} to parse and score.
+                </p>
               )}
             </div>
           </div>
@@ -292,19 +337,19 @@ export function OpportunityView({
         {pursuit.reqmap.length > 0 && (
           <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
-              <h3 className="oe-card-title">Requirement → Capability Mapping</h3>
+              <h3 className="oe-card-title">{isRfi ? "Information request → Capability topic" : "Requirement → Capability Mapping"}</h3>
               <span className="text-xs text-muted-foreground">
                 <span className="font-mono font-semibold text-foreground">
-                  {pursuit.reqmap.filter(r => r.status === "mapped").length}
+                  {mappedCount}
                 </span>{" "}
-                of {pursuit.reqmap.length} mapped
+                of {pursuit.reqmap.length} {isRfi ? "topics we can speak to" : "mapped"}
               </span>
             </div>
             <div className="overflow-x-auto oe-touch-scroll">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="oe-table-header">
-                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Requirement</th>
+                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">{isRfi ? "Information request" : "Requirement"}</th>
                     <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
                     <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Mapped Node</th>
                     <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Evidence</th>
@@ -317,7 +362,7 @@ export function OpportunityView({
                       <td className="px-4 py-3 align-top">
                         <StatusBadge
                           status={r.status}
-                          label={r.status === "mapped" ? "MAPPED" : "UNMAPPED"}
+                          label={r.status === "mapped" ? (isRfi ? "CAN SPEAK TO" : "MAPPED") : (isRfi ? "UNANSWERED" : "UNMAPPED")}
                         />
                       </td>
                       <td className="px-4 py-3 align-top font-mono text-[11px] text-primary">{r.node ?? "—"}</td>
@@ -457,13 +502,13 @@ export function OpportunityView({
                   onClick={() => { setConfirmReason(""); setConfirmOpen("go"); }}
                   className="text-xs font-semibold px-4 py-2 rounded-md bg-go text-white cursor-pointer transition-all hover:opacity-90 shadow-sm"
                 >
-                  Confirm Go
+                  Confirm {isRfi ? "Respond" : "Go"}
                 </button>
                 <button
                   onClick={() => { setConfirmReason(""); setConfirmOpen("nogo"); }}
                   className="text-xs font-semibold px-4 py-2 rounded-md border border-nogo text-nogo bg-card cursor-pointer transition-all hover:bg-nogo-soft"
                 >
-                  Confirm No-Go
+                  Confirm {isRfi ? "Pass" : "No-Go"}
                 </button>
               </>
             )}
@@ -491,9 +536,9 @@ export function OpportunityView({
           {[
             { label: "Intake & shredding", done: pursuit.documents.length > 0 },
             { label: "Triage scored", done: pursuit.rec !== "pending" && !pursuit.status.startsWith("New") },
-            { label: "Go/No-Go decision", done: pursuit.closed || pursuit.status.toLowerCase().includes("confirmed"), current: !pursuit.closed && pursuit.rec !== "pending" && !pursuit.status.toLowerCase().includes("confirmed") },
-            { label: "Gap analysis", done: pursuit.reqmap.length > 0 && pursuit.gaps.length === 0 && !pursuit.closed },
-            { label: "Response drafting", done: false, current: pursuit.rec === "go" && !pursuit.closed },
+            { label: isRfi ? "Respond / Pass decision" : "Go/No-Go decision", done: pursuit.closed || pursuit.status.toLowerCase().includes("confirmed"), current: !pursuit.closed && pursuit.rec !== "pending" && !pursuit.status.toLowerCase().includes("confirmed") },
+            { label: isRfi ? "Topic coverage" : "Gap analysis", done: pursuit.reqmap.length > 0 && pursuit.gaps.length === 0 && !pursuit.closed },
+            { label: isRfi ? "Information response" : "Response drafting", done: false, current: pursuit.rec === "go" && !pursuit.closed },
             { label: "Review & submission", done: false },
           ].map((step, i, arr) => (
             <div key={i} className="flex xl:flex-row flex-col items-center xl:items-start gap-2 xl:gap-3 relative pb-0 xl:pb-5 last:pb-0 min-w-[5.5rem] xl:min-w-0 flex-1 xl:flex-none">
@@ -530,7 +575,9 @@ export function OpportunityView({
       <Modal
         open={confirmOpen !== null}
         onClose={() => setConfirmOpen(null)}
-        title={confirmOpen === "go" ? "Confirm Go Decision" : "Confirm No-Go Decision"}
+        title={confirmOpen === "go"
+          ? (isRfi ? "Confirm Respond" : "Confirm Go Decision")
+          : (isRfi ? "Confirm Pass" : "Confirm No-Go Decision")}
       >
         <div className="space-y-4">
           <div className={cn(
@@ -540,8 +587,8 @@ export function OpportunityView({
               : "bg-[hsl(var(--status-nogo-soft))] border-[hsl(var(--status-nogo))]/20 text-[hsl(var(--status-nogo))]"
           )}>
             {confirmOpen === "go"
-              ? `You are confirming GO for "${pursuit.name}". This will advance the project to response drafting.`
-              : `You are confirming NO-GO for "${pursuit.name}". This will close the project.`
+              ? `You are confirming ${isRfi ? "RESPOND" : "GO"} for "${pursuit.name}". This will advance the project to response drafting.`
+              : `You are confirming ${isRfi ? "PASS" : "NO-GO"} for "${pursuit.name}". This will close the project.`
             }
           </div>
           <FormField label="Reason / notes (optional)">
@@ -563,14 +610,14 @@ export function OpportunityView({
                 onClick={handleConfirm}
                 className="text-xs font-semibold px-4 py-2 rounded-md bg-go text-white cursor-pointer transition-all hover:opacity-90 shadow-sm"
               >
-                Confirm Go
+                Confirm {isRfi ? "Respond" : "Go"}
               </button>
             ) : (
               <button
                 onClick={handleConfirm}
                 className="text-xs font-semibold px-4 py-2 rounded-md bg-destructive text-white cursor-pointer transition-all hover:opacity-90 shadow-sm"
               >
-                Confirm No-Go
+                Confirm {isRfi ? "Pass" : "No-Go"}
               </button>
             )}
           </div>
@@ -581,7 +628,7 @@ export function OpportunityView({
       <Modal open={docUploadOpen} onClose={() => !uploading && setDocUploadOpen(false)} title="Upload Document">
         <div className="space-y-4">
           <p className="text-xs text-muted-foreground">
-            Additional files are parsed and folded into this project’s Go/No-Go packet and later response grounding.
+            Additional files are parsed and folded into this project’s {isRfi ? "Respond / Pass" : "Go/No-Go"} packet and later response grounding.
           </p>
           <DocumentDropzone files={uploadFiles} onChange={setUploadFiles} disabled={uploading} />
           <div className="flex justify-end gap-2 pt-2">

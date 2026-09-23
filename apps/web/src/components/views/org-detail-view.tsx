@@ -7,6 +7,8 @@ import { useToast } from "@/components/ui/toast";
 import { OutreachComposer } from "@/components/outreach/outreach-composer";
 import { AddPursuitForm } from "@/components/pursuit/add-pursuit-form";
 import { createPursuitFromForm, recLabel } from "@/lib/create-pursuit";
+import type { ProjectType } from "@opportunity-engine/contracts";
+import { recShortLabel } from "@opportunity-engine/core";
 import { useOperator } from "@/components/auth/operator-provider";
 import { operatorLabel } from "@/lib/operator-profile";
 import { cn } from "@/lib/cn";
@@ -21,16 +23,11 @@ function getOrgTopScore(org: Organization, allPursuits: Record<string, Pursuit>)
   return org.score;
 }
 
-function RecPill({ rec, closed }: { rec: string; closed?: boolean }) {
+function RecPill({ rec, closed, projectType = "rfp" }: { rec: string; closed?: boolean; projectType?: "rfp" | "rfi" | "sow" }) {
   if (closed) return <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md oe-status-closed">CLOSED</span>;
-  const map: Record<string, [string, string]> = {
-    go: ["GO", "oe-status-go"],
-    nogo: ["NO-GO", "oe-status-nogo"],
-    cond: ["CONDITIONS", "oe-status-cond"],
-    pending: ["PENDING", "oe-status-pending"],
-  };
-  const [label, cls] = map[rec] ?? map.pending!;
-  return <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md ${cls}`}>{label}</span>;
+  const typed = rec === "go" || rec === "nogo" || rec === "cond" || rec === "pending" ? rec : "pending";
+  const cls = { go: "oe-status-go", nogo: "oe-status-nogo", cond: "oe-status-cond", pending: "oe-status-pending" }[typed];
+  return <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md ${cls}`}>{recShortLabel(typed, projectType)}</span>;
 }
 
 export function OrgDetailView({
@@ -86,18 +83,19 @@ export function OrgDetailView({
     setOutreachOpen(true);
   }
 
-  async function handleCreatePursuit(values: { name: string; lane: "B" | "C"; solicitationRef: string; files: File[] }) {
+  async function handleCreatePursuit(values: { name: string; lane: "B" | "C"; projectType: ProjectType; solicitationRef: string; files: File[] }) {
     const { pursuit, ingested, warning } = await createPursuitFromForm({
       org,
       name: values.name,
       lane: values.lane,
+      projectType: values.projectType,
       solicitationRef: values.solicitationRef,
       files: values.files,
     });
     onAddPursuit(pursuit);
     if (ingested) {
       toast(
-        `"${pursuit.name}" scored ${pursuit.score} — ${recLabel(pursuit.rec)}. Confirm Go/No-Go on the opportunity.`,
+        `"${pursuit.name}" scored ${pursuit.score} — ${recLabel(pursuit.rec, pursuit.projectType)}. Confirm ${pursuit.projectType === "rfi" ? "Respond / Pass" : "Go/No-Go"} on the opportunity.`,
         pursuit.rec === "nogo" ? "warning" : "success",
       );
     } else {
@@ -432,7 +430,7 @@ export function OrgDetailView({
               </div>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <RecPill rec={p.rec} closed={p.closed} />
+                  <RecPill rec={p.rec} closed={p.closed} projectType={p.projectType ?? (p.lane === "C" ? "sow" : "rfp")} />
                   <span className="text-xs text-muted-foreground truncate">{p.status}</span>
                   {p.draftStatus && (
                     <span className="text-[10px] text-muted-foreground font-mono">· {p.draftStatus}</span>
@@ -481,7 +479,7 @@ export function OrgDetailView({
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{p.typeLabel}</td>
                   <td className="px-4 py-3 font-mono font-semibold text-foreground">{p.score}</td>
-                  <td className="px-4 py-3"><RecPill rec={p.rec} closed={p.closed} /></td>
+                  <td className="px-4 py-3"><RecPill rec={p.rec} closed={p.closed} projectType={p.projectType ?? (p.lane === "C" ? "sow" : "rfp")} /></td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {p.status}
                     {p.draftStatus && <span className="block text-[10px] font-mono mt-0.5">{p.draftStatus}{p.draftStatusDate ? ` (${p.draftStatusDate})` : ""}</span>}
