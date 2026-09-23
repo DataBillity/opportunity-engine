@@ -26,7 +26,7 @@ export function kindForLane(lane: "B" | "C", filename: string): "solicitation" |
   const lower = filename.toLowerCase();
   if (/amend|addend|qa|q&a|question/.test(lower)) return "addendum";
   if (lane === "C" || /\bsow\b/.test(lower)) return "sow";
-  if (/\brfp\b|solicitation|rfq|rfi/.test(lower)) return "solicitation";
+  if (/\brfp\b|\brfi\b|solicitation|rfq/.test(lower)) return "solicitation";
   return lane === "B" ? "solicitation" : "sow";
 }
 

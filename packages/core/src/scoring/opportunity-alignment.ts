@@ -15,7 +15,15 @@ export interface ScoringInputs {
 }
 
 export interface IntentSignal {
-  type: "budget_confirmed" | "rfp_released" | "leadership_change" | "public_statement" | "job_posting" | "prior_relationship";
+  type:
+    | "budget_confirmed"
+    | "rfp_released"
+    | "rfi_released"
+    | "sow_received"
+    | "leadership_change"
+    | "public_statement"
+    | "job_posting"
+    | "prior_relationship";
   confidence: number; // 0-1
   recency: number; // days since signal
 }

@@ -9,10 +9,12 @@ export function DocumentDropzone({
   files,
   onChange,
   disabled,
+  dropLabel = "Drop the RFP or SOW here",
 }: {
   files: File[];
   onChange: (files: File[]) => void;
   disabled?: boolean;
+  dropLabel?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -57,7 +59,7 @@ export function DocumentDropzone({
             e.target.value = "";
           }}
         />
-        <p className="text-xs text-foreground font-medium">Drop the RFP or SOW here</p>
+        <p className="text-xs text-foreground font-medium">{dropLabel}</p>
         <p className="text-[11px] text-muted-foreground mt-1">
           PDF, Word (.docx), or text · up to 5 files, 12 MB each
         </p>

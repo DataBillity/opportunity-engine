@@ -41,8 +41,9 @@ export function DashboardView({
     const activeOrgs = orgs.filter(o => !o.archived);
     const allPursuitList = Object.values(allPursuits);
     const activePursuits = allPursuitList.filter(p => !p.closed);
-    const rfps = activePursuits.filter(p => p.lane === "B");
-    const sows = activePursuits.filter(p => p.lane === "C");
+    const rfps = activePursuits.filter(p => (p.projectType ?? (p.lane === "C" ? "sow" : "rfp")) === "rfp");
+    const rfis = activePursuits.filter(p => p.projectType === "rfi");
+    const sows = activePursuits.filter(p => (p.projectType ?? (p.lane === "C" ? "sow" : "rfp")) === "sow");
     const goConfirmed = allPursuitList.filter(p => p.rec === "go");
     const submitted = allPursuitList.filter(p => p.draftStatus === "Submitted");
     const won = allPursuitList.filter(p => p.outcome === "Won");
@@ -77,6 +78,7 @@ export function DashboardView({
       { label: "Total Leads", count: activeOrgs.length, color: "bg-primary" },
       { label: "Prospects", count: prospects.length, color: "bg-[hsl(var(--status-cond))]" },
       { label: "Active RFPs", count: rfps.length, color: "bg-[hsl(var(--status-trace))]" },
+      { label: "Active RFIs", count: rfis.length, color: "bg-[hsl(var(--status-cond))]" },
       { label: "Active SOWs", count: sows.length, color: "bg-[hsl(var(--status-go))]" },
       { label: "Go Confirmed", count: goConfirmed.length, color: "bg-go" },
       { label: "Submitted", count: submitted.length, color: "bg-primary/70" },
@@ -84,7 +86,7 @@ export function DashboardView({
 
     const winRate = submitted.length > 0 ? Math.round((won.length / (won.length + lost.length || 1)) * 100) : 0;
 
-    return { activeOrgs, allPursuitList, activePursuits, rfps, sows, goConfirmed, submitted, won, lost, prospects, channelCounts, sourceCounts, scoreRanges, funnelStages, winRate };
+    return { activeOrgs, allPursuitList, activePursuits, rfps, rfis, sows, goConfirmed, submitted, won, lost, prospects, channelCounts, sourceCounts, scoreRanges, funnelStages, winRate };
   }, [orgs, allPursuits]);
 
   return (
@@ -99,8 +101,8 @@ export function DashboardView({
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatCard label="Total Leads" value={stats.activeOrgs.length} sub={`${stats.prospects.length} prospects`} />
-        <StatCard label="Active Pipeline" value={stats.activePursuits.length} sub={`${stats.rfps.length} RFPs · ${stats.sows.length} SOWs`} />
-        <StatCard label="RFPs in Progress" value={stats.rfps.length} color="text-primary" />
+        <StatCard label="Active Pipeline" value={stats.activePursuits.length} sub={`${stats.rfps.length} RFPs · ${stats.rfis.length} RFIs · ${stats.sows.length} SOWs`} />
+        <StatCard label="RFPs / RFIs" value={stats.rfps.length + stats.rfis.length} sub={`${stats.rfps.length} RFPs · ${stats.rfis.length} RFIs`} color="text-primary" />
         <StatCard label="SOWs in Progress" value={stats.sows.length} color="text-[hsl(var(--status-trace))]" />
         <StatCard label="Submissions" value={stats.submitted.length} sub={`${stats.won.length} won · ${stats.lost.length} lost`} />
         <StatCard label="Win Rate" value={`${stats.winRate}%`} color={stats.winRate >= 50 ? "text-[hsl(var(--status-go))]" : "text-[hsl(var(--status-cond))]"} />

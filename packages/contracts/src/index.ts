@@ -50,10 +50,13 @@ export const LeadInput = z.object({
   context: z.string().optional(),
 });
 
+export const ProjectType = z.enum(["rfp", "rfi", "sow"]);
+
 export const PursuitInput = z.object({
   organizationId: z.string().optional(),
   organizationName: z.string().optional(),
   lane: z.enum(["B", "C"]),
+  projectType: ProjectType.optional(),
   name: z.string().min(1),
   solicitationRef: z.string().optional(),
   scopeSummary: z.string().optional(),
@@ -212,10 +215,33 @@ export const PursuitDocumentMeta = z.object({
   parseStatus: z.enum(["extracted", "empty", "unsupported"]),
 });
 
+export const PursuitScoreBreakdown = z.object({
+  projectType: ProjectType,
+  capabilityAlignment: z.number().min(0).max(100),
+  intentTiming: z.number().min(0).max(100),
+  accountValueFit: z.number().min(0).max(100),
+  inboundIntentUplift: z.number().min(0).max(100),
+  coveragePct: z.number().min(0).max(100),
+  mappedCount: z.number().int().nonnegative(),
+  totalRequirements: z.number().int().nonnegative(),
+  documentOverlapCount: z.number().int().nonnegative(),
+  goScoreFloor: z.number(),
+  goCoverageFloor: z.number(),
+  condScoreFloor: z.number(),
+  condCoverageFloor: z.number(),
+  passFailBlocked: z.boolean(),
+  recRule: z.string(),
+  detectedFromDocument: z.boolean().default(false),
+  typeOverridden: z.boolean().default(false),
+});
+
 export const PursuitTriageView = z.object({
   score: z.number().min(0).max(100),
   rec: z.enum(["go", "nogo", "cond", "pending"]),
   confidence: z.number().min(0).max(100),
+  confidenceNote: z.string().optional(),
+  projectType: ProjectType.default("rfp"),
+  scoreBreakdown: PursuitScoreBreakdown.optional(),
   status: z.string(),
   rationale: z.array(z.string()),
   reqmap: z.array(z.object({
@@ -260,8 +286,10 @@ export const PursuitIngestResult = z.object({
 export type OpportunityAlignmentWeights = z.infer<typeof OpportunityAlignmentWeights>;
 export type ScoreRunOutput = z.infer<typeof ScoreRunOutput>;
 export type TriageRunOutput = z.infer<typeof TriageRunOutput>;
+export type ProjectType = z.infer<typeof ProjectType>;
 export type LeadInput = z.infer<typeof LeadInput>;
 export type PursuitInput = z.infer<typeof PursuitInput>;
+export type PursuitScoreBreakdown = z.infer<typeof PursuitScoreBreakdown>;
 export type OutreachBriefing = z.infer<typeof OutreachBriefing>;
 export type OutreachPursuitBrief = z.infer<typeof OutreachPursuitBrief>;
 export type OutreachDraftOutput = z.infer<typeof OutreachDraftOutput>;
