@@ -129,11 +129,13 @@ export function SelectInput({
   onChange,
   options,
   className,
+  ariaLabel,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
   className?: string;
+  ariaLabel?: string;
 }) {
   return (
     <div className={cn("relative w-full", className)}>
@@ -141,6 +143,7 @@ export function SelectInput({
         value={value}
         onChange={e => onChange(e.target.value)}
         className="oe-select"
+        aria-label={ariaLabel}
       >
         {options.map(o => (
           <option key={o.value} value={o.value}>

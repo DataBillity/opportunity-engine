@@ -12,16 +12,17 @@ import {
   type ResponseActionItem,
 } from "@/lib/mock-data";
 import { Modal, FormField, TextInput, TextArea, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
+import { DateField, normalizeDateEntry } from "@/components/ui/date-field";
 import { DocumentDropzone } from "@/components/pursuit/document-dropzone";
 import { ActionItemResponseModal } from "@/components/action-items/action-item-response-modal";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import {
   applyPartnerIngest,
-    applyResumeReplacement,
-    ingestPartnerDocuments,
-    type PartnerIngestKind,
-    type PartnerIngestResult,
+  applyResumeReplacement,
+  ingestPartnerDocuments,
+  type PartnerIngestKind,
+  type PartnerIngestResult,
 } from "@/lib/partner-ingest";
 
 type TabId = "capabilities" | "experience" | "credentials" | "people" | "partners";
@@ -31,6 +32,78 @@ const PARTNER_TYPES = [
   { value: "JV", label: "JV (Joint Venture)" },
   { value: "Subcontractor", label: "Subcontractor" },
 ];
+
+const CREDENTIAL_TYPES = [
+  { value: "Certification", label: "Certification" },
+  { value: "Insurance", label: "Insurance" },
+  { value: "Bonding", label: "Bonding" },
+  { value: "License", label: "License" },
+];
+
+function credentialTypeOptions(current: string) {
+  if (current && !CREDENTIAL_TYPES.some(option => option.value === current)) {
+    return [{ value: current, label: current }, ...CREDENTIAL_TYPES];
+  }
+  return CREDENTIAL_TYPES;
+}
+
+const TEAMING_OPTIONS: { value: "na" | "pending" | "signed"; label: string; flag: boolean | null }[] = [
+  { value: "na", label: "N/A", flag: null },
+  { value: "pending", label: "Pending", flag: false },
+  { value: "signed", label: "Signed", flag: true },
+];
+
+function teamingValue(flag: boolean | null): "na" | "pending" | "signed" {
+  if (flag === true) return "signed";
+  if (flag === false) return "pending";
+  return "na";
+}
+
+function TeamingToggle({
+  value,
+  onChange,
+}: {
+  value: boolean | null;
+  onChange: (next: boolean | null) => void;
+}) {
+  return (
+    <div className="inline-flex p-1 rounded-lg bg-muted/60 gap-0.5">
+      {TEAMING_OPTIONS.map(option => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => onChange(option.flag)}
+          className={cn(
+            "px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer",
+            teamingValue(value) === option.value
+              ? "bg-card text-foreground shadow-sm font-semibold"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function EmptyFilterRow({
+  colSpan,
+  noun,
+  filtered,
+}: {
+  colSpan: number;
+  noun: string;
+  filtered: boolean;
+}) {
+  return (
+    <tr>
+      <td colSpan={colSpan} className="px-4 py-8 text-center text-xs text-muted-foreground">
+        {filtered ? `No matching ${noun}.` : `No ${noun} yet.`}
+      </td>
+    </tr>
+  );
+}
 
 function PartnerMultiSelect({
   selected,
@@ -67,6 +140,8 @@ export function SourcesView({
   onUpdatePartners,
   onUpdateGraph,
   onUpdatePursuit,
+  onArchivePartner,
+  onReinstatePartner,
 }: {
   partners: Partner[];
   graph: GraphData;
@@ -74,10 +149,13 @@ export function SourcesView({
   onUpdatePartners: (next: Partner[] | ((prev: Partner[]) => Partner[])) => void;
   onUpdateGraph: (next: GraphData | ((prev: GraphData) => GraphData)) => void;
   onUpdatePursuit: (pursuitId: string, updates: Partial<Pursuit>) => void;
+  onArchivePartner?: (partnerId: string) => void;
+  onReinstatePartner?: (partnerId: string) => void;
 }) {
   const { toast } = useToast();
   const [tab, setTab] = useState<TabId>("capabilities");
   const [searchQ, setSearchQ] = useState("");
+  const [partnerFilter, setPartnerFilter] = useState("");
   const [showArchived, setShowArchived] = useState(false);
 
   const capabilities = graph.capabilities;
@@ -118,6 +196,7 @@ export function SourcesView({
   const [partnerEmail, setPartnerEmail] = useState("");
   const [partnerSummary, setPartnerSummary] = useState("");
   const [partnerSourceLink, setPartnerSourceLink] = useState("");
+  const [partnerTeaming, setPartnerTeaming] = useState<boolean | null>(null);
   const [capFiles, setCapFiles] = useState<File[]>([]);
   const [expFiles, setExpFiles] = useState<File[]>([]);
   const [credFiles, setCredFiles] = useState<File[]>([]);
@@ -132,6 +211,7 @@ export function SourcesView({
   const [editPartnerContact, setEditPartnerContact] = useState("");
   const [editPartnerEmail, setEditPartnerEmail] = useState("");
   const [editPartnerSummary, setEditPartnerSummary] = useState("");
+  const [editPartnerTeaming, setEditPartnerTeaming] = useState<boolean | null>(null);
   const [editCapFiles, setEditCapFiles] = useState<File[]>([]);
   const [editExpFiles, setEditExpFiles] = useState<File[]>([]);
   const [editCredFiles, setEditCredFiles] = useState<File[]>([]);
@@ -144,6 +224,8 @@ export function SourcesView({
   const [editCap, setEditCap] = useState<GraphCapability | null>(null);
   const [editExp, setEditExp] = useState<GraphExperience | null>(null);
   const [editPerson, setEditPerson] = useState<GraphPerson | null>(null);
+  const [editCredType, setEditCredType] = useState("Certification");
+  const [editCredExpiration, setEditCredExpiration] = useState("");
   const [editCapPartners, setEditCapPartners] = useState<string[]>([]);
   const [editExpPartners, setEditExpPartners] = useState<string[]>([]);
   const [editExpIndustry, setEditExpIndustry] = useState("");
@@ -168,6 +250,18 @@ export function SourcesView({
   const activePartners = partners.filter(p => p.status !== "Archived");
   const partnerOptions = activePartners.map(p => ({ value: p.id, label: p.name }));
   const partnerName2 = (id: string) => partners.find(p => p.id === id)?.name ?? id;
+  const partnerFilterOptions = partners
+    .filter(p => showArchived || p.status !== "Archived")
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(p => ({ value: p.id, label: p.name }));
+  const partnerSelectOptions = [
+    { value: "", label: "All partners" },
+    ...partnerFilterOptions,
+    ...(partnerFilter && !partnerFilterOptions.some(option => option.value === partnerFilter)
+      ? [{ value: partnerFilter, label: partnerName2(partnerFilter) }]
+      : []),
+  ];
   const detailPartner = detailPartnerId ? partners.find(p => p.id === detailPartnerId) ?? null : null;
   const liveCap = detailCap ? capabilities.find(item => item.id === detailCap.id) ?? detailCap : null;
   const liveExp = detailExp ? experience.find(item => item.id === detailExp.id) ?? detailExp : null;
@@ -243,7 +337,7 @@ export function SourcesView({
     onUpdateGraph(prev => ({
       ...prev,
       credentials: [...prev.credentials, {
-        id, name: credName.trim(), credType, partner: credPartner || "PTR-U", scope: "", expiration: credExpiration || "TBD",
+        id, name: credName.trim(), credType, partner: credPartner || "PTR-U", scope: "", expiration: normalizeDateEntry(credExpiration).trim() || "TBD",
         status: "Pending", updated: new Date().toISOString().slice(0, 10), documentText: "", documentFileName: "",
       }],
     }));
@@ -292,7 +386,7 @@ export function SourcesView({
       contact: partnerContact.trim() || "—",
       contactEmail: partnerEmail.trim(),
       status: "Active",
-      teamingAgreementSigned: false,
+      teamingAgreementSigned: partnerTeaming,
       accessTier: null,
       covers: [],
       note: partnerSummary.trim(),
@@ -316,27 +410,22 @@ export function SourcesView({
     }
     setAddPartnerOpen(false);
     setPartnerName(""); setPartnerWebsite(""); setPartnerSourceLink(""); setPartnerContact(""); setPartnerEmail(""); setPartnerSummary("");
+    setPartnerTeaming(null);
     setCapFiles([]); setExpFiles([]); setCredFiles([]); setPeopleFiles([]);
   }
 
   function handleArchivePartner(partnerId: string) {
-    onUpdatePartners(prev => prev.map(p => p.id === partnerId ? { ...p, status: "Archived" } : p));
-    onUpdateGraph(prev => ({
-      capabilities: prev.capabilities.map(c => {
-        if (!c.partners.includes(partnerId)) return c;
-        const remaining = c.partners.filter(pid => pid !== partnerId);
-        return remaining.length === 0 ? { ...c, partners: remaining, status: "Archived" } : { ...c, partners: remaining };
-      }),
-      experience: prev.experience.map(e => {
-        if (!e.partners.includes(partnerId)) return e;
-        const remaining = e.partners.filter(pid => pid !== partnerId);
-        return remaining.length === 0 ? { ...e, partners: remaining, status: "Archived" } : { ...e, partners: remaining };
-      }),
-      credentials: prev.credentials.map(c => c.partner === partnerId ? { ...c, status: "Archived" } : c),
-      people: prev.people.map(p => p.partner === partnerId ? { ...p, status: "Archived" } : p),
-    }));
+    if (onArchivePartner) onArchivePartner(partnerId);
+    else {
+      onUpdatePartners(prev => prev.map(p => p.id === partnerId ? { ...p, status: "Archived" } : p));
+    }
     toast("Partner archived — sole-associated items archived as well", "success");
     setDetailPartnerId(null);
+  }
+
+  function handleReinstatePartner(partnerId: string) {
+    if (onReinstatePartner) onReinstatePartner(partnerId);
+    toast("Partner reinstated with full history", "success");
   }
 
   function openEditPartner(p: Partner) {
@@ -347,6 +436,7 @@ export function SourcesView({
     setEditPartnerContact(p.contact === "—" ? "" : p.contact);
     setEditPartnerEmail(p.contactEmail ?? "");
     setEditPartnerSummary(p.summary || p.note);
+    setEditPartnerTeaming(p.teamingAgreementSigned);
     setEditCapFiles([]); setEditExpFiles([]); setEditCredFiles([]); setEditPeopleFiles([]);
   }
 
@@ -363,6 +453,7 @@ export function SourcesView({
             contactEmail: editPartnerEmail.trim(),
             summary: editPartnerSummary.trim(),
             note: editPartnerSummary.trim(),
+            teamingAgreementSigned: editPartnerTeaming,
           }
         : p
     ));
@@ -405,6 +496,27 @@ export function SourcesView({
     toast("Capability updated", "success");
     setEditCap(null);
     setDetailCap(prev => prev ? { ...prev, partners: editCapPartners } : prev);
+  }
+
+  function openCredential(credential: GraphCredential) {
+    setDetailCred(credential);
+    setEditCredType(credential.credType || "Certification");
+    setEditCredExpiration(credential.expiration === "TBD" ? "" : credential.expiration);
+  }
+
+  function handleSaveCredential() {
+    if (!liveCred) return;
+    const next = {
+      credType: editCredType,
+      expiration: normalizeDateEntry(editCredExpiration).trim() || "TBD",
+      updated: new Date().toISOString().slice(0, 10),
+    };
+    onUpdateGraph(prev => ({
+      ...prev,
+      credentials: prev.credentials.map(c => c.id === liveCred.id ? { ...c, ...next } : c),
+    }));
+    toast("Credential updated", "success");
+    setDetailCred(prev => prev && prev.id === liveCred.id ? { ...prev, ...next } : prev);
   }
 
   function handleSaveExperience() {
@@ -494,8 +606,25 @@ export function SourcesView({
     setDetailPerson(nextPerson);
   }
 
-  const filterItem = (name: string, id: string) =>
-    !searchQ || name.toLowerCase().includes(searchQ.toLowerCase()) || id.toLowerCase().includes(searchQ.toLowerCase());
+  const matchesQuery = (name: string, id: string, partnerIds: string[] = []) => {
+    if (!searchQ) return true;
+    const q = searchQ.toLowerCase();
+    return name.toLowerCase().includes(q)
+      || id.toLowerCase().includes(q)
+      || partnerIds.some(pid => partnerName2(pid).toLowerCase().includes(q));
+  };
+  const matchesPartner = (partnerIds: string[]) => !partnerFilter || partnerIds.includes(partnerFilter);
+  const isListed = (status: string) => showArchived || status !== "Archived";
+
+  const visibleCapabilities = capabilities.filter(c =>
+    isListed(c.status) && matchesPartner(c.partners) && matchesQuery(c.name, c.id, c.partners));
+  const visibleExperience = experience.filter(e =>
+    isListed(e.status) && matchesPartner(e.partners) && matchesQuery(e.name, e.id, e.partners));
+  const visibleCredentials = credentials.filter(c =>
+    isListed(c.status) && matchesPartner([c.partner]) && matchesQuery(c.name, c.id, [c.partner]));
+  const visiblePeople = people.filter(p =>
+    isListed(p.status) && matchesPartner([p.partner]) && matchesQuery(p.name, p.id, [p.partner]));
+  const visiblePartners = partners.filter(p => isListed(p.status) && matchesQuery(p.name, p.id));
 
   const partnerOpenActions = detailPartner
     ? Object.values(allPursuits).flatMap(pursuit =>
@@ -541,6 +670,15 @@ export function SourcesView({
             placeholder={`Search ${tab}…`}
             className="oe-field text-[11px] flex-1 lg:w-48 lg:flex-none"
           />
+          {tab !== "partners" && (
+            <SelectInput
+              value={partnerFilter}
+              onChange={setPartnerFilter}
+              options={partnerSelectOptions}
+              ariaLabel="Filter by partner"
+              className="flex-1 lg:w-52 lg:flex-none min-w-[11rem]"
+            />
+          )}
           <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
             <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="rounded" />
             Show archived
@@ -569,24 +707,21 @@ export function SourcesView({
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">ID</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Capability</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Partners</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Updated</th>
                 </tr>
               </thead>
               <tbody>
-                {capabilities.filter(c => (showArchived || c.status !== "Archived") && filterItem(c.name, c.id)).map(c => (
+                {visibleCapabilities.map(c => (
                   <tr key={c.id} className="oe-table-row border-b border-border last:border-b-0 cursor-pointer" onClick={() => setDetailCap(c)}>
                     <td className="px-4 py-3 font-mono text-[11px] text-primary">{c.id}</td>
                     <td className="px-4 py-3 font-semibold text-foreground">{c.name}</td>
                     <td className="px-4 py-3 text-muted-foreground">{c.partners.map(id => partnerName2(id)).join(", ") || "—"}</td>
-                    <td className="px-4 py-3">
-                      <span className={cn("inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md",
-                        c.status === "Verified" ? "oe-status-go" : c.status === "Archived" ? "oe-status-closed" : "oe-status-cond"
-                      )}>{c.status}</span>
-                    </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{c.updated}</td>
                   </tr>
                 ))}
+                {visibleCapabilities.length === 0 && (
+                  <EmptyFilterRow colSpan={4} noun="capabilities" filtered={Boolean(searchQ || partnerFilter)} />
+                )}
               </tbody>
             </table>
           </div>
@@ -603,23 +738,20 @@ export function SourcesView({
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Experience</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Industry</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Partners</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {experience.filter(e => (showArchived || e.status !== "Archived") && filterItem(e.name, e.id)).map(e => (
+                {visibleExperience.map(e => (
                   <tr key={e.id} className="oe-table-row border-b border-border last:border-b-0 cursor-pointer" onClick={() => setDetailExp(e)}>
                     <td className="px-4 py-3 font-mono text-[11px] text-primary">{e.id}</td>
                     <td className="px-4 py-3 font-semibold text-foreground">{e.name}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{e.industry || "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground">{e.partners.map(id => partnerName2(id)).join(", ") || "—"}</td>
-                    <td className="px-4 py-3">
-                      <span className={cn("inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md",
-                        e.status === "Verified" ? "oe-status-go" : e.status === "Archived" ? "oe-status-closed" : "oe-status-cond"
-                      )}>{e.status}</span>
-                    </td>
                   </tr>
                 ))}
+                {visibleExperience.length === 0 && (
+                  <EmptyFilterRow colSpan={4} noun="experience" filtered={Boolean(searchQ || partnerFilter)} />
+                )}
               </tbody>
             </table>
           </div>
@@ -637,25 +769,21 @@ export function SourcesView({
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Type</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Partner</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Expiration</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {credentials.filter(c => (showArchived || c.status !== "Archived") && filterItem(c.name, c.id)).map(c => (
-                  <tr key={c.id} className="oe-table-row border-b border-border last:border-b-0 cursor-pointer" onClick={() => setDetailCred(c)}>
+                {visibleCredentials.map(c => (
+                  <tr key={c.id} className="oe-table-row border-b border-border last:border-b-0 cursor-pointer" onClick={() => openCredential(c)}>
                     <td className="px-4 py-3 font-mono text-[11px] text-primary">{c.id}</td>
                     <td className="px-4 py-3 font-semibold text-foreground">{c.name}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{c.credType}</td>
                     <td className="px-4 py-3 text-muted-foreground">{partnerName2(c.partner)}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{c.expiration}</td>
-                    <td className="px-4 py-3">
-                      <span className={cn("inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md",
-                        c.status === "Verified" ? "oe-status-go" : c.status === "Archived" ? "oe-status-closed" :
-                        c.status.includes("Partner") ? "oe-status-trace" : "oe-status-cond"
-                      )}>{c.status}</span>
-                    </td>
                   </tr>
                 ))}
+                {visibleCredentials.length === 0 && (
+                  <EmptyFilterRow colSpan={5} noun="credentials" filtered={Boolean(searchQ || partnerFilter)} />
+                )}
               </tbody>
             </table>
           </div>
@@ -673,24 +801,21 @@ export function SourcesView({
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Partner</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Role</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5 hidden xl:table-cell">Expertise</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {people.filter(p => (showArchived || p.status !== "Archived") && filterItem(p.name, p.id)).map(p => (
+                {visiblePeople.map(p => (
                   <tr key={p.id} className="oe-table-row border-b border-border last:border-b-0 cursor-pointer" onClick={() => setDetailPerson(p)}>
                     <td className="px-4 py-3 font-mono text-[11px] text-primary">{p.id}</td>
                     <td className="px-4 py-3 font-semibold text-foreground">{p.name}</td>
                     <td className="px-4 py-3 text-muted-foreground">{partnerName2(p.partner)}</td>
                     <td className="px-4 py-3 text-muted-foreground">{(p.roles ?? [p.role]).filter(Boolean).join(", ") || p.role}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground max-w-[400px] truncate hidden xl:table-cell">{p.expertise}</td>
-                    <td className="px-4 py-3">
-                      <span className={cn("inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md",
-                        p.status === "Verified" ? "oe-status-go" : p.status === "Archived" ? "oe-status-closed" : "oe-status-cond"
-                      )}>{p.status}</span>
-                    </td>
                   </tr>
                 ))}
+                {visiblePeople.length === 0 && (
+                  <EmptyFilterRow colSpan={5} noun="people" filtered={Boolean(searchQ || partnerFilter)} />
+                )}
               </tbody>
             </table>
           </div>
@@ -713,7 +838,7 @@ export function SourcesView({
                 </tr>
               </thead>
               <tbody>
-                {partners.filter(p => (showArchived || p.status !== "Archived") && filterItem(p.name, p.id)).map(p => (
+                {visiblePartners.map(p => (
                   <tr key={p.id} className="oe-table-row border-b border-border last:border-b-0 cursor-pointer" onClick={() => setDetailPartnerId(p.id)}>
                     <td className="px-4 py-3 font-semibold text-foreground">{p.name}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{p.type}</td>
@@ -734,13 +859,18 @@ export function SourcesView({
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                       <div className="flex gap-1.5">
                         <button onClick={() => openEditPartner(p)} className="text-[10px] font-medium px-2 py-1 rounded border border-input bg-card text-foreground cursor-pointer hover:bg-secondary">Edit</button>
-                        {p.status !== "Archived" && (
+                        {p.status === "Archived" ? (
+                          <button onClick={() => handleReinstatePartner(p.id)} className="text-[10px] font-medium px-2 py-1 rounded border border-input bg-card text-foreground cursor-pointer hover:bg-secondary">Reinstate</button>
+                        ) : (
                           <button onClick={() => handleArchivePartner(p.id)} className="text-[10px] font-medium px-2 py-1 rounded border border-input bg-card text-destructive cursor-pointer hover:bg-destructive/10">Archive</button>
                         )}
                       </div>
                     </td>
                   </tr>
                 ))}
+                {visiblePartners.length === 0 && (
+                  <EmptyFilterRow colSpan={7} noun="partners" filtered={Boolean(searchQ)} />
+                )}
               </tbody>
             </table>
           </div>
@@ -753,6 +883,7 @@ export function SourcesView({
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div><span className="text-muted-foreground">Type:</span> <strong>{detailPartner.type}</strong></div>
               <div><span className="text-muted-foreground">Status:</span> <strong>{detailPartner.status}</strong></div>
+              <div><span className="text-muted-foreground">Teaming agreement:</span> <strong>{detailPartner.teamingAgreementSigned === true ? "Signed" : detailPartner.teamingAgreementSigned === false ? "Pending" : "N/A"}</strong></div>
               <div><span className="text-muted-foreground">Website:</span> {detailPartner.website !== "—" ? <a href={detailPartner.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{detailPartner.website}</a> : "—"}</div>
               <div><span className="text-muted-foreground">Date added:</span> {detailPartner.createdAt || "—"}</div>
               <div><span className="text-muted-foreground">Contact:</span> {detailPartner.contact}</div>
@@ -792,6 +923,24 @@ export function SourcesView({
                 <div key={e.id} className="text-xs text-foreground">{e.id} — {e.name}</div>
               ))}</div>
             </div>
+            <div className="border-t border-border pt-3">
+              <h4 className="text-xs font-semibold mb-2">Credentials</h4>
+              {credentials.filter(c => c.partner === detailPartner.id).length === 0 && (
+                <div className="text-xs text-muted-foreground italic">None</div>
+              )}
+              <div className="space-y-1">{credentials.filter(c => c.partner === detailPartner.id).map(c => (
+                <div key={c.id} className="text-xs text-foreground">{c.id} — {c.name} <span className="text-muted-foreground">({c.credType}{c.expiration ? `, expires ${c.expiration}` : ""})</span></div>
+              ))}</div>
+            </div>
+            <div className="border-t border-border pt-3">
+              <h4 className="text-xs font-semibold mb-2">People</h4>
+              {people.filter(p => p.partner === detailPartner.id).length === 0 && (
+                <div className="text-xs text-muted-foreground italic">None</div>
+              )}
+              <div className="space-y-1">{people.filter(p => p.partner === detailPartner.id).map(p => (
+                <div key={p.id} className="text-xs text-foreground">{p.id} — {p.name} <span className="text-muted-foreground">({(p.roles ?? [p.role]).filter(Boolean).join(", ") || p.role})</span></div>
+              ))}</div>
+            </div>
             <div className="flex justify-end pt-3 border-t border-border">
               <SecondaryButton onClick={() => setDetailPartnerId(null)}>Close</SecondaryButton>
             </div>
@@ -804,7 +953,6 @@ export function SourcesView({
           <div className="space-y-3 text-xs">
             <div><span className="text-muted-foreground">ID:</span> <span className="font-mono">{liveCap.id}</span></div>
             <div><span className="text-muted-foreground">Partners:</span> {liveCap.partners.map(id => partnerName2(id)).join(", ") || "—"}</div>
-            <div><span className="text-muted-foreground">Status:</span> {liveCap.status}</div>
             <div className="flex justify-between pt-2">
               <button onClick={() => { handleDeleteItem("capability", liveCap.id); setDetailCap(null); }} className="text-xs text-destructive cursor-pointer hover:underline">Delete</button>
               <div className="flex gap-2">
@@ -849,9 +997,26 @@ export function SourcesView({
       <Modal open={liveCred !== null} onClose={() => setDetailCred(null)} title={liveCred?.name ?? "Credential"} wide>
         {liveCred && (
           <div className="space-y-3 text-xs">
-            <div><span className="text-muted-foreground">Type:</span> {liveCred.credType}</div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FormField label="Type">
+                <SelectInput value={editCredType} onChange={setEditCredType} options={credentialTypeOptions(editCredType)} />
+              </FormField>
+              <FormField label="Expiration date">
+                <DateField value={editCredExpiration} onChange={setEditCredExpiration} />
+              </FormField>
+            </div>
+            <div className="flex justify-end">
+              <PrimaryButton
+                onClick={handleSaveCredential}
+                disabled={
+                  editCredType === (liveCred.credType || "Certification")
+                  && (normalizeDateEntry(editCredExpiration).trim() || "TBD") === (liveCred.expiration || "TBD")
+                }
+              >
+                Save
+              </PrimaryButton>
+            </div>
             <div><span className="text-muted-foreground">Partner:</span> {partnerName2(liveCred.partner)}</div>
-            <div><span className="text-muted-foreground">Expiration:</span> {liveCred.expiration}</div>
             <div>
               <div className="font-semibold mb-1">Document</div>
               <div className="text-muted-foreground mb-1">{liveCred.documentFileName || "No file name on record"}</div>
@@ -942,7 +1107,7 @@ export function SourcesView({
             <TextInput value={editPersonIndustries} onChange={setEditPersonIndustries} />
           </FormField>
           <FormField label="Replace resume" hint="A new resume re-sets roles, expertise, and industries from the parsed document.">
-            <DocumentDropzone files={resumeFiles} onChange={setResumeFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={resumeFiles} onChange={setResumeFiles} disabled={ingestBusy} dropLabel="Drop your Resumes here" />
           </FormField>
           <div className="flex justify-end gap-2">
             <SecondaryButton onClick={() => setEditPerson(null)}>Cancel</SecondaryButton>
@@ -971,17 +1136,20 @@ export function SourcesView({
           <FormField label="Summary">
             <TextArea value={editPartnerSummary} onChange={setEditPartnerSummary} rows={3} />
           </FormField>
+          <FormField label="Teaming agreement">
+            <TeamingToggle value={editPartnerTeaming} onChange={setEditPartnerTeaming} />
+          </FormField>
           <FormField label="Capability documents">
-            <DocumentDropzone files={editCapFiles} onChange={setEditCapFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={editCapFiles} onChange={setEditCapFiles} disabled={ingestBusy} dropLabel="Drop the Capability Statements here" />
           </FormField>
           <FormField label="Experience documents">
-            <DocumentDropzone files={editExpFiles} onChange={setEditExpFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={editExpFiles} onChange={setEditExpFiles} disabled={ingestBusy} dropLabel="Drop the Experience/Project Summaries here" />
           </FormField>
           <FormField label="Credential documents">
-            <DocumentDropzone files={editCredFiles} onChange={setEditCredFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={editCredFiles} onChange={setEditCredFiles} disabled={ingestBusy} dropLabel="Drop your Certification, Insurance, Bonding, and Other Credential documents here" />
           </FormField>
           <FormField label="People / resume documents">
-            <DocumentDropzone files={editPeopleFiles} onChange={setEditPeopleFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={editPeopleFiles} onChange={setEditPeopleFiles} disabled={ingestBusy} dropLabel="Drop your Resumes here" />
           </FormField>
           <div className="flex justify-end gap-2 pt-2">
             <SecondaryButton onClick={() => setEditPartner(null)}>Cancel</SecondaryButton>
@@ -1038,16 +1206,13 @@ export function SourcesView({
             <TextInput value={credName} onChange={setCredName} placeholder="e.g. SOC 2 Type II" />
           </FormField>
           <FormField label="Type">
-            <SelectInput value={credType} onChange={setCredType} options={[
-              { value: "Certification", label: "Certification" }, { value: "Insurance", label: "Insurance" },
-              { value: "Bonding", label: "Bonding" }, { value: "License", label: "License" },
-            ]} />
+            <SelectInput value={credType} onChange={setCredType} options={CREDENTIAL_TYPES} />
           </FormField>
           <FormField label="Partner">
             <SelectInput value={credPartner} onChange={setCredPartner} options={[{ value: "", label: "Select partner…" }, ...partnerOptions]} />
           </FormField>
           <FormField label="Expiration date">
-            <TextInput value={credExpiration} onChange={setCredExpiration} placeholder="e.g. 2027-06-01" />
+            <DateField value={credExpiration} onChange={setCredExpiration} />
           </FormField>
           <div className="flex justify-end gap-2 pt-2">
             <SecondaryButton onClick={() => setAddCredOpen(false)}>Cancel</SecondaryButton>
@@ -1103,17 +1268,20 @@ export function SourcesView({
           <FormField label="Source link (optional)">
             <TextInput value={partnerSourceLink} onChange={setPartnerSourceLink} />
           </FormField>
+          <FormField label="Teaming agreement">
+            <TeamingToggle value={partnerTeaming} onChange={setPartnerTeaming} />
+          </FormField>
           <FormField label="Capability documents">
-            <DocumentDropzone files={capFiles} onChange={setCapFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={capFiles} onChange={setCapFiles} disabled={ingestBusy} dropLabel="Drop the Capability Statements here" />
           </FormField>
           <FormField label="Experience documents">
-            <DocumentDropzone files={expFiles} onChange={setExpFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={expFiles} onChange={setExpFiles} disabled={ingestBusy} dropLabel="Drop the Experience/Project Summaries here" />
           </FormField>
           <FormField label="Credential documents">
-            <DocumentDropzone files={credFiles} onChange={setCredFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={credFiles} onChange={setCredFiles} disabled={ingestBusy} dropLabel="Drop your Certification, Insurance, Bonding, and Other Credential documents here" />
           </FormField>
           <FormField label="People / resume documents">
-            <DocumentDropzone files={peopleFiles} onChange={setPeopleFiles} disabled={ingestBusy} />
+            <DocumentDropzone files={peopleFiles} onChange={setPeopleFiles} disabled={ingestBusy} dropLabel="Drop your Resumes here" />
           </FormField>
           <div className="flex justify-end gap-2 pt-2">
             <SecondaryButton onClick={() => setAddPartnerOpen(false)}>Cancel</SecondaryButton>

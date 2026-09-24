@@ -1,28 +1,34 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
-import { searchResults as initialResults, type SearchResult, type Organization } from "@/lib/mock-data";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { searchResults as searchCatalog, type Organization } from "@/lib/mock-data";
 import { Modal, FormField, TextArea, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
 import { parseBulkLeads, LEAD_CHANNELS } from "@/lib/create-lead";
 import { useToast } from "@/components/ui/toast";
+import { useOperator } from "@/components/auth/operator-provider";
+import {
+  loadSearchCandidates,
+  saveSearchCandidates,
+  type DiscoveryCandidate,
+} from "@/lib/search-candidates";
 import { cn } from "@/lib/cn";
 
 export function SearchView({
   onAddOrg,
-  onAddOrgs,
-  onImportedLeads,
 }: {
   onAddOrg: (org: Organization) => void;
   onAddOrgs?: (orgs: Organization[]) => void;
   onImportedLeads?: () => void;
 }) {
   const { toast } = useToast();
+  const { profile } = useOperator();
+  const operatorEmail = profile?.email ?? "";
 
   const [industry, setIndustry] = useState("all");
   const [keyword, setKeyword] = useState("");
   const [minScore, setMinScore] = useState("");
   const [activeSources, setActiveSources] = useState<Set<string>>(new Set(["Firmographic", "Filings", "Press", "LinkedIn"]));
-  const [results, setResults] = useState<SearchResult[]>(initialResults);
+  const [results, setResults] = useState<DiscoveryCandidate[]>([]);
   const [refreshing, setRefreshing] = useState<Set<string>>(new Set());
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -54,16 +60,34 @@ export function SearchView({
     "LinkedIn post": "LinkedIn",
   };
 
-  const filteredResults = useMemo(() => {
-    return results.filter(r => {
-      if (industry !== "all" && r.industry !== industry) return false;
-      if (keyword.trim() && !r.signal.toLowerCase().includes(keyword.toLowerCase()) && !r.org.toLowerCase().includes(keyword.toLowerCase())) return false;
-      if (minScore && r.score < Number(minScore)) return false;
-      const rSource = sourceMap[r.source] ?? "";
-      if (!activeSources.has(rSource)) return false;
-      return true;
+  const persistSession = useCallback((candidates: DiscoveryCandidate[], added: Set<string>) => {
+    if (!operatorEmail) return;
+    saveSearchCandidates(operatorEmail, {
+      candidates,
+      addedIds: Array.from(added),
     });
-  }, [results, industry, keyword, minScore, activeSources]);
+  }, [operatorEmail]);
+
+  useEffect(() => {
+    if (!operatorEmail) return;
+    const stored = loadSearchCandidates(operatorEmail);
+    if (stored) {
+      setResults(stored.candidates);
+      setAddedIds(new Set(stored.addedIds));
+      setHasSearched(true);
+    } else {
+      setResults([]);
+      setAddedIds(new Set());
+      setHasSearched(false);
+    }
+  }, [operatorEmail]);
+
+  function replaceCandidates(next: DiscoveryCandidate[]) {
+    setResults(next);
+    setAddedIds(new Set());
+    setHasSearched(true);
+    persistSession(next, new Set());
+  }
 
   function toggleSource(s: string) {
     setActiveSources(prev => {
@@ -78,20 +102,34 @@ export function SearchView({
   }
 
   function handleRunSearch() {
-    setHasSearched(true);
-    toast(`Search complete — ${filteredResults.length} candidates found`, "info");
+    const next: DiscoveryCandidate[] = searchCatalog.filter(r => {
+      if (industry !== "all" && r.industry !== industry) return false;
+      if (keyword.trim() && !r.signal.toLowerCase().includes(keyword.toLowerCase()) && !r.org.toLowerCase().includes(keyword.toLowerCase())) return false;
+      if (minScore && r.score < Number(minScore)) return false;
+      const rSource = sourceMap[r.source] ?? "";
+      if (!activeSources.has(rSource)) return false;
+      return true;
+    }).map(r => ({
+      ...r,
+      id: `${r.id}-${Date.now()}`,
+      updated: "just now",
+    }));
+    replaceCandidates(next);
+    toast(`Search complete — ${next.length} candidate${next.length === 1 ? "" : "s"} found`, "info");
   }
 
   function handleRefresh(id: string) {
     setRefreshing(prev => new Set(prev).add(id));
     setTimeout(() => {
-      setResults(prev =>
-        prev.map(r =>
+      setResults(prev => {
+        const next = prev.map(r =>
           r.id === id
             ? { ...r, score: Math.min(100, r.score + Math.floor(Math.random() * 8) - 2), updated: "just now" }
             : r
-        )
-      );
+        );
+        persistSession(next, addedIds);
+        return next;
+      });
       setRefreshing(prev => {
         const next = new Set(prev);
         next.delete(id);
@@ -101,8 +139,8 @@ export function SearchView({
     }, 1200);
   }
 
-  function handleAdd(r: SearchResult) {
-    const newOrg: Organization = {
+  function handleAdd(r: DiscoveryCandidate) {
+    const newOrg: Organization = r.leadDraft ?? {
       id: `ORG-${Date.now().toString().slice(-4)}`,
       name: r.org,
       industry: r.industry,
@@ -119,7 +157,11 @@ export function SearchView({
       pursuits: [],
     };
     onAddOrg(newOrg);
-    setAddedIds(prev => new Set(prev).add(r.id));
+    setAddedIds(prev => {
+      const next = new Set(prev).add(r.id);
+      persistSession(results, next);
+      return next;
+    });
     toast(`${r.org} added to pipeline`, "success");
   }
 
@@ -142,17 +184,26 @@ export function SearchView({
   function handleBulkUpload() {
     const selectedOrgs = parsedBulk.orgs.filter((_, idx) => bulkSelected.has(idx));
     if (selectedOrgs.length === 0) return;
-    const orgsWithSource = bulkSource.trim()
-      ? selectedOrgs.map(org => ({ ...org, source: bulkSource.trim() }))
-      : selectedOrgs;
-    if (onAddOrgs) onAddOrgs(orgsWithSource);
-    else for (const org of orgsWithSource) onAddOrg(org);
+    const stamp = Date.now();
+    const next: DiscoveryCandidate[] = selectedOrgs.map((org, index) => {
+      const withSource = bulkSource.trim() ? { ...org, source: bulkSource.trim() } : org;
+      return {
+        id: `${withSource.id}-bulk-${stamp}-${index}`,
+        org: withSource.name,
+        industry: withSource.industry,
+        signal: withSource.summary || withSource.whyGoodFit || "Imported lead",
+        source: withSource.source || (parsedBulk.kind === "linkedin" ? "LinkedIn" : bulkChannel),
+        score: withSource.score,
+        updated: "just now",
+        leadDraft: withSource,
+      };
+    });
+    replaceCandidates(next);
     const toastMsg = parsedBulk.kind === "linkedin"
-      ? `${selectedOrgs.length} LinkedIn lead${selectedOrgs.length !== 1 ? "s" : ""} added to Prospects`
-      : `${selectedOrgs.length} sales lead${selectedOrgs.length !== 1 ? "s" : ""} added to Prospects`;
+      ? `${next.length} LinkedIn candidate${next.length !== 1 ? "s" : ""} loaded — previous candidates cleared`
+      : `${next.length} candidate${next.length !== 1 ? "s" : ""} loaded — previous candidates cleared`;
     toast(toastMsg, "success");
     resetBulkForm();
-    onImportedLeads?.();
   }
 
   return (
@@ -246,11 +297,11 @@ export function SearchView({
         <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-border">
           <h3 className="oe-card-title">Candidates</h3>
           <span className="text-xs text-muted-foreground">
-            <span className="font-mono font-semibold text-foreground">{filteredResults.length}</span> candidates
+            <span className="font-mono font-semibold text-foreground">{results.length}</span> candidates
           </span>
         </div>
         <div className="lg:hidden divide-y divide-border">
-          {filteredResults.map(r => (
+          {results.map(r => (
             <div key={r.id} className="p-4 space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -292,9 +343,11 @@ export function SearchView({
               </div>
             </div>
           ))}
-          {filteredResults.length === 0 && (
+          {results.length === 0 && (
             <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-              No candidates match your current filters. Try broadening your search criteria.
+              {hasSearched
+                ? "No candidates in this result set. Run a new search or bulk import to replace the list."
+                : "Run a search or bulk-import leads to load candidates. Starting a new search or upload clears any previous candidates for your account."}
             </div>
           )}
         </div>
@@ -311,7 +364,7 @@ export function SearchView({
               </tr>
             </thead>
             <tbody>
-              {filteredResults.map(r => (
+              {results.map(r => (
                 <tr key={r.id} className="oe-table-row border-b border-border last:border-b-0">
                   <td className="px-3 lg:px-4 py-3 font-semibold text-foreground">{r.org}</td>
                   <td className="px-3 lg:px-4 py-3 text-muted-foreground hidden lg:table-cell">{r.industry}</td>
@@ -356,10 +409,12 @@ export function SearchView({
                   </td>
                 </tr>
               ))}
-              {filteredResults.length === 0 && (
+              {results.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                    No candidates match your current filters. Try broadening your search criteria.
+                    {hasSearched
+                      ? "No candidates in this result set. Run a new search or bulk import to replace the list."
+                      : "Run a search or bulk-import leads to load candidates. Starting a new search or upload clears any previous candidates for your account."}
                   </td>
                 </tr>
               )}
@@ -372,7 +427,7 @@ export function SearchView({
       <div className="flex items-start gap-2.5 text-xs text-muted-foreground bg-card border border-border rounded-lg px-4 py-3 shadow-sm">
         <div className="w-1 self-stretch bg-primary rounded-full shrink-0" />
         <p>
-          Refreshing re-runs enrichment and re-scores against the current graph. Scores are appended, never overwritten (SCORE-08).
+          Refreshing re-runs enrichment and re-scores against the current graph. A new search or bulk import replaces this candidate list for your account only; candidates not added as leads are not retained after that.
         </p>
       </div>
 
@@ -509,7 +564,7 @@ export function SearchView({
               onClick={handleBulkUpload}
               disabled={bulkSelected.size === 0}
             >
-              Import {bulkSelected.size} Lead{bulkSelected.size !== 1 ? "s" : ""}
+              Import {bulkSelected.size} Candidate{bulkSelected.size !== 1 ? "s" : ""}
             </PrimaryButton>
           </div>
         </div>
