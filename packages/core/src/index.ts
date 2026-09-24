@@ -8,6 +8,20 @@ export {
 } from "./scoring/pursuit-triage";
 export type { OrgTriageContext } from "./scoring/pursuit-triage";
 export {
+  BID_REC_THRESHOLDS,
+  RFI_REC_THRESHOLDS,
+  laneForProjectType,
+  projectTypeFromLane,
+  projectTypeLabel,
+  projectTypeLongLabel,
+  recDecisionLabel,
+  recShortLabel,
+  isRfiDocument,
+  resolveProjectType,
+  thresholdsFor,
+} from "./scoring/project-type";
+export type { ProjectType } from "./scoring/project-type";
+export {
   BILLITY_CAPABILITIES,
   ICP_VERTICALS,
   matchBillityCapabilities,

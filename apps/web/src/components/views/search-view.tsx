@@ -436,7 +436,7 @@ export function SearchView({
         <div className="space-y-4">
           <p className="text-xs text-muted-foreground">
             Upload a LinkedIn <span className="font-mono">Connections.csv</span> export, paste that CSV, or paste a simple lead list.
-            Qualified connections become sales leads on Prospects — not RFPs or SOWs.
+            Qualified connections become sales leads on Prospects — not RFPs, RFIs, or SOWs.
           </p>
           <div
             onDragOver={e => {

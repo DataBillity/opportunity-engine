@@ -54,17 +54,40 @@ export interface PursuitDocument {
   parseStatus?: "extracted" | "empty" | "unsupported";
 }
 
+export interface PursuitScoreBreakdown {
+  projectType: "rfp" | "rfi" | "sow";
+  capabilityAlignment: number;
+  intentTiming: number;
+  accountValueFit: number;
+  inboundIntentUplift: number;
+  coveragePct: number;
+  mappedCount: number;
+  totalRequirements: number;
+  documentOverlapCount: number;
+  goScoreFloor: number;
+  goCoverageFloor: number;
+  condScoreFloor: number;
+  condCoverageFloor: number;
+  passFailBlocked: boolean;
+  recRule: string;
+  detectedFromDocument?: boolean;
+  typeOverridden?: boolean;
+}
+
 export interface Pursuit {
   id: string;
   orgId: string;
   name: string;
   typeLabel: string;
+  projectType?: "rfp" | "rfi" | "sow";
   solicitationRef: string;
   lane: "B" | "C";
   score: number;
   status: string;
   rec: "go" | "nogo" | "cond" | "pending";
   confidence: number;
+  confidenceNote?: string;
+  scoreBreakdown?: PursuitScoreBreakdown;
   closed: boolean;
   dueDate: string | null;
   documents: PursuitDocument[];
@@ -290,7 +313,7 @@ export const organizations: Organization[] = [
 
 export const pursuits: Record<string, Pursuit> = {
   "OPP-2201": {
-    id: "OPP-2201", orgId: "ORG-01", name: "Fare Systems Modernization", typeLabel: "Government RFP", solicitationRef: "RFP 24-118",
+    id: "OPP-2201", orgId: "ORG-01", name: "Fare Systems Modernization", typeLabel: "RFP", projectType: "rfp", solicitationRef: "RFP 24-118",
     lane: "B", score: 68, status: "Triage complete", rec: "nogo", confidence: 64, closed: false, dueDate: "2026-10-02",
     documents: [{ name: "RFP_24-118_Base.pdf" }, { name: "Amendment_1_Addendum.pdf" }, { name: "Vendor_QA_Responses.pdf" }],
     docSummary: {
@@ -317,7 +340,7 @@ export const pursuits: Record<string, Pursuit> = {
     decisionRecord: { id: "DEC-88213", type: "D4 — Go/No-Go triage (RFP-01, RFP-03)", subject: "Project OPP-2201", model: "triage-v3 / prompt v1.9 / graph v212", reviewer: "—  not yet confirmed", action: "Recommendation generated, awaiting human confirmation", retention: "3 years minimum (bid-defensibility class)" },
   },
   "OPP-2150": {
-    id: "OPP-2150", orgId: "ORG-01", name: "Real-Time Passenger Information System", typeLabel: "Government RFP", solicitationRef: "RFP 24-062",
+    id: "OPP-2150", orgId: "ORG-01", name: "Real-Time Passenger Information System", typeLabel: "RFP", projectType: "rfp", solicitationRef: "RFP 24-062",
     lane: "B", score: 41, status: "No-Go confirmed — closed", rec: "nogo", confidence: 81, closed: true, dueDate: null,
     documents: [{ name: "RFP_24-062_Base.pdf" }],
     docSummary: { objective: ["Deploy real-time arrival signage across 400 transit shelters."], services: ["Digital signage hardware + real-time feed integration"], deliverables: ["Hardware install across 400 sites", "Feed integration platform"] },
@@ -328,7 +351,7 @@ export const pursuits: Record<string, Pursuit> = {
     decisionRecord: { id: "DEC-86110", type: "D4 — Go/No-Go triage", subject: "Project OPP-2150", model: "triage-v2 / prompt v1.6 / graph v188", reviewer: "J. Tran (Bid Manager)", action: "Confirmed NO-GO, 2026-05-09", retention: "3 years minimum" },
   },
   "OPP-2214": {
-    id: "OPP-2214", orgId: "ORG-02", name: "Claims Platform Modernization", typeLabel: "Private SOW", solicitationRef: "Direct SOW",
+    id: "OPP-2214", orgId: "ORG-02", name: "Claims Platform Modernization", typeLabel: "SOW", projectType: "sow", solicitationRef: "Direct SOW",
     lane: "C", score: 84, status: "Go confirmed", rec: "go", confidence: 88, closed: false, dueDate: null,
     documents: [{ name: "Harborview_SOW_ClaimsModernization_v3.docx" }, { name: "Data_Processing_Addendum.pdf" }],
     docSummary: {
@@ -346,7 +369,7 @@ export const pursuits: Record<string, Pursuit> = {
     decisionRecord: { id: "DEC-88190", type: "D4 — Go/No-Go triage (SOW lens)", subject: "Project OPP-2214", model: "triage-v3 / prompt v1.9 / graph v211", reviewer: "M. Alvarez (Commercial Lead)", action: "Confirmed Go, 09/03", retention: "3 years minimum" },
   },
   "OPP-2215": {
-    id: "OPP-2215", orgId: "ORG-02", name: "Patient Portal Redesign", typeLabel: "Private SOW", solicitationRef: "Direct SOW",
+    id: "OPP-2215", orgId: "ORG-02", name: "Patient Portal Redesign", typeLabel: "SOW", projectType: "sow", solicitationRef: "Direct SOW",
     lane: "C", score: 76, status: "Triage complete", rec: "go", confidence: 79, closed: false, dueDate: null,
     documents: [{ name: "Harborview_SOW_PatientPortal_draft.docx" }],
     docSummary: {
@@ -361,7 +384,7 @@ export const pursuits: Record<string, Pursuit> = {
     decisionRecord: { id: "DEC-88350", type: "D4 — Go/No-Go triage", subject: "Project OPP-2215", model: "triage-v3 / prompt v1.9 / graph v213", reviewer: "—  not yet confirmed", action: "Recommendation generated, awaiting human confirmation", retention: "3 years minimum" },
   },
   "OPP-2219": {
-    id: "OPP-2219", orgId: "ORG-03", name: "Unemployment Insurance Modernization", typeLabel: "Government RFP", solicitationRef: "RFP SOL-24-0441",
+    id: "OPP-2219", orgId: "ORG-03", name: "Unemployment Insurance Modernization", typeLabel: "RFP", projectType: "rfp", solicitationRef: "RFP SOL-24-0441",
     lane: "B", score: 91, status: "Go confirmed — drafting", rec: "go", confidence: 92, closed: false, dueDate: "2026-09-28",
     documents: [{ name: "SOL-24-0441_Base.pdf" }, { name: "Technical_Appendix_A.pdf" }, { name: "Pricing_Schedule.xlsx" }],
     docSummary: {

@@ -6,6 +6,7 @@ import type { Organization, Pursuit } from "@/lib/mock-data";
 import { Modal, FormField, TextInput, TextArea, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
 import { AddPursuitForm } from "@/components/pursuit/add-pursuit-form";
 import { createPursuitFromForm, recLabel } from "@/lib/create-pursuit";
+import type { ProjectType } from "@opportunity-engine/contracts";
 import { createSalesLead, LEAD_CHANNELS } from "@/lib/create-lead";
 import { useToast } from "@/components/ui/toast";
 import { navItems, utilityNavItems, type NavItem } from "@/components/layout/nav-items";
@@ -186,20 +187,21 @@ export function TopBar({
     };
   }, [newMenuOpen]);
 
-  async function handleCreatePursuit(values: { name: string; lane: "B" | "C"; solicitationRef: string; files: File[] }) {
+  async function handleCreatePursuit(values: { name: string; lane: "B" | "C"; projectType: ProjectType; solicitationRef: string; files: File[] }) {
     const org = orgs.find(item => item.id === npOrg);
     if (!org) throw new Error("Select an organization first.");
     const { pursuit, ingested, warning } = await createPursuitFromForm({
       org,
       name: values.name,
       lane: values.lane,
+      projectType: values.projectType,
       solicitationRef: values.solicitationRef,
       files: values.files,
     });
     onAddPursuit(pursuit);
     if (ingested) {
       toast(
-        `"${pursuit.name}" scored ${pursuit.score} — ${recLabel(pursuit.rec)}. Confirm Go/No-Go on the opportunity.`,
+        `"${pursuit.name}" scored ${pursuit.score} — ${recLabel(pursuit.rec, pursuit.projectType)}. Confirm ${pursuit.projectType === "rfi" ? "Respond / Pass" : "Go/No-Go"} on the opportunity.`,
         pursuit.rec === "nogo" ? "warning" : "success",
       );
     } else {
@@ -328,7 +330,7 @@ export function TopBar({
                   className="w-full text-left px-4 py-2.5 text-xs text-foreground hover:bg-muted/40 cursor-pointer transition-all"
                 >
                   <div className="font-semibold">Project</div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">RFP or SOW against an account</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">RFP, RFI, or SOW against an account</div>
                 </button>
                 <button
                   role="menuitem"
@@ -339,7 +341,7 @@ export function TopBar({
                   className="w-full text-left px-4 py-2.5 text-xs text-foreground hover:bg-muted/40 cursor-pointer transition-all"
                 >
                   <div className="font-semibold">Sales Lead</div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">Prospect on the pipeline — not an RFP or SOW</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">Prospect on the pipeline — not an RFP, RFI, or SOW</div>
                 </button>
               </div>
             )}

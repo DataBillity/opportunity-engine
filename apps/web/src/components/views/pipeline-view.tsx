@@ -7,10 +7,23 @@ import { useToast } from "@/components/ui/toast";
 import { OutreachComposer } from "@/components/outreach/outreach-composer";
 import { AddPursuitForm } from "@/components/pursuit/add-pursuit-form";
 import { createPursuitFromForm, recLabel } from "@/lib/create-pursuit";
+import type { ProjectType } from "@opportunity-engine/contracts";
 import { cn } from "@/lib/cn";
 
-function laneLabel(l: string) {
-  return { A: "Prospect", B: "RFP", C: "SOW", D: "Partner" }[l] ?? l;
+function pursuitType(p: Pursuit): "rfp" | "rfi" | "sow" {
+  return p.projectType ?? (p.lane === "C" ? "sow" : "rfp");
+}
+
+function typeChip(p: Pursuit) {
+  return { rfp: "RFP", rfi: "RFI", sow: "SOW" }[pursuitType(p)];
+}
+
+function orgMatchesLane(org: Organization, allPursuits: Record<string, Pursuit>, laneFilter: string): boolean {
+  if (laneFilter === "A") return org.pursuits.length === 0;
+  const pursuits = org.pursuits.map(pid => allPursuits[pid]).filter(Boolean) as Pursuit[];
+  if (laneFilter === "RFI") return pursuits.some(p => pursuitType(p) === "rfi");
+  if (laneFilter === "B") return pursuits.some(p => pursuitType(p) === "rfp");
+  return pursuits.some(p => p.lane === laneFilter);
 }
 
 function getOrgPursuits(org: Organization, allPursuits: Record<string, Pursuit>): Pursuit[] {
@@ -79,8 +92,7 @@ export function PipelineView({
 
   let rows = visibleOrgs;
   if (laneFilter && laneFilter !== "all") {
-    if (laneFilter === "A") rows = visibleOrgs.filter(o => o.pursuits.length === 0);
-    else rows = visibleOrgs.filter(o => getOrgPursuits(o, allPursuits).some(p => p.lane === laneFilter));
+    rows = visibleOrgs.filter(o => orgMatchesLane(o, allPursuits, laneFilter));
   }
 
   if (filterText.trim()) {
@@ -127,19 +139,20 @@ export function PipelineView({
     setAddPursuitOpen(true);
   }
 
-  async function handleCreatePursuit(values: { name: string; lane: "B" | "C"; solicitationRef: string; files: File[] }) {
+  async function handleCreatePursuit(values: { name: string; lane: "B" | "C"; projectType: ProjectType; solicitationRef: string; files: File[] }) {
     if (!addPursuitOrg) return;
     const { pursuit, ingested, warning } = await createPursuitFromForm({
       org: addPursuitOrg,
       name: values.name,
       lane: values.lane,
+      projectType: values.projectType,
       solicitationRef: values.solicitationRef,
       files: values.files,
     });
     onAddPursuit(pursuit);
     if (ingested) {
       toast(
-        `"${pursuit.name}" scored ${pursuit.score} — ${recLabel(pursuit.rec)}. Confirm Go/No-Go on the opportunity.`,
+        `"${pursuit.name}" scored ${pursuit.score} — ${recLabel(pursuit.rec, pursuit.projectType)}. Confirm ${pursuit.projectType === "rfi" ? "Respond / Pass" : "Go/No-Go"} on the opportunity.`,
         pursuit.rec === "nogo" ? "warning" : "success",
       );
     } else {
@@ -255,12 +268,14 @@ export function PipelineView({
                       key={p.id}
                       className={cn(
                         "inline-block text-[10px] px-2 py-0.5 font-semibold rounded-md border",
-                        p.lane === "B"
-                          ? "text-primary border-primary/30 bg-primary/5"
-                          : "text-trace border-trace/30 bg-trace/5"
+                        pursuitType(p) === "rfi"
+                          ? "text-cond border-cond/30 bg-cond/5"
+                          : p.lane === "B"
+                            ? "text-primary border-primary/30 bg-primary/5"
+                            : "text-trace border-trace/30 bg-trace/5"
                       )}
                     >
-                      {laneLabel(p.lane)}
+                      {typeChip(p)}
                     </span>
                   ))}
                   {active.length > 1 && (
@@ -354,12 +369,14 @@ export function PipelineView({
                             key={p.id}
                             className={cn(
                               "inline-block text-[10px] px-2 py-0.5 font-semibold rounded-md border",
-                              p.lane === "B"
-                                ? "text-primary border-primary/30 bg-primary/5"
-                                : "text-trace border-trace/30 bg-trace/5"
+                              pursuitType(p) === "rfi"
+                                ? "text-cond border-cond/30 bg-cond/5"
+                                : p.lane === "B"
+                                  ? "text-primary border-primary/30 bg-primary/5"
+                                  : "text-trace border-trace/30 bg-trace/5"
                             )}
                           >
-                            {laneLabel(p.lane)}
+                            {typeChip(p)}
                           </span>
                         ))}
                         {active.length > 1 && (

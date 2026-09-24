@@ -255,7 +255,9 @@ export default function CommandCenter() {
             ...p,
             rec: decision,
             confidence: decision === "go" ? Math.max(p.confidence, 90) : Math.max(p.confidence, 85),
-            status: decision === "go" ? "Go confirmed" : "No-Go confirmed — closed",
+            status: decision === "go"
+              ? (p.projectType === "rfi" ? "Respond confirmed" : "Go confirmed")
+              : (p.projectType === "rfi" ? "Pass confirmed — closed" : "No-Go confirmed — closed"),
             closed: decision === "nogo",
           },
         };
