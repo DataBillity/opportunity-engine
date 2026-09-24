@@ -643,14 +643,14 @@ export function SourcesView({
         </p>
       </div>
 
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4">
-        <div className="bg-muted/60 inline-flex p-1 rounded-xl gap-0.5 overflow-x-auto oe-touch-scroll max-w-full">
+      <div className="space-y-3">
+        <div className="bg-muted/60 inline-flex p-1 rounded-xl gap-1 overflow-x-auto oe-touch-scroll max-w-full">
           {tabs.map(t => (
             <button
               key={t.id}
               onClick={() => { setTab(t.id); setSearchQ(""); }}
               className={cn(
-                "px-3 sm:px-4 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer whitespace-nowrap",
+                "px-3.5 sm:px-4 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer whitespace-nowrap",
                 tab === t.id
                   ? "bg-card text-foreground shadow-sm font-semibold"
                   : "text-muted-foreground hover:text-foreground"
@@ -662,27 +662,29 @@ export function SourcesView({
           ))}
         </div>
 
-        <div className="flex items-center gap-2 w-full lg:w-auto flex-wrap">
-          <input
-            type="text"
-            value={searchQ}
-            onChange={e => setSearchQ(e.target.value)}
-            placeholder={`Search ${tab}…`}
-            className="oe-field text-[11px] flex-1 lg:w-48 lg:flex-none"
-          />
-          {tab !== "partners" && (
-            <SelectInput
-              value={partnerFilter}
-              onChange={setPartnerFilter}
-              options={partnerSelectOptions}
-              ariaLabel="Filter by partner"
-              className="flex-1 lg:w-52 lg:flex-none min-w-[11rem]"
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center">
+            <input
+              type="text"
+              value={searchQ}
+              onChange={e => setSearchQ(e.target.value)}
+              placeholder={`Search ${tab}…`}
+              className="oe-field text-xs w-full sm:w-64"
             />
-          )}
-          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
-            <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="rounded" />
-            Show archived
-          </label>
+            {tab !== "partners" && (
+              <SelectInput
+                value={partnerFilter}
+                onChange={setPartnerFilter}
+                options={partnerSelectOptions}
+                ariaLabel="Filter by partner"
+                className="w-full sm:w-56"
+              />
+            )}
+            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+              <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="rounded" />
+              Show archived
+            </label>
+          </div>
           <button
             onClick={() => {
               if (tab === "capabilities") setAddCapOpen(true);
@@ -691,7 +693,7 @@ export function SourcesView({
               else if (tab === "people") setAddPersonOpen(true);
               else if (tab === "partners") setAddPartnerOpen(true);
             }}
-            className="text-xs font-semibold px-3.5 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm whitespace-nowrap"
+            className="shrink-0 self-start sm:self-auto text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm whitespace-nowrap"
           >
             + Add {tab === "capabilities" ? "Capability" : tab === "experience" ? "Experience" : tab === "credentials" ? "Credential" : tab === "people" ? "Person" : "Partner"}
           </button>
