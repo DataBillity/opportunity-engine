@@ -643,33 +643,33 @@ export function SourcesView({
         </p>
       </div>
 
-      <div className="space-y-3">
-        <div className="bg-muted/60 inline-flex p-1 rounded-xl gap-1 overflow-x-auto oe-touch-scroll max-w-full">
+      <div className="flex flex-col gap-4">
+        <div className="bg-muted/60 inline-flex w-fit max-w-full p-1 rounded-xl gap-1 overflow-x-auto oe-touch-scroll">
           {tabs.map(t => (
             <button
               key={t.id}
               onClick={() => { setTab(t.id); setSearchQ(""); }}
               className={cn(
-                "px-3.5 sm:px-4 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer whitespace-nowrap",
+                "px-4 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer whitespace-nowrap",
                 tab === t.id
                   ? "bg-card text-foreground shadow-sm font-semibold"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
               {t.label}
-              <span className="ml-1.5 text-[10px] font-mono opacity-60">{t.count}</span>
+              <span className="ml-2 text-[10px] font-mono opacity-60">{t.count}</span>
             </button>
           ))}
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <input
               type="text"
               value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
               placeholder={`Search ${tab}…`}
-              className="oe-field text-xs w-full sm:w-64"
+              className="oe-field text-xs w-full sm:w-72"
             />
             {tab !== "partners" && (
               <SelectInput
@@ -677,10 +677,10 @@ export function SourcesView({
                 onChange={setPartnerFilter}
                 options={partnerSelectOptions}
                 ariaLabel="Filter by partner"
-                className="w-full sm:w-56"
+                className="w-full sm:w-60"
               />
             )}
-            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer whitespace-nowrap sm:px-1">
               <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="rounded" />
               Show archived
             </label>
@@ -693,7 +693,7 @@ export function SourcesView({
               else if (tab === "people") setAddPersonOpen(true);
               else if (tab === "partners") setAddPartnerOpen(true);
             }}
-            className="shrink-0 self-start sm:self-auto text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm whitespace-nowrap"
+            className="shrink-0 self-start xl:self-auto text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm whitespace-nowrap"
           >
             + Add {tab === "capabilities" ? "Capability" : tab === "experience" ? "Experience" : tab === "credentials" ? "Credential" : tab === "people" ? "Person" : "Partner"}
           </button>
