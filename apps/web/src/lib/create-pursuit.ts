@@ -124,9 +124,12 @@ export function applyIngestToPursuit(
     documents,
     docSummary: {
       objective: extraction.objective,
+      challenges: extraction.challenges,
       services: extraction.services,
       deliverables: extraction.deliverables,
+      responseConstraints: extraction.responseConstraints,
     },
+    informationRequests: extraction.requirements.map(item => item.requirementText),
     score: triage.score,
     rec: triage.rec,
     confidence: triage.confidence,

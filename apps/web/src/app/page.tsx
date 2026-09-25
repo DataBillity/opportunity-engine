@@ -502,6 +502,7 @@ export default function CommandCenter() {
                 partners={partners}
                 people={graph.people}
                 experience={graph.experience}
+                capabilities={graph.capabilities.filter(item => item.status !== "Archived").map(item => item.name)}
                 onBack={() => setActiveView("decision")}
                 onUpdatePursuit={handleUpdatePursuit}
               />

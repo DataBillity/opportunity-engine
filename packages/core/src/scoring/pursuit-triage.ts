@@ -29,7 +29,8 @@ export interface OrgTriageContext {
 
 const PASS_FAIL = /\b(pass[\s/-]*fail|mandatory|must have|shall possess|fedramp|ato\b|performance bond|bonding capacity)\b/i;
 const RFI_ELIGIBILITY = /\b(must be registered|mandatory registration|eligibility|nda required|non[- ]disclosure)\b/i;
-const INFO_REQUEST = /\b(provide information|please (?:describe|provide|explain|identify|outline)|how would you|what (?:is|are) your)\b/i;
+const INFO_REQUEST = /\b(provide information|please (?:describe|provide|explain|identify|outline)|how would you|what (?:is|are) your|describe your|describe the|describe if|do you have|how will|how does|is data |does the solution)\b/i;
+const RESPONSE_FORMAT = /\b(\d+\s*pages?|page limit|single[- ]spaced|point font|one-inch margins|font size|submission format|file format|margins)\b/i;
 
 export function capSourceText(text: string): { text: string; truncated: boolean } {
   const normalized = text.replace(/\u0000/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
@@ -52,10 +53,12 @@ export function mergeSolicitationExtractions(
     dueDate: overlay.dueDate !== undefined ? overlay.dueDate : base.dueDate,
     issuer: overlay.issuer?.trim() || base.issuer,
     objective: pickList(overlay.objective, base.objective),
+    challenges: pickList(overlay.challenges, base.challenges),
     services: pickList(overlay.services, base.services),
     deliverables: pickList(overlay.deliverables, base.deliverables),
     requirements: overlayReqs.length ? overlayReqs : base.requirements,
     responseSections: overlay.responseSections?.length ? overlay.responseSections : base.responseSections,
+    responseConstraints: pickList(overlay.responseConstraints, base.responseConstraints),
     constraints: pickList(overlay.constraints, base.constraints),
   };
 }
@@ -69,21 +72,26 @@ export function extractSolicitationHeuristic(
   const due = extractDueDate(text);
   const solicitationRef = extractSolicitationRef(text) || undefined;
   const requirements = extractRequirements(text, projectType);
+  const scope = extractScopeNarrative(text, projectType);
   return {
     inferredName: extractTitle(text, projectType) || stem || "Untitled solicitation",
     solicitationRef,
     dueDate: due,
     issuer: extractIssuer(text),
-    objective: sectionBullets(text, /(?:purpose|objective|overview|background)\b/i) ||
-      sentencesMatching(text, /moderniz|replace|implement|retire|redesign|deploy/i),
-    services: sectionBullets(text, /(?:scope of (?:work|services)|services required|statement of work)\b/i) ||
-      sentencesMatching(text, /integrat|platform|pipeline|analytics|payment|portal|migrat/i),
-    deliverables: sectionBullets(text, /deliverables?\b/i) ||
-      sentencesMatching(text, /deliver|production|dashboard|training|cutover|rollout/i),
+    objective: scope.objective,
+    challenges: scope.challenges,
+    services: scope.services,
+    deliverables: scope.deliverables,
     requirements,
     responseSections: extractResponseSections(text, projectType),
-    constraints: sentencesMatching(text, /fedramp|hipaa|soc 2|iso 27001|bonding|ato\b|wcag|zero[- ]downtime/i),
+    responseConstraints: extractResponseConstraints(text),
+    constraints: sentencesMatching(text, /fedramp|hipaa|soc 2|iso 27001|bonding|ato\b|wcag|zero[- ]downtime/i)
+      .filter(line => !RESPONSE_FORMAT.test(line)),
   };
+}
+
+export interface CapabilityCatalogEntry {
+  name: string;
 }
 
 export function scorePursuitTriage(input: {
@@ -95,6 +103,7 @@ export function scorePursuitTriage(input: {
   org: OrgTriageContext;
   provider: "claude" | "gemini" | "heuristic";
   modelVersion: string;
+  capabilityCatalog?: CapabilityCatalogEntry[];
 }): PursuitTriageView {
   const { extraction, sourceText, lane, org, provider, modelVersion } = input;
   const resolved = resolveProjectType({
@@ -106,12 +115,16 @@ export function scorePursuitTriage(input: {
   const projectType = resolved.projectType;
   const thresholds = thresholdsFor(projectType);
 
-  const reqs = normalizeRequirements(
-    extraction.requirements.length ? extraction.requirements : fallbackRequirements(extraction),
-    projectType,
-  );
-  const docMatches = matchBillityCapabilities(sourceText, "solicitation", "public_web");
-  const reqmap = reqs.map(req => mapRequirement(req, docMatches, projectType));
+  const scopeCorpus = scopeTextForScoring(extraction, sourceText, projectType);
+  const reqs = projectType === "rfi"
+    ? scopeRequirements(extraction, scopeCorpus)
+    : normalizeRequirements(
+      extraction.requirements.length ? extraction.requirements : fallbackRequirements(extraction),
+      projectType,
+    );
+  const docMatches = matchBillityCapabilities(scopeCorpus || sourceText, "solicitation", "public_web");
+  const catalog = input.capabilityCatalog ?? [];
+  const reqmap = reqs.map(req => mapRequirement(req, docMatches, projectType, catalog));
   const mapped = reqmap.filter(r => r.status === "mapped");
   const passFailUnmapped = projectType !== "rfi" && reqs.some((req, i) => {
     const row = reqmap[i];
@@ -145,11 +158,7 @@ export function scorePursuitTriage(input: {
   });
 
   const coverage = reqmap.length ? mapped.length / reqmap.length : 0;
-  const topicalCoverage = projectType === "rfi"
-    ? (reqmap.length
-      ? Math.max(coverage, Math.min(1, docMatches.length / Math.max(reqmap.length, 4)))
-      : (docMatches.length ? 0.55 : 0))
-    : coverage;
+  const topicalCoverage = coverage;
 
   let rec: PursuitTriageView["rec"] = "go";
   let recRule = "";
@@ -160,9 +169,9 @@ export function scorePursuitTriage(input: {
     if (topicalCoverage >= thresholds.goCoverage && alignment.total >= thresholds.goScore) {
       rec = "go";
       recRule = `RFI Respond: topical coverage ≥ ${Math.round(thresholds.goCoverage * 100)}% and score ≥ ${thresholds.goScore}.`;
-    } else if (topicalCoverage >= thresholds.condCoverage || alignment.total >= thresholds.condScore) {
+    } else if (topicalCoverage >= thresholds.condCoverage && alignment.total >= thresholds.condScore) {
       rec = "cond";
-      recRule = `RFI Respond with caveats: some topical fit (coverage ≥ ${Math.round(thresholds.condCoverage * 100)}% or score ≥ ${thresholds.condScore}).`;
+      recRule = `RFI Respond with caveats: scope coverage ≥ ${Math.round(thresholds.condCoverage * 100)}% and score ≥ ${thresholds.condScore}. Page limits are not part of this rule.`;
     } else {
       rec = "nogo";
       recRule = "RFI Pass: topical fit is too thin to spend a response.";
@@ -214,7 +223,7 @@ export function scorePursuitTriage(input: {
     rec,
     confidence,
     confidenceNote: projectType === "rfi"
-      ? "Confidence is how complete the extraction and topic mapping are — not the opportunity score. Information requests we have not answered yet do not count as delivered capability."
+      ? "Confidence is how complete the scope extraction and capability mapping are — not the opportunity score. Page limits and response questions are not scored."
       : "Confidence is extraction and requirement-mapping certainty, not the opportunity score. A high score with thin mapping stays near 50%.",
     projectType,
     scoreBreakdown: {
@@ -287,16 +296,18 @@ function mapRequirement(
   req: SolicitationRequirement,
   docMatches: CapabilityMatch[],
   projectType: ProjectType,
+  catalog: CapabilityCatalogEntry[] = [],
 ) {
+  const catalogHit = matchCatalog(req.requirementText, catalog);
   const matches = matchBillityCapabilities(req.requirementText, "requirement", "public_web");
-  const hit = matches[0] ?? docMatches.find(m => requestOverlapsCapability(req.requirementText, m));
+  const hit = matches[0] ?? catalogHit ?? docMatches.find(m => requestOverlapsCapability(req.requirementText, m));
   if (hit) {
     return {
       req: req.requirementText,
       status: "mapped" as const,
       node: hit.label,
       evidence: projectType === "rfi"
-        ? "Topic we can speak to. This is an information request — not a completed response."
+        ? `Scope topic matches ${hit.label}. Page limits and response questions are not part of this score.`
         : hit.evidence || "Matched DataBillity capability taxonomy",
     };
   }
@@ -305,9 +316,7 @@ function mapRequirement(
     status: "unmapped" as const,
     node: null,
     evidence: projectType === "rfi"
-      ? INFO_REQUEST.test(req.requirementText)
-        ? "Information request — we have not drafted an answer yet, and no matching capability topic was found."
-        : "No matching capability topic at the requested specificity."
+      ? "Scope topic has no matching capability or expertise."
       : req.passFail
         ? "Pass/fail criterion — no matching DataBillity capability node"
         : "No matching capability node at required specificity",
@@ -339,11 +348,11 @@ function buildGaps(
       id: `GAP-${120 + gaps.length}`,
       title: row.req,
       crit: projectType === "rfi"
-        ? (passFail ? "Eligibility gate" : "Unanswered information request")
+        ? (passFail ? "Eligibility gate" : "Scope outside current capabilities")
         : passFail ? "Pass/fail criterion" : "Unmapped requirement",
-      demand: projectType === "rfi" ? "From uploaded RFI" : "From uploaded solicitation",
+      demand: projectType === "rfi" ? "From RFI purpose and challenges" : "From uploaded solicitation",
       closure: projectType === "rfi"
-        ? "Draft an information response or decline this topic"
+        ? "Partner coverage or Pass"
         : passFail ? "Partner coverage or No-Go" : "Partner, hire, or scoped exception",
     });
   });
@@ -371,10 +380,10 @@ function buildRationale(input: {
     return ["Uploaded file did not yield extractable text. Re-upload a text PDF, Word, or plain-text solicitation."];
   }
   if (input.overridden) {
-    lines.push("Document reads as an RFI (request for information), not a bid RFP. Scored on topical fit — whether we can answer — not whether a proposal already provides the information.");
+    lines.push("Document reads as an RFI. Scored on the purpose, challenges, and likely services — not on page limits or the questions in the response worksheet.");
   }
   if (input.projectType === "rfi") {
-    lines.push(`RFI lens: ${input.mapped} of ${input.total} information requests mapped to capability topics (${Math.round(input.coverage * 100)}% request coverage). Unanswered questions are expected — this is not a bid.`);
+    lines.push(`RFI lens: ${input.mapped} of ${input.total} scope topics mapped to capabilities (${Math.round(input.coverage * 100)}% scope coverage). Response format and unanswered questions do not change Respond/Pass.`);
   } else if (input.total) {
     lines.push(`${input.mapped} of ${input.total} extracted requirements mapped to DataBillity capabilities (${Math.round(input.coverage * 100)}% coverage).`);
   }
@@ -397,7 +406,7 @@ function buildRationale(input: {
     if (input.rec === "go") {
       lines.push("Enough topical overlap to spend an information response and position for a later RFP.");
     } else if (input.rec === "cond") {
-      lines.push("Respond only on the topics we can speak to; do not treat this as a full bid.");
+      lines.push("Some of the stated scope fits our capabilities. Respond only where that fit is real; page limits do not change the decision.");
     } else {
       lines.push("Too little topical fit to invest in an RFI response.");
     }
@@ -587,6 +596,153 @@ function sentencesMatching(text: string, pattern: RegExp): string[] {
     }
   }
   return items;
+}
+
+const FORMAT_STOP = new Set(["pages", "page", "limit", "font", "margin", "margins", "single", "spaced", "point"]);
+
+function isScopeStatement(text: string): boolean {
+  const value = text.trim();
+  if (value.length < 28) return false;
+  if (RESPONSE_FORMAT.test(value) && !/\b(moderniz|claims|workflow|system|platform)\b/i.test(value)) return false;
+  if (INFO_REQUEST.test(value)) return false;
+  return true;
+}
+
+function extractResponseConstraints(text: string): string[] {
+  return sentencesMatching(text, RESPONSE_FORMAT).slice(0, 6);
+}
+
+function extractScopeNarrative(text: string, projectType: ProjectType): {
+  objective: string[];
+  challenges: string[];
+  services: string[];
+  deliverables: string[];
+} {
+  if (projectType !== "rfi") {
+    const objective = sectionBullets(text, /(?:purpose|objective|overview|background)\b/i).filter(isScopeStatement).slice(0, 6);
+    const services = sectionBullets(text, /(?:scope of (?:work|services)|services required|statement of work)\b/i).filter(isScopeStatement).slice(0, 8);
+    const deliverables = sectionBullets(text, /deliverables?\b/i).filter(line => !RESPONSE_FORMAT.test(line)).slice(0, 8);
+    return {
+      objective: objective.length ? objective : sentencesMatching(text, /moderniz|replace|implement|retire|redesign|deploy/i).filter(isScopeStatement).slice(0, 6),
+      challenges: [],
+      services: services.length ? services : sentencesMatching(text, /integrat|platform|pipeline|analytics|payment|portal|migrat/i).filter(isScopeStatement).slice(0, 8),
+      deliverables: deliverables.length ? deliverables : sentencesMatching(text, /deliver|production|dashboard|training|cutover|rollout/i).filter(line => !RESPONSE_FORMAT.test(line)).slice(0, 8),
+    };
+  }
+
+  const purpose = sectionBody(text, /project purpose|purpose of this rfi/i);
+  const challenges = sectionBody(text, /current challenges|challenge statement/i);
+  const vision = sectionBody(text, /project vision/i);
+  const background = sectionBody(text, /project background/i);
+  const intro = sectionBody(text, /introduction and overview/i);
+
+  const objective = uniqueLines([
+    ...sentencesMatching(purpose, /seeking|objective|intent|moderniz|replace|market research|configurable/i),
+    ...sentencesMatching(intro, /issuing this|solicit|moderniz|replace/i),
+  ]).filter(isScopeStatement).slice(0, 4);
+
+  const challengeLines = collapseContained(uniqueLines([
+    ...numberedItems(challenges),
+    ...sentencesMatching(challenges, /lack of|limitation|manual|cannot|unable|challenge/i),
+  ]).filter(isScopeStatement)).slice(0, 8);
+
+  const serviceLines = collapseContained(uniqueLines([
+    ...sentencesMatching(`${vision}\n${purpose}`, /system|workflow|automat|integrat|configur|platform|solution|claims|payment|migrat/i),
+  ]).filter(isScopeStatement).filter(line => !objective.some(item => item.toLowerCase() === line.toLowerCase()))).slice(0, 6);
+
+  const deliverableLines = uniqueLines([
+    ...sentencesMatching(`${vision}\n${background}`, /system|module|workflow|application|engine|portal|migration/i),
+  ]).filter(isScopeStatement).slice(0, 6);
+
+  return {
+    objective: objective.length ? objective : sentencesMatching(text, /seeking information|moderniz|replace the current/i).filter(isScopeStatement).slice(0, 3),
+    challenges: challengeLines,
+    services: serviceLines,
+    deliverables: deliverableLines,
+  };
+}
+
+function scopeTextForScoring(extraction: SolicitationExtraction, sourceText: string, projectType: ProjectType): string {
+  const listed = [
+    ...extraction.objective,
+    ...(extraction.challenges ?? []),
+    ...extraction.services,
+    ...extraction.deliverables,
+  ].filter(isScopeStatement);
+  if (projectType === "rfi") {
+    const narrative = extractScopeNarrative(sourceText, "rfi");
+    const fromDoc = [...narrative.objective, ...narrative.challenges, ...narrative.services, ...narrative.deliverables];
+    if (fromDoc.length) return uniqueLines([...listed, ...fromDoc]).join("\n");
+  }
+  if (listed.length) return listed.join("\n");
+  return sourceText
+    .split(/\n+/)
+    .filter(line => !RESPONSE_FORMAT.test(line) && !INFO_REQUEST.test(line))
+    .join("\n");
+}
+
+function scopeRequirements(extraction: SolicitationExtraction, scopeCorpus: string): SolicitationRequirement[] {
+  const listed = uniqueLines([
+    ...extraction.objective,
+    ...(extraction.challenges ?? []),
+    ...extraction.services,
+    ...extraction.deliverables,
+  ]).filter(isScopeStatement);
+  const items = listed.length ? listed : uniqueLines(scopeCorpus.split(/\n+/)).filter(isScopeStatement).slice(0, 12);
+  return items.map(requirementText => ({ requirementText, passFail: false }));
+}
+
+function matchCatalog(
+  text: string,
+  catalog: CapabilityCatalogEntry[],
+): { label: string; evidence: string } | undefined {
+  const hay = text.toLowerCase();
+  let best: { label: string; evidence: string; score: number } | undefined;
+  for (const entry of catalog) {
+    const tokens = entry.name.toLowerCase().split(/[^a-z0-9]+/).filter(token =>
+      token.length >= 5 && !FORMAT_STOP.has(token),
+    );
+    const hits = tokens.filter(token => hay.includes(token));
+    const score = hits.length >= 2 || hits.some(token => token.length >= 10) ? hits.length : 0;
+    if (score && (!best || score > best.score)) {
+      best = { label: entry.name, evidence: entry.name, score };
+    }
+  }
+  return best ? { label: best.label, evidence: best.evidence } : undefined;
+}
+
+function sectionBody(text: string, heading: RegExp): string {
+  const match = heading.exec(text);
+  if (!match || match.index === undefined) return "";
+  const rest = text.slice(match.index + match[0].length);
+  const next = rest.search(/\n\s*[A-Z]\.\s+[A-Z]/);
+  return (next >= 0 ? rest.slice(0, next) : rest).slice(0, 4000);
+}
+
+function numberedItems(text: string): string[] {
+  return text
+    .split(/(?:^|\n)\s*\d+\.\s+/)
+    .map(line => line.replace(/\s+/g, " ").trim())
+    .filter(line => line.length > 28);
+}
+
+function collapseContained(lines: string[]): string[] {
+  return lines.filter((line, index) => !lines.some((other, otherIndex) =>
+    otherIndex !== index && other.length > line.length && other.toLowerCase().includes(line.toLowerCase()),
+  ));
+}
+
+function uniqueLines(lines: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of lines) {
+    const value = line.replace(/\s+/g, " ").trim();
+    const key = value.toLowerCase();
+    if (!value || seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+  }
+  return out;
 }
 
 function slug(value: string): string {

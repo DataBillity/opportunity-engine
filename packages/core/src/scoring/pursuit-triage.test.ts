@@ -41,10 +41,12 @@ function emptyExtraction(requirements = infoRequests): SolicitationExtraction {
     dueDate: "2026-10-15",
     issuer: "Example Transit Authority",
     objective: ["Gather vendor information ahead of a possible later solicitation."],
-    services: [],
+    challenges: ["The current customer data platform cannot support identity resolution or consent."],
+    services: ["Customer data platform with identity resolution, personalization, consent, and analytics dashboards."],
     deliverables: [],
     requirements,
     responseSections: [],
+    responseConstraints: ["Responses must be no more than 10 pages, single spaced in 12-point font."],
     constraints: [],
   };
 }
@@ -101,7 +103,7 @@ describe("scorePursuitTriage", () => {
     expect(result.projectType).toBe("rfi");
     expect(result.rec).not.toBe("nogo");
     expect(recDecisionLabel(result.rec, "rfi")).toMatch(/Respond/);
-    expect(result.reqmap.every(row => /information request|topic we can speak/i.test(row.evidence))).toBe(true);
+    expect(result.reqmap.every(row => /scope topic|page limits/i.test(row.evidence))).toBe(true);
     expect(result.rationale.some(line => /RFI lens/i.test(line))).toBe(true);
     expect(result.confidenceNote).toMatch(/not the opportunity score/i);
   });

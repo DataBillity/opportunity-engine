@@ -241,7 +241,7 @@ export function OpportunityView({
             <p>
               <strong>Recommendation ({recLabel(pursuit.rec, projectType)})</strong>{" "}
               {isRfi
-                ? "uses topical fit — whether we can speak to the information requests — not whether we have already answered them."
+                ? "uses the purpose, challenges, and likely services — not page limits or the questions in the response worksheet."
                 : `uses coverage gates, not “score ≥ 75”. ${recLabel("go", projectType)} needs ≥ ${breakdown?.goCoverageFloor ?? 75}% requirement coverage and score ≥ ${breakdown?.goScoreFloor ?? 68}.`}
               {breakdown && !isRfi && (
                 <> Coverage here is {breakdown.mappedCount} of {breakdown.totalRequirements} ({breakdown.coveragePct}%).{breakdown.passFailBlocked ? " An unmapped pass/fail requirement also blocks Go." : ""}{breakdown.documentOverlapCount > 0 ? ` Document language overlap (${breakdown.documentOverlapCount} topics) can lift the score without counting as mapped requirements.` : ""}</>
@@ -269,9 +269,10 @@ export function OpportunityView({
           <div className="px-5 py-3.5 border-b border-border">
             <h3 className="oe-card-title">Scope Summary</h3>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border">
+          <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 divide-border">
             {([
               ["Objective", pursuit.docSummary.objective],
+              ["Challenges", pursuit.docSummary.challenges ?? []],
               ["Services", pursuit.docSummary.services],
               ["Deliverables", pursuit.docSummary.deliverables],
             ] as const).map(([heading, items]) => (
@@ -289,6 +290,16 @@ export function OpportunityView({
               </div>
             ))}
           </div>
+          {(pursuit.docSummary.responseConstraints ?? []).length > 0 && (
+            <div className="px-5 py-4 border-t border-border bg-muted/20">
+              <h4 className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">
+                Response instructions — not scored
+              </h4>
+              <ul className="list-disc pl-4 text-xs space-y-1.5 text-foreground">
+                {pursuit.docSummary.responseConstraints!.map((item, i) => <li key={i}>{item}</li>)}
+              </ul>
+            </div>
+          )}
         </div>
 
         {/* Documents card */}
@@ -337,7 +348,7 @@ export function OpportunityView({
         {pursuit.reqmap.length > 0 && (
           <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
-              <h3 className="oe-card-title">{isRfi ? "Information request → Capability topic" : "Requirement → Capability Mapping"}</h3>
+              <h3 className="oe-card-title">{isRfi ? "Scope → Capability" : "Requirement → Capability Mapping"}</h3>
               <span className="text-xs text-muted-foreground">
                 <span className="font-mono font-semibold text-foreground">
                   {mappedCount}
@@ -349,7 +360,7 @@ export function OpportunityView({
               <table className="w-full text-xs">
                 <thead>
                   <tr className="oe-table-header">
-                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">{isRfi ? "Information request" : "Requirement"}</th>
+                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">{isRfi ? "Scope topic" : "Requirement"}</th>
                     <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
                     <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Mapped Node</th>
                     <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Evidence</th>
@@ -362,7 +373,7 @@ export function OpportunityView({
                       <td className="px-4 py-3 align-top">
                         <StatusBadge
                           status={r.status}
-                          label={r.status === "mapped" ? (isRfi ? "CAN SPEAK TO" : "MAPPED") : (isRfi ? "UNANSWERED" : "UNMAPPED")}
+                          label={r.status === "mapped" ? "MAPPED" : "UNMAPPED"}
                         />
                       </td>
                       <td className="px-4 py-3 align-top font-mono text-[11px] text-primary">{r.node ?? "—"}</td>

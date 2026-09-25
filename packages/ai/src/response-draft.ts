@@ -32,7 +32,9 @@ Hard rules:
 - If a gap or unmapped requirement is listed, qualify it or describe how a partner would cover it. Do not pretend it is already solved.
 - Past Performance and Key Personnel may only name people and engagements in the grounding facts.
 - Write prose paragraphs for the named section only. No cover letter, no other volumes, no HTML, no markdown headings.
-- 220–420 words unless the facts are too thin; then write a short, honest section and say what is missing.
+- If response-format facts give a page limit, font, or margin rule, stay inside that limit. Those rules shape the draft. They are not a reason the opportunity fits.
+- For an RFI, answer the listed questions using capability and experience facts. Do not invent coverage for challenges we do not list a capability for.
+- 220–420 words unless a page limit or thin facts require less; then write a short, honest section and say what is missing.
 - Tone: precise, operator-facing, no hype, no "synergies", no "world-class".
 
 Return ONLY JSON with this shape:
@@ -70,8 +72,12 @@ export function collectResponseFacts(briefing: ResponseDraftBriefingType): Respo
   if (pursuit.dueDate) push("rfp", `Response due ${pursuit.dueDate}.`);
   if (pursuit.documents.length) push("rfp", `Source documents: ${pursuit.documents.join(", ")}.`);
   for (const item of pursuit.docSummary?.objective ?? []) push("rfp", `Objective: ${item}`);
-  for (const item of pursuit.docSummary?.services ?? []) push("rfp", `Requested service: ${item}`);
-  for (const item of pursuit.docSummary?.deliverables ?? []) push("rfp", `Deliverable: ${item}`);
+  for (const item of pursuit.docSummary?.challenges ?? []) push("rfp", `Challenge: ${item}`);
+  for (const item of pursuit.docSummary?.services ?? []) push("rfp", `Likely service: ${item}`);
+  for (const item of pursuit.docSummary?.deliverables ?? []) push("rfp", `Likely deliverable: ${item}`);
+  for (const item of pursuit.docSummary?.responseConstraints ?? []) push("rfp", `Response format (shape the draft; do not treat as a reason to pursue): ${item}`);
+  for (const item of pursuit.informationRequests ?? []) push("rfp", `Question to answer: ${item}`);
+  for (const item of pursuit.capabilities ?? []) push("experience", `Capability we can cite: ${item}`);
   for (const item of pursuit.mappedRequirements) push("rfp", `Mapped requirement: ${item}`);
   for (const item of pursuit.unmappedRequirements) push("rfp", `Unmapped requirement: ${item}`);
   for (const item of pursuit.gaps) push("rfp", `Gap: ${item}`);

@@ -159,7 +159,7 @@ export function ResponseBuilderEmptyState({
 }
 
 export function ResponseBuilderView({
-  pursuit, org, onBack, onUpdatePursuit, partners, people, experience,
+  pursuit, org, onBack, onUpdatePursuit, partners, people, experience, capabilities,
 }: {
   pursuit: Pursuit;
   org?: Organization;
@@ -168,6 +168,7 @@ export function ResponseBuilderView({
   partners?: Partner[];
   people?: GraphPerson[];
   experience?: GraphExperience[];
+  capabilities?: string[];
 }) {
   const { toast } = useToast();
   const [sections, setSections] = useState<SectionMeta[]>(() => sectionsForPursuit(pursuit));
@@ -242,6 +243,7 @@ export function ResponseBuilderView({
       assignments: personnelAssignments,
       people: people ?? [],
       experience,
+      capabilities,
       existingDraft: options.regenerate ? htmlToPlainText(drafts[activeSection] ?? "") : undefined,
     });
 

@@ -19,6 +19,7 @@ import {
   MAX_FILE_BYTES,
   MAX_FILES,
 } from "@/lib/extract-document";
+import { readSharedWorkspace } from "@/lib/shared-workspace-store";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -145,6 +146,11 @@ export async function POST(request: Request) {
     }
   }
 
+  const workspace = await readSharedWorkspace().catch(() => null);
+  const capabilityCatalog = (workspace?.graph.capabilities ?? [])
+    .filter(item => item.status !== "Archived")
+    .map(item => ({ name: item.name }));
+
   const triage = scorePursuitTriage({
     extraction,
     sourceText: capped.text,
@@ -159,6 +165,7 @@ export async function POST(request: Request) {
     },
     provider,
     modelVersion,
+    capabilityCatalog,
   });
 
   const payload = PursuitIngestResult.parse({

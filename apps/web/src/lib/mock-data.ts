@@ -96,9 +96,12 @@ export interface Pursuit {
   triageMode?: "model" | "heuristic" | "pending";
   docSummary: {
     objective: string[];
+    challenges?: string[];
     services: string[];
     deliverables: string[];
+    responseConstraints?: string[];
   };
+  informationRequests?: string[];
   rationale: string[];
   reqmap: RequirementMapping[];
   gaps: GapItem[];

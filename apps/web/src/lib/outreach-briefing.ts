@@ -13,8 +13,10 @@ export function toPursuitBrief(pursuit: Pursuit): OutreachPursuitBrief {
     closed: pursuit.closed,
     docSummary: {
       objective: pursuit.docSummary.objective,
+      challenges: pursuit.docSummary.challenges ?? [],
       services: pursuit.docSummary.services,
       deliverables: pursuit.docSummary.deliverables,
+      responseConstraints: pursuit.docSummary.responseConstraints ?? [],
     },
     rationale: pursuit.rationale,
     mappedRequirements: pursuit.reqmap
