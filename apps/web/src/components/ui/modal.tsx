@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 
+const escapeStack: Array<() => void> = [];
+
 export function Modal({
   open,
   onClose,
@@ -26,11 +28,16 @@ export function Modal({
 
   useEffect(() => {
     if (!open) return;
+    escapeStack.push(onClose);
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && escapeStack[escapeStack.length - 1] === onClose) onClose();
     }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      const index = escapeStack.lastIndexOf(onClose);
+      if (index >= 0) escapeStack.splice(index, 1);
+      window.removeEventListener("keydown", onKey);
+    };
   }, [open, onClose]);
 
   if (!open || !mounted) return null;

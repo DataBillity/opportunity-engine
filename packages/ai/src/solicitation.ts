@@ -6,7 +6,7 @@ import {
 import { callModel, ModelGatewayError } from "./gateway";
 import { parseModelJson } from "./json";
 
-export const SOLICITATION_EXTRACT_PROMPT_VERSION = "solicitation-extract-v1.1";
+export const SOLICITATION_EXTRACT_PROMPT_VERSION = "solicitation-extract-v1.2";
 
 const RFP_SOW_PROMPT = `You extract facts from an RFP or Statement of Work for DataBillity bid triage.
 
@@ -19,13 +19,18 @@ Hard rules:
 
 const RFI_PROMPT = `You extract facts from a Request for Information (RFI) for DataBillity pursuit triage.
 
-An RFI is market research, not a bid. The issuer is asking for information. DataBillity has not answered yet.
+An RFI is market research, not a bid. Score the opportunity on the work the issuer is trying to do, not on how they want the response formatted.
 
 Hard rules:
 - Use only the document text. Do not invent agencies, dates, certifications, or answers.
-- Extract the questions / information requests the issuer asked vendors to address.
-- Do not treat "provide information" or "please describe" as bid shall-statements that have already been fulfilled.
-- Mark passFail true only for eligibility to respond (registration, NDA, mandatory form). Never for an unanswered information request.
+- objective: why they issued the RFI — the scope and outcome they are researching. Not the questions they ask vendors.
+- challenges: problems in the current system or process they are trying to resolve.
+- services: business and technology services a future solution would likely include.
+- deliverables: systems, modules, or work products a future solution would likely produce. Not the RFI response itself.
+- requirements: the questions the issuer asked vendors to answer, kept so a later response can address them. Do not put those questions in objective, challenges, services, or deliverables.
+- responseConstraints: how to write the response (page limit, font, margins, file format, submission mechanics). Never put these in objective, services, deliverables, requirements, or constraints.
+- constraints: eligibility or security gates that affect whether we can do the work. Not page count or formatting.
+- Mark passFail true only for eligibility to respond (registration, NDA, mandatory form). Never for an unanswered information request or a page limit.
 - If a field is not present, use an empty string, empty array, or null.
 - Return ONLY JSON matching the schema.`;
 
@@ -67,9 +72,10 @@ export function buildSolicitationExtractPrompt(input: {
       solicitationRef: refHint,
       dueDate: "YYYY-MM-DD or null",
       issuer: "issuing org or empty",
-      objective: ["..."],
-      services: ["..."],
-      deliverables: projectType === "rfi" ? ["requested information topics"] : ["..."],
+      objective: projectType === "rfi" ? ["why they issued the RFI and the outcome they want"] : ["..."],
+      challenges: projectType === "rfi" ? ["current-state problems they are trying to resolve"] : ["..."],
+      services: projectType === "rfi" ? ["business or technology services a future solution would likely include"] : ["..."],
+      deliverables: projectType === "rfi" ? ["systems or work products a future solution would likely produce"] : ["..."],
       requirements: [{
         requirementText: reqHint,
         sectionRef: "optional",
@@ -77,7 +83,8 @@ export function buildSolicitationExtractPrompt(input: {
         weight: 0,
       }],
       responseSections: [{ ref: "Vol I § 3.2", title: "Technical Approach", sectionId: "tech" }],
-      constraints: ["hard constraints only"],
+      responseConstraints: projectType === "rfi" ? ["page limit, font, margins, or submission format — not scored"] : [],
+      constraints: ["eligibility or security gates only — not page limits"],
     }),
   ].join("\n");
 }

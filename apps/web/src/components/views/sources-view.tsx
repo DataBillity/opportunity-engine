@@ -155,7 +155,6 @@ export function SourcesView({
   const { toast } = useToast();
   const [tab, setTab] = useState<TabId>("capabilities");
   const [searchQ, setSearchQ] = useState("");
-  const [partnerFilter, setPartnerFilter] = useState("");
   const [showArchived, setShowArchived] = useState(false);
 
   const capabilities = graph.capabilities;
@@ -239,29 +238,18 @@ export function SourcesView({
 
   const [actionTarget, setActionTarget] = useState<{ pursuitId: string; item: ResponseActionItem } | null>(null);
 
+  const isActive = (status: string) => status !== "Archived";
   const tabs: { id: TabId; label: string; count: number }[] = [
-    { id: "capabilities", label: "Capabilities", count: capabilities.filter(c => showArchived || c.status !== "Archived").length },
-    { id: "experience", label: "Experience", count: experience.filter(e => showArchived || e.status !== "Archived").length },
-    { id: "credentials", label: "Credentials", count: credentials.filter(c => showArchived || c.status !== "Archived").length },
-    { id: "people", label: "People", count: people.filter(p => showArchived || p.status !== "Archived").length },
-    { id: "partners", label: "Partners", count: partners.filter(p => showArchived || p.status !== "Archived").length },
+    { id: "capabilities", label: "Capabilities", count: capabilities.filter(c => isActive(c.status)).length },
+    { id: "experience", label: "Experience", count: experience.filter(e => isActive(e.status)).length },
+    { id: "credentials", label: "Credentials", count: credentials.filter(c => isActive(c.status)).length },
+    { id: "people", label: "People", count: people.filter(p => isActive(p.status)).length },
+    { id: "partners", label: "Partners", count: partners.filter(p => showArchived || isActive(p.status)).length },
   ];
 
   const activePartners = partners.filter(p => p.status !== "Archived");
   const partnerOptions = activePartners.map(p => ({ value: p.id, label: p.name }));
   const partnerName2 = (id: string) => partners.find(p => p.id === id)?.name ?? id;
-  const partnerFilterOptions = partners
-    .filter(p => showArchived || p.status !== "Archived")
-    .slice()
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map(p => ({ value: p.id, label: p.name }));
-  const partnerSelectOptions = [
-    { value: "", label: "All partners" },
-    ...partnerFilterOptions,
-    ...(partnerFilter && !partnerFilterOptions.some(option => option.value === partnerFilter)
-      ? [{ value: partnerFilter, label: partnerName2(partnerFilter) }]
-      : []),
-  ];
   const detailPartner = detailPartnerId ? partners.find(p => p.id === detailPartnerId) ?? null : null;
   const liveCap = detailCap ? capabilities.find(item => item.id === detailCap.id) ?? detailCap : null;
   const liveExp = detailExp ? experience.find(item => item.id === detailExp.id) ?? detailExp : null;
@@ -613,18 +601,15 @@ export function SourcesView({
       || id.toLowerCase().includes(q)
       || partnerIds.some(pid => partnerName2(pid).toLowerCase().includes(q));
   };
-  const matchesPartner = (partnerIds: string[]) => !partnerFilter || partnerIds.includes(partnerFilter);
-  const isListed = (status: string) => showArchived || status !== "Archived";
-
   const visibleCapabilities = capabilities.filter(c =>
-    isListed(c.status) && matchesPartner(c.partners) && matchesQuery(c.name, c.id, c.partners));
+    isActive(c.status) && matchesQuery(c.name, c.id, c.partners));
   const visibleExperience = experience.filter(e =>
-    isListed(e.status) && matchesPartner(e.partners) && matchesQuery(e.name, e.id, e.partners));
+    isActive(e.status) && matchesQuery(e.name, e.id, e.partners));
   const visibleCredentials = credentials.filter(c =>
-    isListed(c.status) && matchesPartner([c.partner]) && matchesQuery(c.name, c.id, [c.partner]));
+    isActive(c.status) && matchesQuery(c.name, c.id, [c.partner]));
   const visiblePeople = people.filter(p =>
-    isListed(p.status) && matchesPartner([p.partner]) && matchesQuery(p.name, p.id, [p.partner]));
-  const visiblePartners = partners.filter(p => isListed(p.status) && matchesQuery(p.name, p.id));
+    isActive(p.status) && matchesQuery(p.name, p.id, [p.partner]));
+  const visiblePartners = partners.filter(p => (showArchived || isActive(p.status)) && matchesQuery(p.name, p.id));
 
   const partnerOpenActions = detailPartner
     ? Object.values(allPursuits).flatMap(pursuit =>
@@ -668,22 +653,15 @@ export function SourcesView({
               type="text"
               value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
-              placeholder={`Search ${tab}…`}
+              placeholder={tab === "partners" ? "Search partners…" : "Search name or partner…"}
               className="oe-field text-xs w-full sm:w-72"
             />
-            {tab !== "partners" && (
-              <SelectInput
-                value={partnerFilter}
-                onChange={setPartnerFilter}
-                options={partnerSelectOptions}
-                ariaLabel="Filter by partner"
-                className="w-full sm:w-60"
-              />
+            {tab === "partners" && (
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer whitespace-nowrap sm:px-1">
+                <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="rounded" />
+                Show archived
+              </label>
             )}
-            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer whitespace-nowrap sm:px-1">
-              <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="rounded" />
-              Show archived
-            </label>
           </div>
           <button
             onClick={() => {
@@ -722,7 +700,7 @@ export function SourcesView({
                   </tr>
                 ))}
                 {visibleCapabilities.length === 0 && (
-                  <EmptyFilterRow colSpan={4} noun="capabilities" filtered={Boolean(searchQ || partnerFilter)} />
+                  <EmptyFilterRow colSpan={4} noun="capabilities" filtered={Boolean(searchQ)} />
                 )}
               </tbody>
             </table>
@@ -752,7 +730,7 @@ export function SourcesView({
                   </tr>
                 ))}
                 {visibleExperience.length === 0 && (
-                  <EmptyFilterRow colSpan={4} noun="experience" filtered={Boolean(searchQ || partnerFilter)} />
+                  <EmptyFilterRow colSpan={4} noun="experience" filtered={Boolean(searchQ)} />
                 )}
               </tbody>
             </table>
@@ -784,7 +762,7 @@ export function SourcesView({
                   </tr>
                 ))}
                 {visibleCredentials.length === 0 && (
-                  <EmptyFilterRow colSpan={5} noun="credentials" filtered={Boolean(searchQ || partnerFilter)} />
+                  <EmptyFilterRow colSpan={5} noun="credentials" filtered={Boolean(searchQ)} />
                 )}
               </tbody>
             </table>
@@ -816,7 +794,7 @@ export function SourcesView({
                   </tr>
                 ))}
                 {visiblePeople.length === 0 && (
-                  <EmptyFilterRow colSpan={5} noun="people" filtered={Boolean(searchQ || partnerFilter)} />
+                  <EmptyFilterRow colSpan={5} noun="people" filtered={Boolean(searchQ)} />
                 )}
               </tbody>
             </table>
@@ -915,14 +893,29 @@ export function SourcesView({
             </div>
             <div className="border-t border-border pt-3">
               <h4 className="text-xs font-semibold mb-2">Capabilities</h4>
-              <div className="space-y-1">{capabilities.filter(c => c.partners.includes(detailPartner.id)).map(c => (
-                <div key={c.id} className="text-xs text-foreground">{c.id} — {c.name}</div>
-              ))}</div>
+              {capabilities.filter(c => c.partners.includes(detailPartner.id)).length === 0 && (
+                <div className="text-xs text-muted-foreground italic">None</div>
+              )}
+              <div className="space-y-1">{capabilities.filter(c => c.partners.includes(detailPartner.id)).map(c => {
+                const others = c.partners.filter(id => id !== detailPartner.id).map(id => partnerName2(id));
+                return (
+                  <button key={c.id} onClick={() => setDetailCap(c)} className="block w-full text-left text-xs text-foreground hover:bg-muted/40 rounded-md px-2 py-1.5">
+                    <span className="font-mono text-primary">{c.id}</span> — <span className="font-semibold">{c.name}</span>
+                    <span className="text-muted-foreground"> · updated {c.updated}{others.length ? ` · also ${others.join(", ")}` : ""}{c.status === "Archived" ? " · Archived" : ""}</span>
+                  </button>
+                );
+              })}</div>
             </div>
             <div className="border-t border-border pt-3">
               <h4 className="text-xs font-semibold mb-2">Experience</h4>
+              {experience.filter(e => e.partners.includes(detailPartner.id)).length === 0 && (
+                <div className="text-xs text-muted-foreground italic">None</div>
+              )}
               <div className="space-y-1">{experience.filter(e => e.partners.includes(detailPartner.id)).map(e => (
-                <div key={e.id} className="text-xs text-foreground">{e.id} — {e.name}</div>
+                <button key={e.id} onClick={() => setDetailExp(e)} className="block w-full text-left text-xs text-foreground hover:bg-muted/40 rounded-md px-2 py-1.5">
+                  <span className="font-mono text-primary">{e.id}</span> — <span className="font-semibold">{e.name}</span>
+                  <span className="text-muted-foreground"> · {e.industry || "No industry"} · updated {e.updated}{e.status === "Archived" ? " · Archived" : ""}</span>
+                </button>
               ))}</div>
             </div>
             <div className="border-t border-border pt-3">
@@ -931,7 +924,10 @@ export function SourcesView({
                 <div className="text-xs text-muted-foreground italic">None</div>
               )}
               <div className="space-y-1">{credentials.filter(c => c.partner === detailPartner.id).map(c => (
-                <div key={c.id} className="text-xs text-foreground">{c.id} — {c.name} <span className="text-muted-foreground">({c.credType}{c.expiration ? `, expires ${c.expiration}` : ""})</span></div>
+                <button key={c.id} onClick={() => openCredential(c)} className="block w-full text-left text-xs text-foreground hover:bg-muted/40 rounded-md px-2 py-1.5">
+                  <span className="font-mono text-primary">{c.id}</span> — <span className="font-semibold">{c.name}</span>
+                  <span className="text-muted-foreground"> · {c.credType}{c.expiration ? `, expires ${c.expiration}` : ""}{c.status === "Archived" ? " · Archived" : ""}</span>
+                </button>
               ))}</div>
             </div>
             <div className="border-t border-border pt-3">
@@ -940,7 +936,10 @@ export function SourcesView({
                 <div className="text-xs text-muted-foreground italic">None</div>
               )}
               <div className="space-y-1">{people.filter(p => p.partner === detailPartner.id).map(p => (
-                <div key={p.id} className="text-xs text-foreground">{p.id} — {p.name} <span className="text-muted-foreground">({(p.roles ?? [p.role]).filter(Boolean).join(", ") || p.role})</span></div>
+                <button key={p.id} onClick={() => setDetailPerson(p)} className="block w-full text-left text-xs text-foreground hover:bg-muted/40 rounded-md px-2 py-1.5">
+                  <span className="font-mono text-primary">{p.id}</span> — <span className="font-semibold">{p.name}</span>
+                  <span className="text-muted-foreground"> · {(p.roles ?? [p.role]).filter(Boolean).join(", ") || p.role}{p.status === "Archived" ? " · Archived" : ""}</span>
+                </button>
               ))}</div>
             </div>
             <div className="flex justify-end pt-3 border-t border-border">
@@ -955,6 +954,7 @@ export function SourcesView({
           <div className="space-y-3 text-xs">
             <div><span className="text-muted-foreground">ID:</span> <span className="font-mono">{liveCap.id}</span></div>
             <div><span className="text-muted-foreground">Partners:</span> {liveCap.partners.map(id => partnerName2(id)).join(", ") || "—"}</div>
+            <div><span className="text-muted-foreground">Updated:</span> {liveCap.updated}</div>
             <div className="flex justify-between pt-2">
               <button onClick={() => { handleDeleteItem("capability", liveCap.id); setDetailCap(null); }} className="text-xs text-destructive cursor-pointer hover:underline">Delete</button>
               <div className="flex gap-2">

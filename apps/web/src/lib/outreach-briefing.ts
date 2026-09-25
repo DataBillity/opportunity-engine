@@ -13,9 +13,12 @@ export function toPursuitBrief(pursuit: Pursuit): OutreachPursuitBrief {
     closed: pursuit.closed,
     docSummary: {
       objective: pursuit.docSummary.objective,
+      challenges: pursuit.docSummary.challenges ?? [],
       services: pursuit.docSummary.services,
       deliverables: pursuit.docSummary.deliverables,
+      responseConstraints: pursuit.docSummary.responseConstraints ?? [],
     },
+    informationRequests: pursuit.informationRequests ?? [],
     rationale: pursuit.rationale,
     mappedRequirements: pursuit.reqmap
       .filter(item => item.status === "mapped")

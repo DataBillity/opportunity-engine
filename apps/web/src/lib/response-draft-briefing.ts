@@ -59,6 +59,7 @@ export function buildResponseDraftBriefing(input: {
   assignments: Record<string, string>;
   people: GraphPerson[];
   experience?: GraphExperience[];
+  capabilities?: string[];
   existingDraft?: string;
   instructions?: string;
 }): ResponseDraftBriefing {
@@ -91,9 +92,13 @@ export function buildResponseDraftBriefing(input: {
       documents: input.pursuit.documents.map(doc => doc.name),
       docSummary: {
         objective: input.pursuit.docSummary.objective,
+        challenges: input.pursuit.docSummary.challenges ?? [],
         services: input.pursuit.docSummary.services,
         deliverables: input.pursuit.docSummary.deliverables,
+        responseConstraints: input.pursuit.docSummary.responseConstraints ?? [],
       },
+      informationRequests: input.pursuit.informationRequests ?? [],
+      capabilities: input.capabilities ?? [],
       mappedRequirements: input.pursuit.reqmap
         .filter(item => item.status === "mapped")
         .map(item => `${item.req}${item.node ? ` — ${item.node}` : ""}`),
