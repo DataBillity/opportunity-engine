@@ -168,6 +168,8 @@ export interface Partner {
   note: string;
   summary: string;
   createdAt: string;
+  _sharedCapIds?: string[];
+  _sharedExpIds?: string[];
 }
 
 export interface GraphData {

@@ -15,7 +15,7 @@ import { DashboardView } from "@/components/views/dashboard-view";
 import { ArchiveView } from "@/components/views/archive-view";
 import { OperatorProvider } from "@/components/auth/operator-provider";
 import { useToast } from "@/components/ui/toast";
-import { applyPartnerArchive, applyPartnerReinstate, setPartnerArchived } from "@/lib/partner-archive";
+import { applyPartnerArchive, applyPartnerReinstate, computeSharedIds, setPartnerArchived } from "@/lib/partner-archive";
 import { mergeWorkspace, sameWorkspace, type SharedWorkspace, type WorkspaceState } from "@/lib/shared-workspace";
 import {
   organizations as initialOrgs,
@@ -81,6 +81,10 @@ export default function CommandCenter() {
   }));
   const saveGen = useRef(0);
   const saveWarned = useRef(false);
+  const graphRef = useRef(graph);
+  graphRef.current = graph;
+  const partnersRef = useRef(partners);
+  partnersRef.current = partners;
 
   function applyWorkspace(next: WorkspaceState, revision: number, baseline: WorkspaceState) {
     revisionRef.current = revision;
@@ -323,7 +327,8 @@ export default function CommandCenter() {
 
   const handleArchivePartner = useCallback(
     (partnerId: string) => {
-      setPartners(prev => setPartnerArchived(prev, partnerId, true));
+      const shared = computeSharedIds(graphRef.current, partnerId);
+      setPartners(prev => setPartnerArchived(prev, partnerId, true, shared.capIds, shared.expIds));
       setGraph(prev => applyPartnerArchive(prev, partnerId));
     },
     []
@@ -331,8 +336,11 @@ export default function CommandCenter() {
 
   const handleReinstatePartner = useCallback(
     (partnerId: string) => {
+      const partner = partnersRef.current.find(p => p.id === partnerId);
+      const sharedCapIds = partner?._sharedCapIds ?? [];
+      const sharedExpIds = partner?._sharedExpIds ?? [];
       setPartners(prev => setPartnerArchived(prev, partnerId, false));
-      setGraph(prev => applyPartnerReinstate(prev, partnerId));
+      setGraph(prev => applyPartnerReinstate(prev, partnerId, sharedCapIds, sharedExpIds));
     },
     []
   );
@@ -529,6 +537,7 @@ export default function CommandCenter() {
               <ArchiveView
                 orgs={orgs}
                 partners={partners}
+                graph={graph}
                 allPursuits={allPursuits}
                 onOrgSelect={(id) => handleOrgSelect(id, "archive")}
                 onReinstateOrg={handleReinstateOrg}
