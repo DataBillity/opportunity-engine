@@ -18,6 +18,7 @@ export function toPursuitBrief(pursuit: Pursuit): OutreachPursuitBrief {
       deliverables: pursuit.docSummary.deliverables,
       responseConstraints: pursuit.docSummary.responseConstraints ?? [],
     },
+    informationRequests: pursuit.informationRequests ?? [],
     rationale: pursuit.rationale,
     mappedRequirements: pursuit.reqmap
       .filter(item => item.status === "mapped")
