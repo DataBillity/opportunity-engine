@@ -87,6 +87,55 @@ function TeamingToggle({
   );
 }
 
+type SortDir = "asc" | "desc";
+
+function cmp(a: string, b: string, dir: SortDir): number {
+  const r = a.localeCompare(b, undefined, { sensitivity: "base", numeric: true });
+  return dir === "asc" ? r : -r;
+}
+
+function cmpTeaming(a: boolean | null, b: boolean | null, dir: SortDir): number {
+  const rank = (v: boolean | null) => (v === true ? 0 : v === false ? 1 : 2);
+  const r = rank(a) - rank(b);
+  return dir === "asc" ? r : -r;
+}
+
+function toggleSort<T extends string>(
+  current: { field: T; dir: SortDir },
+  field: T,
+): { field: T; dir: SortDir } {
+  if (current.field === field) return { field, dir: current.dir === "asc" ? "desc" : "asc" };
+  return { field, dir: "asc" };
+}
+
+function SortableHeader({
+  label,
+  field,
+  current,
+  className,
+  onClick,
+}: {
+  label: string;
+  field: string;
+  current: { field: string; dir: SortDir };
+  className?: string;
+  onClick: () => void;
+}) {
+  const active = current.field === field;
+  return (
+    <th
+      className={cn(
+        "text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5 cursor-pointer select-none hover:text-foreground transition-colors",
+        className,
+      )}
+      onClick={onClick}
+    >
+      {label}
+      {active && <span className="ml-1 text-foreground">{current.dir === "asc" ? "↑" : "↓"}</span>}
+    </th>
+  );
+}
+
 function EmptyFilterRow({
   colSpan,
   noun,
@@ -237,6 +286,15 @@ export function SourcesView({
   const [resumeFiles, setResumeFiles] = useState<File[]>([]);
 
   const [actionTarget, setActionTarget] = useState<{ pursuitId: string; item: ResponseActionItem } | null>(null);
+
+  const [capSort, setCapSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
+  const [expSort, setExpSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
+  const [credSort, setCredSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
+  const [peopleSort, setPeopleSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
+  const [partnerSort, setPartnerSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
+
+  const [editCred, setEditCred] = useState<GraphCredential | null>(null);
+  const [credDocFiles, setCredDocFiles] = useState<File[]>([]);
 
   const isActive = (status: string) => status !== "Archived";
   const tabs: { id: TabId; label: string; count: number }[] = [
@@ -488,23 +546,50 @@ export function SourcesView({
 
   function openCredential(credential: GraphCredential) {
     setDetailCred(credential);
-    setEditCredType(credential.credType || "Certification");
-    setEditCredExpiration(credential.expiration === "TBD" ? "" : credential.expiration);
   }
 
-  function handleSaveCredential() {
-    if (!liveCred) return;
+  function openEditCredential(credential: GraphCredential) {
+    setEditCred(credential);
+    setEditCredType(credential.credType || "Certification");
+    setEditCredExpiration(credential.expiration === "TBD" ? "" : credential.expiration);
+    setCredDocFiles([]);
+  }
+
+  async function handleSaveCredential() {
+    if (!editCred) return;
+    let docUpdate: Partial<GraphCredential> = {};
+    if (credDocFiles.length > 0) {
+      setIngestBusy(true);
+      try {
+        const result = await ingestPartnerDocuments("credentials", credDocFiles);
+        if (result.credentials.length > 0) {
+          const parsed = result.credentials[0]!;
+          docUpdate = {
+            documentText: parsed.documentText,
+            documentFileName: parsed.documentFileName,
+          };
+        }
+        if (result.warning) toast(result.warning, "warning");
+      } catch (error) {
+        toast(error instanceof Error ? error.message : "Document parse failed", "warning");
+      } finally {
+        setIngestBusy(false);
+      }
+    }
     const next = {
       credType: editCredType,
       expiration: normalizeDateEntry(editCredExpiration).trim() || "TBD",
       updated: new Date().toISOString().slice(0, 10),
+      ...docUpdate,
     };
     onUpdateGraph(prev => ({
       ...prev,
-      credentials: prev.credentials.map(c => c.id === liveCred.id ? { ...c, ...next } : c),
+      credentials: prev.credentials.map(c => c.id === editCred.id ? { ...c, ...next } : c),
     }));
     toast("Credential updated", "success");
-    setDetailCred(prev => prev && prev.id === liveCred.id ? { ...prev, ...next } : prev);
+    setEditCred(null);
+    setCredDocFiles([]);
+    setDetailCred(prev => prev && prev.id === editCred.id ? { ...prev, ...next } : prev);
   }
 
   function handleSaveExperience() {
@@ -601,15 +686,58 @@ export function SourcesView({
       || id.toLowerCase().includes(q)
       || partnerIds.some(pid => partnerName2(pid).toLowerCase().includes(q));
   };
+  const matchesBasic = (name: string, id: string) => {
+    if (!searchQ) return true;
+    const q = searchQ.toLowerCase();
+    return name.toLowerCase().includes(q) || id.toLowerCase().includes(q);
+  };
   const visibleCapabilities = capabilities.filter(c =>
-    isActive(c.status) && matchesQuery(c.name, c.id, c.partners));
+    isActive(c.status) && matchesBasic(c.name, c.id)
+  ).sort((a, b) => {
+    const { field, dir } = capSort;
+    if (field === "id") return cmp(a.id, b.id, dir);
+    if (field === "partners") return cmp(a.partners.map(id => partnerName2(id)).join(", "), b.partners.map(id => partnerName2(id)).join(", "), dir);
+    if (field === "updated") return cmp(a.updated, b.updated, dir);
+    return cmp(a.name, b.name, dir);
+  });
   const visibleExperience = experience.filter(e =>
-    isActive(e.status) && matchesQuery(e.name, e.id, e.partners));
+    isActive(e.status) && matchesBasic(e.name, e.id)
+  ).sort((a, b) => {
+    const { field, dir } = expSort;
+    if (field === "id") return cmp(a.id, b.id, dir);
+    if (field === "industry") return cmp(a.industry || "", b.industry || "", dir);
+    if (field === "partners") return cmp(a.partners.map(id => partnerName2(id)).join(", "), b.partners.map(id => partnerName2(id)).join(", "), dir);
+    return cmp(a.name, b.name, dir);
+  });
   const visibleCredentials = credentials.filter(c =>
-    isActive(c.status) && matchesQuery(c.name, c.id, [c.partner]));
+    isActive(c.status) && matchesBasic(c.name, c.id)
+  ).sort((a, b) => {
+    const { field, dir } = credSort;
+    if (field === "id") return cmp(a.id, b.id, dir);
+    if (field === "credType") return cmp(a.credType, b.credType, dir);
+    if (field === "partner") return cmp(partnerName2(a.partner), partnerName2(b.partner), dir);
+    if (field === "expiration") return cmp(a.expiration, b.expiration, dir);
+    return cmp(a.name, b.name, dir);
+  });
   const visiblePeople = people.filter(p =>
-    isActive(p.status) && matchesQuery(p.name, p.id, [p.partner]));
-  const visiblePartners = partners.filter(p => (showArchived || isActive(p.status)) && matchesQuery(p.name, p.id));
+    isActive(p.status) && matchesBasic(p.name, p.id)
+  ).sort((a, b) => {
+    const { field, dir } = peopleSort;
+    if (field === "id") return cmp(a.id, b.id, dir);
+    if (field === "partner") return cmp(partnerName2(a.partner), partnerName2(b.partner), dir);
+    if (field === "role") return cmp((a.roles ?? [a.role]).filter(Boolean).join(", "), (b.roles ?? [b.role]).filter(Boolean).join(", "), dir);
+    if (field === "expertise") return cmp(a.expertise, b.expertise, dir);
+    return cmp(a.name, b.name, dir);
+  });
+  const visiblePartners = partners.filter(p =>
+    (showArchived || isActive(p.status)) && matchesQuery(p.name, p.id)
+  ).sort((a, b) => {
+    const { field, dir } = partnerSort;
+    if (field === "type") return cmp(a.type, b.type, dir);
+    if (field === "contact") return cmp(a.contact || "", b.contact || "", dir);
+    if (field === "teaming") return cmpTeaming(a.teamingAgreementSigned, b.teamingAgreementSigned, dir);
+    return cmp(a.name, b.name, dir);
+  });
 
   const partnerOpenActions = detailPartner
     ? Object.values(allPursuits).flatMap(pursuit =>
@@ -653,7 +781,7 @@ export function SourcesView({
               type="text"
               value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
-              placeholder={tab === "partners" ? "Search partners…" : "Search name or partner…"}
+              placeholder={tab === "partners" ? "Search partners…" : "Search…"}
               className="oe-field text-xs w-full sm:w-72"
             />
             {tab === "partners" && (
@@ -684,10 +812,10 @@ export function SourcesView({
             <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="oe-table-header">
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">ID</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Capability</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Partners</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Updated</th>
+                  <SortableHeader label="ID" field="id" current={capSort} onClick={() => setCapSort(s => toggleSort(s, "id"))} />
+                  <SortableHeader label="Capability" field="name" current={capSort} onClick={() => setCapSort(s => toggleSort(s, "name"))} />
+                  <SortableHeader label="Partners" field="partners" current={capSort} onClick={() => setCapSort(s => toggleSort(s, "partners"))} />
+                  <SortableHeader label="Updated" field="updated" current={capSort} onClick={() => setCapSort(s => toggleSort(s, "updated"))} />
                 </tr>
               </thead>
               <tbody>
@@ -714,10 +842,10 @@ export function SourcesView({
             <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="oe-table-header">
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">ID</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Experience</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Industry</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Partners</th>
+                  <SortableHeader label="ID" field="id" current={expSort} onClick={() => setExpSort(s => toggleSort(s, "id"))} />
+                  <SortableHeader label="Experience" field="name" current={expSort} onClick={() => setExpSort(s => toggleSort(s, "name"))} />
+                  <SortableHeader label="Industry" field="industry" current={expSort} onClick={() => setExpSort(s => toggleSort(s, "industry"))} />
+                  <SortableHeader label="Partners" field="partners" current={expSort} onClick={() => setExpSort(s => toggleSort(s, "partners"))} />
                 </tr>
               </thead>
               <tbody>
@@ -744,11 +872,11 @@ export function SourcesView({
             <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="oe-table-header">
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">ID</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Credential</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Type</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Partner</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Expiration</th>
+                  <SortableHeader label="ID" field="id" current={credSort} onClick={() => setCredSort(s => toggleSort(s, "id"))} />
+                  <SortableHeader label="Credential" field="name" current={credSort} onClick={() => setCredSort(s => toggleSort(s, "name"))} />
+                  <SortableHeader label="Type" field="credType" current={credSort} onClick={() => setCredSort(s => toggleSort(s, "credType"))} />
+                  <SortableHeader label="Partner" field="partner" current={credSort} onClick={() => setCredSort(s => toggleSort(s, "partner"))} />
+                  <SortableHeader label="Expiration" field="expiration" current={credSort} onClick={() => setCredSort(s => toggleSort(s, "expiration"))} />
                 </tr>
               </thead>
               <tbody>
@@ -777,8 +905,8 @@ export function SourcesView({
               <thead>
                 <tr className="oe-table-header">
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">ID</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Name</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Partner</th>
+                  <SortableHeader label="Name" field="name" current={peopleSort} onClick={() => setPeopleSort(s => toggleSort(s, "name"))} />
+                  <SortableHeader label="Partner" field="partner" current={peopleSort} onClick={() => setPeopleSort(s => toggleSort(s, "partner"))} />
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Role</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5 hidden xl:table-cell">Expertise</th>
                 </tr>
@@ -808,11 +936,11 @@ export function SourcesView({
             <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="oe-table-header">
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Partner</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Type</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Contact</th>
+                  <SortableHeader label="Partner" field="name" current={partnerSort} onClick={() => setPartnerSort(s => toggleSort(s, "name"))} />
+                  <SortableHeader label="Type" field="type" current={partnerSort} onClick={() => setPartnerSort(s => toggleSort(s, "type"))} />
+                  <SortableHeader label="Contact" field="contact" current={partnerSort} onClick={() => setPartnerSort(s => toggleSort(s, "contact"))} />
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Email</th>
-                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Teaming Agreement</th>
+                  <SortableHeader label="Teaming Agreement" field="teaming" current={partnerSort} onClick={() => setPartnerSort(s => toggleSort(s, "teaming"))} />
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Actions</th>
                 </tr>
@@ -996,29 +1124,14 @@ export function SourcesView({
         )}
       </Modal>
 
-      <Modal open={liveCred !== null} onClose={() => setDetailCred(null)} title={liveCred?.name ?? "Credential"} wide>
+      <Modal open={liveCred !== null && editCred === null} onClose={() => setDetailCred(null)} title={liveCred?.name ?? "Credential"} wide>
         {liveCred && (
           <div className="space-y-3 text-xs">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <FormField label="Type">
-                <SelectInput value={editCredType} onChange={setEditCredType} options={credentialTypeOptions(editCredType)} />
-              </FormField>
-              <FormField label="Expiration date">
-                <DateField value={editCredExpiration} onChange={setEditCredExpiration} />
-              </FormField>
-            </div>
-            <div className="flex justify-end">
-              <PrimaryButton
-                onClick={handleSaveCredential}
-                disabled={
-                  editCredType === (liveCred.credType || "Certification")
-                  && (normalizeDateEntry(editCredExpiration).trim() || "TBD") === (liveCred.expiration || "TBD")
-                }
-              >
-                Save
-              </PrimaryButton>
-            </div>
+            <div><span className="text-muted-foreground">ID:</span> <span className="font-mono">{liveCred.id}</span></div>
+            <div><span className="text-muted-foreground">Type:</span> {liveCred.credType}</div>
             <div><span className="text-muted-foreground">Partner:</span> {partnerName2(liveCred.partner)}</div>
+            <div><span className="text-muted-foreground">Expiration:</span> {liveCred.expiration}</div>
+            <div><span className="text-muted-foreground">Updated:</span> {liveCred.updated}</div>
             <div>
               <div className="font-semibold mb-1">Document</div>
               <div className="text-muted-foreground mb-1">{liveCred.documentFileName || "No file name on record"}</div>
@@ -1026,7 +1139,30 @@ export function SourcesView({
             </div>
             <div className="flex justify-between pt-2">
               <button onClick={() => { handleDeleteItem("credential", liveCred.id); setDetailCred(null); }} className="text-xs text-destructive cursor-pointer hover:underline">Delete</button>
-              <SecondaryButton onClick={() => setDetailCred(null)}>Close</SecondaryButton>
+              <div className="flex gap-2">
+                <SecondaryButton onClick={() => openEditCredential(liveCred)}>Edit</SecondaryButton>
+                <SecondaryButton onClick={() => setDetailCred(null)}>Close</SecondaryButton>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={editCred !== null} onClose={() => setEditCred(null)} title="Edit Credential" wide>
+        {editCred && (
+          <div className="space-y-4">
+            <FormField label="Type">
+              <SelectInput value={editCredType} onChange={setEditCredType} options={credentialTypeOptions(editCredType)} />
+            </FormField>
+            <FormField label="Expiration date">
+              <DateField value={editCredExpiration} onChange={setEditCredExpiration} />
+            </FormField>
+            <FormField label="Credential document" hint="Upload a new or renewed credential document to replace the existing one.">
+              <DocumentDropzone files={credDocFiles} onChange={setCredDocFiles} disabled={ingestBusy} dropLabel="Drop your Credential document here" />
+            </FormField>
+            <div className="flex justify-end gap-2">
+              <SecondaryButton onClick={() => setEditCred(null)}>Cancel</SecondaryButton>
+              <PrimaryButton onClick={handleSaveCredential} disabled={ingestBusy}>{ingestBusy ? "Saving…" : "Save"}</PrimaryButton>
             </div>
           </div>
         )}

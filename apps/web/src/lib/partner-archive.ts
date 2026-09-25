@@ -8,6 +8,16 @@ function soleOwned(ids: string[], partnerId: string): boolean {
   return ids.length === 1 && ids[0] === partnerId;
 }
 
+export function computeSharedIds(graph: GraphData, partnerId: string): { capIds: string[]; expIds: string[] } {
+  const capIds = graph.capabilities
+    .filter(c => c.partners.includes(partnerId) && c.partners.length > 1)
+    .map(c => c.id);
+  const expIds = graph.experience
+    .filter(e => e.partners.includes(partnerId) && e.partners.length > 1)
+    .map(e => e.id);
+  return { capIds, expIds };
+}
+
 export function applyPartnerArchive(graph: GraphData, partnerId: string): GraphData {
   return {
     capabilities: graph.capabilities.map(item => {
@@ -29,17 +39,26 @@ export function applyPartnerArchive(graph: GraphData, partnerId: string): GraphD
   };
 }
 
-export function applyPartnerReinstate(graph: GraphData, partnerId: string): GraphData {
+export function applyPartnerReinstate(
+  graph: GraphData,
+  partnerId: string,
+  sharedCapIds: string[] = [],
+  sharedExpIds: string[] = [],
+): GraphData {
   return {
     capabilities: graph.capabilities.map(item => {
-      if (!item.partners.includes(partnerId) && !isArchivedStatus(item.status)) return item;
+      if (sharedCapIds.includes(item.id) && !item.partners.includes(partnerId) && !isArchivedStatus(item.status)) {
+        return { ...item, partners: [...item.partners, partnerId] };
+      }
       if (item.partners.includes(partnerId) && isArchivedStatus(item.status) && soleOwned(item.partners, partnerId)) {
         return { ...item, status: restoreArchivedStatus(item.status) };
       }
       return item;
     }),
     experience: graph.experience.map(item => {
-      if (!item.partners.includes(partnerId) && !isArchivedStatus(item.status)) return item;
+      if (sharedExpIds.includes(item.id) && !item.partners.includes(partnerId) && !isArchivedStatus(item.status)) {
+        return { ...item, partners: [...item.partners, partnerId] };
+      }
       if (item.partners.includes(partnerId) && isArchivedStatus(item.status) && soleOwned(item.partners, partnerId)) {
         return { ...item, status: restoreArchivedStatus(item.status) };
       }
@@ -58,8 +77,22 @@ export function applyPartnerReinstate(graph: GraphData, partnerId: string): Grap
   };
 }
 
-export function setPartnerArchived(partners: Partner[], partnerId: string, archived: boolean): Partner[] {
+export function setPartnerArchived(
+  partners: Partner[],
+  partnerId: string,
+  archived: boolean,
+  sharedCapIds?: string[],
+  sharedExpIds?: string[],
+): Partner[] {
   return partners.map(partner =>
-    partner.id === partnerId ? { ...partner, status: archived ? "Archived" : "Active" } : partner
+    partner.id === partnerId
+      ? {
+          ...partner,
+          status: archived ? "Archived" : "Active",
+          ...(archived
+            ? { _sharedCapIds: sharedCapIds, _sharedExpIds: sharedExpIds }
+            : { _sharedCapIds: undefined, _sharedExpIds: undefined }),
+        }
+      : partner
   );
 }

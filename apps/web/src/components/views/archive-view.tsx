@@ -1,6 +1,8 @@
 "use client";
 
-import type { Organization, Partner, Pursuit } from "@/lib/mock-data";
+import { useState } from "react";
+import type { GraphData, Organization, Partner, Pursuit } from "@/lib/mock-data";
+import { Modal, SecondaryButton } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 
@@ -21,6 +23,7 @@ function TeamingBadge({ value }: { value: boolean | null }) {
 export function ArchiveView({
   orgs,
   partners,
+  graph,
   allPursuits,
   onOrgSelect,
   onReinstateOrg,
@@ -28,6 +31,7 @@ export function ArchiveView({
 }: {
   orgs: Organization[];
   partners: Partner[];
+  graph: GraphData;
   allPursuits: Record<string, Pursuit>;
   onOrgSelect: (id: string) => void;
   onReinstateOrg: (orgId: string) => void;
@@ -36,6 +40,24 @@ export function ArchiveView({
   const { toast } = useToast();
   const archivedLeads = orgs.filter(org => org.archived);
   const archivedPartners = partners.filter(partner => partner.status === "Archived");
+
+  const [detailPartnerId, setDetailPartnerId] = useState<string | null>(null);
+  const detailPartner = detailPartnerId ? partners.find(p => p.id === detailPartnerId) ?? null : null;
+
+  const partnerName2 = (id: string) => partners.find(p => p.id === id)?.name ?? id;
+
+  const partnerCapabilities = detailPartner
+    ? graph.capabilities.filter(c => c.partners.includes(detailPartner.id))
+    : [];
+  const partnerExperience = detailPartner
+    ? graph.experience.filter(e => e.partners.includes(detailPartner.id))
+    : [];
+  const partnerCredentials = detailPartner
+    ? graph.credentials.filter(c => c.partner === detailPartner.id)
+    : [];
+  const partnerPeople = detailPartner
+    ? graph.people.filter(p => p.partner === detailPartner.id)
+    : [];
 
   return (
     <div className="space-y-5">
@@ -131,14 +153,18 @@ export function ArchiveView({
               </thead>
               <tbody>
                 {archivedPartners.map(partner => (
-                  <tr key={partner.id} className="oe-table-row border-b border-border last:border-b-0">
+                  <tr
+                    key={partner.id}
+                    className="oe-table-row border-b border-border last:border-b-0 cursor-pointer"
+                    onClick={() => setDetailPartnerId(partner.id)}
+                  >
                     <td className="px-4 py-3 font-semibold text-foreground">{partner.name}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{partner.type}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{partner.contact || "—"}</td>
                     <td className="px-4 py-3 text-xs">
                       <TeamingBadge value={partner.teamingAgreementSigned} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                       <button
                         type="button"
                         onClick={() => {
@@ -159,6 +185,106 @@ export function ArchiveView({
           </div>
         )}
       </div>
+
+      <Modal open={detailPartner !== null} onClose={() => setDetailPartnerId(null)} title={detailPartner?.name ?? "Archived Partner"} wide>
+        {detailPartner && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div><span className="text-muted-foreground">Type:</span> <strong>{detailPartner.type}</strong></div>
+              <div><span className="text-muted-foreground">Status:</span> <strong>{detailPartner.status}</strong></div>
+              <div><span className="text-muted-foreground">Teaming agreement:</span> <strong>{detailPartner.teamingAgreementSigned === true ? "Signed" : detailPartner.teamingAgreementSigned === false ? "Pending" : "N/A"}</strong></div>
+              <div><span className="text-muted-foreground">Website:</span> {detailPartner.website !== "—" ? <a href={detailPartner.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{detailPartner.website}</a> : "—"}</div>
+              <div><span className="text-muted-foreground">Date added:</span> {detailPartner.createdAt || "—"}</div>
+              <div><span className="text-muted-foreground">Contact:</span> {detailPartner.contact}</div>
+              <div><span className="text-muted-foreground">Email:</span> {detailPartner.contactEmail || "—"}</div>
+            </div>
+            {(detailPartner.summary || detailPartner.note) && (
+              <div>
+                <h4 className="text-xs font-semibold mb-1">Summary</h4>
+                <p className="text-xs text-muted-foreground">{detailPartner.summary || detailPartner.note}</p>
+              </div>
+            )}
+
+            <div className="border-t border-border pt-3">
+              <h4 className="text-xs font-semibold mb-2">Capabilities</h4>
+              {partnerCapabilities.length === 0 && (
+                <div className="text-xs text-muted-foreground italic">None</div>
+              )}
+              <div className="space-y-1">
+                {partnerCapabilities.map(c => {
+                  const others = c.partners.filter(id => id !== detailPartner.id).map(id => partnerName2(id));
+                  return (
+                    <div key={c.id} className="text-xs text-foreground rounded-md px-2 py-1.5 bg-muted/30">
+                      <span className="font-mono text-primary">{c.id}</span> — <span className="font-semibold">{c.name}</span>
+                      <span className="text-muted-foreground"> · updated {c.updated}{others.length ? ` · also ${others.join(", ")}` : ""}{c.status === "Archived" ? " · Archived" : ""}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="border-t border-border pt-3">
+              <h4 className="text-xs font-semibold mb-2">Experience</h4>
+              {partnerExperience.length === 0 && (
+                <div className="text-xs text-muted-foreground italic">None</div>
+              )}
+              <div className="space-y-1">
+                {partnerExperience.map(e => (
+                  <div key={e.id} className="text-xs text-foreground rounded-md px-2 py-1.5 bg-muted/30">
+                    <span className="font-mono text-primary">{e.id}</span> — <span className="font-semibold">{e.name}</span>
+                    <span className="text-muted-foreground"> · {e.industry || "No industry"} · updated {e.updated}{e.status === "Archived" ? " · Archived" : ""}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-border pt-3">
+              <h4 className="text-xs font-semibold mb-2">Credentials</h4>
+              {partnerCredentials.length === 0 && (
+                <div className="text-xs text-muted-foreground italic">None</div>
+              )}
+              <div className="space-y-1">
+                {partnerCredentials.map(c => (
+                  <div key={c.id} className="text-xs text-foreground rounded-md px-2 py-1.5 bg-muted/30">
+                    <span className="font-mono text-primary">{c.id}</span> — <span className="font-semibold">{c.name}</span>
+                    <span className="text-muted-foreground"> · {c.credType}{c.expiration ? `, expires ${c.expiration}` : ""}{c.status === "Archived" ? " · Archived" : ""}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-border pt-3">
+              <h4 className="text-xs font-semibold mb-2">People</h4>
+              {partnerPeople.length === 0 && (
+                <div className="text-xs text-muted-foreground italic">None</div>
+              )}
+              <div className="space-y-1">
+                {partnerPeople.map(p => (
+                  <div key={p.id} className="text-xs text-foreground rounded-md px-2 py-1.5 bg-muted/30">
+                    <span className="font-mono text-primary">{p.id}</span> — <span className="font-semibold">{p.name}</span>
+                    <span className="text-muted-foreground"> · {(p.roles ?? [p.role]).filter(Boolean).join(", ") || p.role}{p.status === "Archived" ? " · Archived" : ""}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-between pt-3 border-t border-border">
+              <button
+                type="button"
+                onClick={() => {
+                  onReinstatePartner(detailPartner.id);
+                  toast(`"${detailPartner.name}" reinstated with full history`, "success");
+                  setDetailPartnerId(null);
+                }}
+                className="text-xs font-semibold px-3 py-1.5 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm"
+              >
+                Reinstate
+              </button>
+              <SecondaryButton onClick={() => setDetailPartnerId(null)}>Close</SecondaryButton>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
