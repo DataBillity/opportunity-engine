@@ -295,6 +295,34 @@ export default function CommandCenter() {
     []
   );
 
+  const handleDeletePursuit = useCallback(
+    (pursuitId: string) => {
+      const removed = allPursuits[pursuitId];
+      if (!removed) return;
+      setAllPursuits(prev => {
+        const next = { ...prev };
+        delete next[pursuitId];
+        return next;
+      });
+      setOrgs(prev => prev.map(org => {
+        if (!org.pursuits.includes(pursuitId)) return org;
+        const pursuits = org.pursuits.filter(id => id !== pursuitId);
+        const openScores = pursuits
+          .map(id => allPursuits[id])
+          .filter((item): item is Pursuit => item !== undefined && !item.closed)
+          .map(item => item.score);
+        return {
+          ...org,
+          pursuits,
+          score: openScores.length ? Math.max(...openScores) : org.score,
+        };
+      }));
+      setCurrentPursuitId(prev => (prev === pursuitId ? null : prev));
+      setActiveView(prev => (prev === "decision" || prev === "draft") && currentPursuitId === pursuitId ? "org" : prev);
+    },
+    [allPursuits, currentPursuitId],
+  );
+
   const handleUpdatePursuit = useCallback(
     (pursuitId: string, updates: Partial<Pursuit>) => {
       setAllPursuits(prev => {
@@ -468,6 +496,7 @@ export default function CommandCenter() {
                 onPursuitSelect={handlePursuitSelect}
                 onBack={() => setActiveView(leadReturnView)}
                 onAddPursuit={handleAddPursuit}
+                onDeletePursuit={handleDeletePursuit}
                 onArchiveOrg={handleArchiveOrg}
                 onReinstateOrg={handleReinstateOrg}
                 onUpdateOrg={handleUpdateOrg}
@@ -483,6 +512,7 @@ export default function CommandCenter() {
                 onDraft={() => setActiveView("draft")}
                 onConfirmDecision={handleConfirmDecision}
                 onUpdatePursuit={handleUpdatePursuit}
+                onDeletePursuit={handleDeletePursuit}
               />
             )}
             {activeView === "decision" && (!selectedPursuit || !currentOrg) && (

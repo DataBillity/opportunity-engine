@@ -40,17 +40,19 @@ function StatusBadge({ status, label }: { status: string; label: string }) {
 }
 
 export function OpportunityView({
-  pursuit, org, partners, onBack, onDraft, onConfirmDecision, onUpdatePursuit,
+  pursuit, org, partners, onBack, onDraft,   onConfirmDecision, onUpdatePursuit, onDeletePursuit,
 }: {
   pursuit: Pursuit; org: Organization;
   partners?: Partner[];
   onBack: () => void; onDraft: () => void;
   onConfirmDecision: (pursuitId: string, decision: "go" | "nogo") => void;
   onUpdatePursuit: (pursuitId: string, updates: Partial<Pursuit>) => void;
+  onDeletePursuit?: (pursuitId: string) => void;
 }) {
   const { toast } = useToast();
   const { profile } = useOperator();
   const [confirmOpen, setConfirmOpen] = useState<"go" | "nogo" | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmReason, setConfirmReason] = useState("");
   const [docUploadOpen, setDocUploadOpen] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
@@ -207,6 +209,12 @@ export function OpportunityView({
                 className="text-xs font-medium px-3.5 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
               >
                 Refresh Score
+              </button>
+              <button
+                onClick={() => setDeleteOpen(true)}
+                className="text-xs font-medium px-3.5 py-2 rounded-md border border-input bg-card text-destructive cursor-pointer transition-all hover:bg-secondary"
+              >
+                Delete project
               </button>
             </div>
           </div>
@@ -636,6 +644,27 @@ export function OpportunityView({
       </Modal>
 
       {/* Upload Document Modal */}
+      <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Delete Project">
+        <div className="space-y-4">
+          <p className="text-sm text-foreground">
+            Delete <strong>{pursuit.name}</strong> from {org.name}? This removes the current assessment. Add the {projectTypeOf(pursuit).toUpperCase()} again and upload the documents to run a full new assessment.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <SecondaryButton onClick={() => setDeleteOpen(false)}>Cancel</SecondaryButton>
+            <button
+              onClick={() => {
+                onDeletePursuit?.(pursuit.id);
+                toast(`Deleted project "${pursuit.name}"`, "success");
+                setDeleteOpen(false);
+              }}
+              className="text-xs font-semibold px-4 py-2 rounded-md bg-destructive text-white cursor-pointer transition-all hover:opacity-90 shadow-sm"
+            >
+              Delete project
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal open={docUploadOpen} onClose={() => !uploading && setDocUploadOpen(false)} title="Upload Document">
         <div className="space-y-4">
           <p className="text-xs text-muted-foreground">

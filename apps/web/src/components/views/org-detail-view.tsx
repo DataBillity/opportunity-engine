@@ -37,6 +37,7 @@ export function OrgDetailView({
   onPursuitSelect,
   onBack,
   onAddPursuit,
+  onDeletePursuit,
   onArchiveOrg,
   onReinstateOrg,
   onUpdateOrg,
@@ -48,6 +49,7 @@ export function OrgDetailView({
   onPursuitSelect: (id: string) => void;
   onBack: () => void;
   onAddPursuit: (pursuit: Pursuit) => void;
+  onDeletePursuit?: (pursuitId: string) => void;
   onArchiveOrg?: (orgId: string) => void;
   onReinstateOrg?: (orgId: string) => void;
   onUpdateOrg?: (orgId: string, updates: Partial<Organization>) => void;
@@ -66,6 +68,7 @@ export function OrgDetailView({
   const [localNotes, setLocalNotes] = useState(org.notes);
 
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const [deletePursuit, setDeletePursuit] = useState<Pursuit | null>(null);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeSourceId, setMergeSourceId] = useState("");
   const [mergeName, setMergeName] = useState("");
@@ -462,12 +465,20 @@ export function OrgDetailView({
                     )}>{p.outcome}</span>
                   )}
                 </div>
-                <button
-                  onClick={() => onPursuitSelect(p.id)}
-                  className="text-xs font-medium px-3 py-1.5 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary shrink-0"
-                >
-                  View
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => onPursuitSelect(p.id)}
+                    className="text-xs font-medium px-3 py-1.5 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+                  >
+                    View
+                  </button>
+                  <button
+                    onClick={() => setDeletePursuit(p)}
+                    className="text-xs font-medium px-3 py-1.5 rounded-md border border-input bg-card text-destructive cursor-pointer transition-all hover:bg-secondary"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             </div>
           )) : (
@@ -513,12 +524,20 @@ export function OrgDetailView({
                     ) : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => onPursuitSelect(p.id)}
-                      className="text-xs font-medium px-3 py-1.5 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
-                    >
-                      View
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => onPursuitSelect(p.id)}
+                        className="text-xs font-medium px-3 py-1.5 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+                      >
+                        View
+                      </button>
+                      <button
+                        onClick={() => setDeletePursuit(p)}
+                        className="text-xs font-medium px-3 py-1.5 rounded-md border border-input bg-card text-destructive cursor-pointer transition-all hover:bg-secondary"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )) : (
@@ -563,6 +582,28 @@ export function OrgDetailView({
       </Modal>
 
       {/* Archive Confirmation Modal */}
+      <Modal open={deletePursuit !== null} onClose={() => setDeletePursuit(null)} title="Delete Project">
+        <div className="space-y-4">
+          <p className="text-sm text-foreground">
+            Delete <strong>{deletePursuit?.name}</strong> from {org.name}? The assessment and uploaded text for this {deletePursuit?.typeLabel ?? "project"} are removed. Add the project again to run a new assessment from the documents.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <SecondaryButton onClick={() => setDeletePursuit(null)}>Cancel</SecondaryButton>
+            <button
+              onClick={() => {
+                if (!deletePursuit) return;
+                onDeletePursuit?.(deletePursuit.id);
+                toast(`Deleted project "${deletePursuit.name}"`, "success");
+                setDeletePursuit(null);
+              }}
+              className="text-xs font-semibold px-4 py-2 rounded-md bg-destructive text-white cursor-pointer transition-all hover:opacity-90 shadow-sm"
+            >
+              Delete project
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal open={archiveConfirmOpen} onClose={() => setArchiveConfirmOpen(false)} title="Archive Lead">
         <div className="space-y-4">
           <p className="text-sm text-foreground">
