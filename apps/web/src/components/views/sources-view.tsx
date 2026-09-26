@@ -139,11 +139,11 @@ function SortableHeader({
       )}
       onClick={onClick}
     >
-      <span className="inline-flex items-center gap-1">
+      <span className="inline-flex items-center gap-1.5">
         {label}
-        <svg width="10" height="10" viewBox="0 0 10 10" className="inline-block shrink-0" aria-hidden="true">
-          <path d="M5 1l3 3.5H2z" fill="currentColor" opacity={active && current.dir === "asc" ? 1 : 0.35} />
-          <path d="M5 9l3-3.5H2z" fill="currentColor" opacity={active && current.dir === "desc" ? 1 : 0.35} />
+        <svg width="16" height="16" viewBox="0 0 10 10" className="inline-block shrink-0" aria-hidden="true">
+          <path d="M5 0.6l3.4 3.8H1.6z" fill="currentColor" opacity={active && current.dir === "asc" ? 1 : 0.45} />
+          <path d="M5 9.4l3.4-3.8H1.6z" fill="currentColor" opacity={active && current.dir === "desc" ? 1 : 0.45} />
         </svg>
       </span>
     </th>
