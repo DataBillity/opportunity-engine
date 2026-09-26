@@ -125,13 +125,26 @@ function SortableHeader({
   return (
     <th
       className={cn(
-        "text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5 cursor-pointer select-none hover:text-foreground transition-colors",
+        "text-left text-[10px] uppercase tracking-wider font-semibold px-4 py-2.5 cursor-pointer select-none group transition-colors",
+        active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
         className,
       )}
       onClick={onClick}
     >
-      {label}
-      {active && <span className="ml-1 text-foreground">{current.dir === "asc" ? "↑" : "↓"}</span>}
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="shrink-0 opacity-90">
+            {current.dir === "asc"
+              ? <path d="M12 19V5M5 12l7-7 7 7" />
+              : <path d="M12 5v14M5 12l7 7 7-7" />}
+          </svg>
+        ) : (
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 opacity-0 group-hover:opacity-40 transition-opacity">
+            <path d="M7 15l5 5 5-5M7 9l5-5 5 5" />
+          </svg>
+        )}
+      </span>
     </th>
   );
 }
