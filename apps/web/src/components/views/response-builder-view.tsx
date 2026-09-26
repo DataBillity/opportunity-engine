@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import type { GraphExperience, GraphPerson, Organization, Partner, Pursuit, ResponseActionItem } from "@/lib/mock-data";
+import type { GraphExperience, GraphPerson, Organization, Partner, Pursuit, ResponseActionItem, RfiGapLogItem, RfiResponseMeta } from "@/lib/mock-data";
+import { RFI_OUTLINE_SECTIONS } from "@opportunity-engine/core";
 import { getPartner } from "@/lib/mock-data";
 import { Modal, FormField, TextInput, TextArea, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
 import { ActionItemResponseModal } from "@/components/action-items/action-item-response-modal";
@@ -10,6 +11,7 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { rankPeopleForRole } from "@/lib/personnel-fit";
 import { buildResponseDraftBriefing } from "@/lib/response-draft-briefing";
+import { RfiResponsePackagePanel } from "@/components/views/rfi-response-package";
 import { escapeHtml, htmlToPlainText, isEmptyRichText, plainTextToHtml, sanitizeRichText } from "@/lib/rich-text";
 
 interface SectionMeta {
@@ -32,8 +34,23 @@ const initialSections: SectionMeta[] = [
   { id: "mgmt", name: "Management Plan", ref: "Vol I § 3.6", trace: "none", tracePct: "Not started", mandatory: true },
 ];
 
+function isGenericRfiMatrix(matrix: { sectionId: string }[]): boolean {
+  if (matrix.length !== 3) return false;
+  return matrix.map(item => item.sectionId).sort().join(",") === "approach,experience,overview";
+}
+
 function sectionsForPursuit(pursuit: Pursuit): SectionMeta[] {
   if (pursuit.id === "OPP-2219") return initialSections;
+  if (pursuit.projectType === "rfi") {
+    const matrix = pursuit.complianceMatrix ?? [];
+    const source = matrix.length && !isGenericRfiMatrix(matrix)
+      ? matrix
+      : RFI_OUTLINE_SECTIONS.map(section => ({ ref: section.ref, title: section.title, sectionId: section.sectionId }));
+    return source.map(item => ({
+      id: item.sectionId, name: item.title, ref: item.ref,
+      trace: "none" as const, tracePct: "Not started", mandatory: true,
+    }));
+  }
   if (pursuit.complianceMatrix?.length) {
     return pursuit.complianceMatrix.map(item => ({
       id: item.sectionId, name: item.title, ref: item.ref,
@@ -105,11 +122,31 @@ The subcontracting plan ensures clear accountability across all consortium membe
 
 interface ChatMessage { role: "system" | "user" | "assistant"; text: string; }
 
+interface DraftGap {
+  id: string;
+  location: string;
+  gapType: string;
+  description: string;
+  owner: string;
+  priority: "High" | "Medium" | "Low" | string;
+  due: string;
+  status: string;
+  notes: string;
+}
+
 interface DraftApiResponse {
+  kind?: "section" | "package";
   body?: string;
+  gaps?: DraftGap[];
+  reviewerSummary?: string;
+  strategicNotes?: string;
+  questions?: string[];
+  compliance?: RfiResponseMeta["compliance"];
+  sections?: { id: string; ref: string; title: string; body: string }[];
   provider?: "claude" | "gemini";
   modelVersion?: string;
   insights?: { id: string }[];
+  usedFallback?: boolean;
   error?: string;
   hint?: string;
 }
@@ -126,6 +163,53 @@ const demoPersonnelAssignments: Record<string, string> = {
   "QA & Compliance Lead": "PPL-120",
 };
 
+function asGapPriority(value: string): RfiGapLogItem["priority"] {
+  if (value === "High" || value === "Low") return value;
+  return "Medium";
+}
+
+function asGapStatus(value: string): RfiGapLogItem["status"] {
+  if (value === "Resolved" || value === "In progress") return value;
+  return "Open";
+}
+
+function toGapItems(gaps: DraftGap[]): RfiGapLogItem[] {
+  return gaps.map(gap => ({
+    id: gap.id,
+    location: gap.location,
+    gapType: gap.gapType,
+    description: gap.description,
+    owner: gap.owner || "Prime",
+    priority: asGapPriority(gap.priority),
+    dueAt: gap.due,
+    status: asGapStatus(gap.status),
+    notes: gap.notes,
+  }));
+}
+
+function gapsToActionItems(gaps: RfiGapLogItem[], partners: Partner[] | undefined): ResponseActionItem[] {
+  return gaps.map(gap => {
+    const named = gap.owner.replace(/^Partner:\s*/i, "").trim().toLowerCase();
+    const partner = /^prime\b/i.test(gap.owner)
+      ? undefined
+      : partners?.find(item => item.name.toLowerCase() === named);
+    return {
+      id: gap.id,
+      kind: gap.gapType,
+      description: gap.description,
+      expectedResponseType: gap.gapType,
+      relatedSection: gap.location,
+      assignedPartnerId: partner?.id ?? null,
+      assignedInternal: partner ? null : gap.owner,
+      dueAt: gap.dueAt,
+      status: gap.status,
+      gates: [gap.priority],
+      responseContent: gap.notes,
+      responseDocument: null,
+    };
+  });
+}
+
 const copilotResponses: Record<string, string> = {
   "Strengthen the fraud analytics paragraph": "I've enhanced the fraud analytics paragraph with specific metrics and methodology details.",
   "Add a risk mitigation section": "I've added a risk mitigation section addressing three key areas.",
@@ -134,9 +218,11 @@ const copilotResponses: Record<string, string> = {
 
 export function ResponseBuilderEmptyState({
   orgName,
+  projectType,
   onOpenOpportunity,
 }: {
   orgName?: string;
+  projectType?: "rfp" | "rfi" | "sow";
   onOpenOpportunity: () => void;
 }) {
   return (
@@ -144,8 +230,12 @@ export function ResponseBuilderEmptyState({
       <h2 className="text-base font-semibold text-foreground">Response Builder</h2>
       <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
         {orgName
-          ? `No confirmed Go pursuit for ${orgName}. Confirm Go on an opportunity before drafting a response.`
-          : "Confirm Go on an opportunity before drafting a response."}
+          ? projectType === "rfi"
+            ? `No confirmed Respond decision for ${orgName}. Confirm Respond on an RFI before drafting a response.`
+            : `No confirmed Go pursuit for ${orgName}. Confirm Go on an opportunity before drafting a response.`
+          : projectType === "rfi"
+            ? "Confirm Respond on an RFI before drafting a response."
+            : "Confirm Go on an opportunity before drafting a response."}
       </p>
       <button
         type="button"
@@ -203,6 +293,8 @@ export function ResponseBuilderView({
   const [addPersonTitle, setAddPersonTitle] = useState("");
   const [addPersonPartner, setAddPersonPartner] = useState("");
   const [actionItem, setActionItem] = useState<ResponseActionItem | null>(null);
+  const [rfiPacket, setRfiPacket] = useState<RfiResponseMeta | null>(pursuit.rfiResponse ?? null);
+  const isRfi = pursuit.projectType === "rfi";
 
   // Upload final
   const [uploadFinalOpen, setUploadFinalOpen] = useState(false);
@@ -232,6 +324,108 @@ export function ResponseBuilderView({
     toast(`Outcome set to ${newOutcome}`, "success");
   }
 
+  function persistRfiPacket(packet: RfiResponseMeta) {
+    setRfiPacket(packet);
+    onUpdatePursuit(pursuit.id, {
+      rfiResponse: packet,
+      responseActionItems: gapsToActionItems(packet.gaps, partners),
+      complianceMatrix: sections.map(section => ({
+        ref: section.ref,
+        title: section.name,
+        sectionId: section.id,
+      })),
+    });
+  }
+
+  async function requestRfiPackage() {
+    const section = sections[0];
+    if (!section) return;
+    setGenerating(true);
+    const briefing = buildResponseDraftBriefing({
+      pursuit,
+      org,
+      section,
+      sections: sections.map(item => ({ id: item.id, name: item.name, ref: item.ref })),
+      assignments: personnelAssignments,
+      people: people ?? [],
+      experience,
+      capabilities,
+      partners,
+      mode: "package",
+      existingGapIds: rfiPacket?.gaps.map(gap => gap.id) ?? [],
+    });
+
+    try {
+      const res = await fetch("/api/response/generate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ briefing }),
+      });
+      const data = await res.json() as DraftApiResponse;
+      if (!res.ok || !data.reviewerSummary || !data.sections?.length) {
+        setMessages(prev => [...prev, {
+          role: "system",
+          text: data.error || data.hint || "RFI package unavailable.",
+        }]);
+        toast(data.error || "RFI package unavailable", "warning");
+        return;
+      }
+
+      const tracePct = data.usedFallback ? "shell" : (data.provider ?? "model");
+      const draftedById = new Map(data.sections.map(item => [item.id, item]));
+      const mergedSections = sections.map(section => {
+        const drafted = draftedById.get(section.id);
+        if (!drafted) return section;
+        return { ...section, name: drafted.title || section.name, ref: drafted.ref || section.ref, trace: "partial" as const, tracePct };
+      });
+      const extras = data.sections
+        .filter(item => !sections.some(section => section.id === item.id))
+        .map(item => ({
+          id: item.id,
+          name: item.title,
+          ref: item.ref || item.title,
+          trace: "partial" as const,
+          tracePct,
+          mandatory: true,
+        }));
+      const allSections = [...mergedSections, ...extras];
+      setSections(allSections);
+      setDrafts(prev => {
+        const next = { ...prev };
+        for (const item of data.sections ?? []) next[item.id] = plainTextToHtml(item.body);
+        return next;
+      });
+      setActiveSection(allSections[0]?.id ?? section.id);
+      const packet: RfiResponseMeta = {
+        reviewerSummary: data.reviewerSummary,
+        strategicNotes: data.strategicNotes ?? "",
+        questions: data.questions ?? [],
+        compliance: data.compliance ?? [],
+        gaps: toGapItems(data.gaps ?? []),
+      };
+      setRfiPacket(packet);
+      onUpdatePursuit(pursuit.id, {
+        rfiResponse: packet,
+        responseActionItems: gapsToActionItems(packet.gaps, partners),
+        complianceMatrix: allSections.map(item => ({ ref: item.ref, title: item.name, sectionId: item.id })),
+      });
+      setMessages(prev => [...prev, {
+        role: "system",
+        text: data.usedFallback
+          ? "Model draft unavailable. Saved an RFI shell with a Gap Log. Do not submit it."
+          : `RFI response drafted${data.provider ? ` via ${data.provider}` : ""}. ${packet.gaps.length} gap${packet.gaps.length === 1 ? "" : "s"} logged for review.`,
+      }]);
+      toast(data.usedFallback ? "RFI shell saved — resolve the Gap Log before review" : "RFI response drafted for review", data.usedFallback ? "warning" : "success");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to generate the RFI response";
+      setMessages(prev => [...prev, { role: "system", text: message }]);
+      toast(message, "warning");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   async function requestSectionDraft(options: { regenerate: boolean }) {
     const section = sections.find(item => item.id === activeSection);
     if (!section) return;
@@ -244,7 +438,9 @@ export function ResponseBuilderView({
       people: people ?? [],
       experience,
       capabilities,
+      partners,
       existingDraft: options.regenerate ? htmlToPlainText(drafts[activeSection] ?? "") : undefined,
+      existingGapIds: rfiPacket?.gaps.map(gap => gap.id) ?? [],
     });
 
     try {
@@ -272,6 +468,18 @@ export function ResponseBuilderView({
       }
 
       setDrafts(prev => ({ ...prev, [activeSection]: plainTextToHtml(data.body!.trim()) }));
+      if (isRfi && data.gaps?.length) {
+        const incoming = toGapItems(data.gaps);
+        const prior = rfiPacket?.gaps ?? [];
+        const merged = [...prior.filter(gap => !incoming.some(next => next.id === gap.id)), ...incoming];
+        persistRfiPacket({
+          reviewerSummary: rfiPacket?.reviewerSummary ?? "Section updated. Review the Gap Log before submission.",
+          strategicNotes: rfiPacket?.strategicNotes ?? "",
+          questions: rfiPacket?.questions ?? [],
+          compliance: rfiPacket?.compliance ?? [],
+          gaps: merged,
+        });
+      }
       setSections(prev => {
         const next = prev.map(s => s.id === activeSection
           ? { ...s, trace: "partial" as const, tracePct: data.provider ?? "model" }
@@ -352,6 +560,18 @@ export function ResponseBuilderView({
   }
 
   function handleExportWord() {
+    const summary = isRfi && rfiPacket
+      ? `<h1>Reviewer summary</h1><p>${escapeHtml(rfiPacket.reviewerSummary)}</p>${
+        rfiPacket.questions.length
+          ? `<h2>Suggested questions</h2><ul>${rfiPacket.questions.map(question => `<li>${escapeHtml(question)}</li>`).join("")}</ul>`
+          : ""
+      }${rfiPacket.strategicNotes.trim() ? `<h2>Strategic notes</h2><p>${escapeHtml(rfiPacket.strategicNotes)}</p>` : ""}`
+      : "";
+    const gapTable = isRfi && rfiPacket
+      ? `<h1>Gap log</h1><table border="1" cellpadding="6" cellspacing="0"><tr><th>ID</th><th>Location</th><th>Type</th><th>Description</th><th>Owner</th><th>Priority</th><th>Due</th><th>Status</th></tr>${
+        rfiPacket.gaps.map(gap => `<tr><td>${escapeHtml(gap.id)}</td><td>${escapeHtml(gap.location)}</td><td>${escapeHtml(gap.gapType)}</td><td>${escapeHtml(gap.description)}</td><td>${escapeHtml(gap.owner)}</td><td>${escapeHtml(gap.priority)}</td><td>${escapeHtml(gap.dueAt)}</td><td>${escapeHtml(gap.status)}</td></tr>`).join("")
+      }</table>`
+      : "";
     const body = sections.map(s => {
       const content = isEmptyRichText(drafts[s.id])
         ? "<p><em>Not drafted</em></p>"
@@ -360,7 +580,7 @@ export function ResponseBuilderView({
     }).join("");
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(pursuit.name)} — Response Draft</title>
 <style>body{font-family:Georgia,serif;max-width:720px;margin:40px auto;line-height:1.65;color:#111}h1{font-family:Calibri,sans-serif;font-size:20px;margin:28px 0 8px}h2{font-size:16px}ul,ol{padding-left:1.4em}</style>
-</head><body><p style="color:#555;font-size:13px">${escapeHtml(pursuit.solicitationRef || pursuit.typeLabel)}</p><h1>${escapeHtml(pursuit.name)} — Response Draft</h1>${body}</body></html>`;
+</head><body><p style="color:#555;font-size:13px">${escapeHtml(pursuit.solicitationRef || pursuit.typeLabel)}</p><h1>${escapeHtml(pursuit.name)} — Response Draft</h1>${summary}${body}${gapTable}</body></html>`;
     const blob = new Blob(["\ufeff", html], { type: "application/msword" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -430,6 +650,17 @@ export function ResponseBuilderView({
           <button onClick={() => setUploadFinalOpen(true)} className="text-xs font-medium px-3 py-1.5 rounded-md border border-input bg-card text-foreground cursor-pointer hover:bg-secondary">Upload Final</button>
         </div>
       </div>
+
+      {isRfi && rfiPacket && (
+        <RfiResponsePackagePanel
+          packet={rfiPacket}
+          onOpenGap={id => {
+            const existing = (pursuit.responseActionItems ?? []).find(item => item.id === id);
+            const gap = rfiPacket.gaps.find(item => item.id === id);
+            setActionItem(existing ?? (gap ? gapsToActionItems([gap], partners)[0] ?? null : null));
+          }}
+        />
+      )}
 
       <div className="flex flex-col xl:flex-row gap-4 items-stretch xl:items-start">
         {/* Section nav card */}
@@ -549,7 +780,7 @@ export function ResponseBuilderView({
               <div className="absolute inset-0 bg-card/80 backdrop-blur-[1px] flex items-center justify-center z-10">
                 <div className="flex items-center gap-3">
                   <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                  <span className="text-sm text-muted-foreground">Generating draft from the solicitation packet and team graph…</span>
+                  <span className="text-sm text-muted-foreground">{isRfi ? "Drafting the RFI response, gap log, and reviewer summary…" : "Generating draft from the solicitation packet and team graph…"}</span>
                 </div>
               </div>
             )}
@@ -575,7 +806,12 @@ export function ResponseBuilderView({
 
           {/* Actions */}
           <div className="flex gap-2.5 flex-wrap">
-            {!hasDraft && (
+            {isRfi && (
+              <button onClick={() => void requestRfiPackage()} disabled={generating} className="text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm disabled:opacity-50">
+                {generating ? "Drafting…" : sections.some(section => !isEmptyRichText(drafts[section.id])) ? "Regenerate RFI response" : "Generate RFI response"}
+              </button>
+            )}
+            {!isRfi && !hasDraft && (
               <button onClick={handleGenerateDraft} disabled={generating} className="text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm disabled:opacity-50">Generate draft</button>
             )}
             {hasDraft && (
@@ -593,7 +829,7 @@ export function ResponseBuilderView({
           </div>
 
           {/* Action items panel */}
-          {pursuit.responseActionItems && pursuit.responseActionItems.length > 0 && (
+          {!isRfi && pursuit.responseActionItems && pursuit.responseActionItems.length > 0 && (
             <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
                 <h3 className="oe-card-title">Outstanding Action Items</h3>
@@ -768,10 +1004,30 @@ export function ResponseBuilderView({
         onClose={() => setActionItem(null)}
         onSave={updates => {
           if (!actionItem) return;
+          const listed = pursuit.responseActionItems ?? [];
+          const fromPacket = gapsToActionItems(rfiPacket?.gaps ?? [], partners)
+            .filter(item => !listed.some(existing => existing.id === item.id));
+          const baseItems = listed.some(item => item.id === actionItem.id) ? listed : [...listed, ...fromPacket];
+          const nextItems = baseItems.map(item =>
+            item.id === actionItem.id ? { ...item, ...updates } : item
+          );
+          const resolved = updates.status === "Done" || updates.status === "Resolved";
+          const nextPacket = isRfi && rfiPacket
+            ? {
+              ...rfiPacket,
+              gaps: rfiPacket.gaps.map(gap => gap.id === actionItem.id
+                ? {
+                  ...gap,
+                  notes: updates.responseContent ?? gap.notes,
+                  status: resolved ? "Resolved" as const : gap.status,
+                }
+                : gap),
+            }
+            : rfiPacket;
+          if (nextPacket) setRfiPacket(nextPacket);
           onUpdatePursuit(pursuit.id, {
-            responseActionItems: (pursuit.responseActionItems ?? []).map(item =>
-              item.id === actionItem.id ? { ...item, ...updates } : item
-            ),
+            responseActionItems: nextItems,
+            ...(nextPacket ? { rfiResponse: nextPacket } : {}),
           });
           toast("Action item updated", "success");
         }}

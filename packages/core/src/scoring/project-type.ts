@@ -28,6 +28,17 @@ export function projectTypeLabel(type: ProjectType): string {
   return { rfp: "RFP", rfi: "RFI", sow: "SOW" }[type];
 }
 
+/** Used when an RFI does not prescribe its own response headings. */
+export const RFI_OUTLINE_SECTIONS = [
+  { ref: "Cover", title: "Cover letter", sectionId: "cover" },
+  { ref: "Company", title: "Company and team overview", sectionId: "company" },
+  { ref: "Understanding", title: "Understanding of the requirement", sectionId: "understanding" },
+  { ref: "Questions", title: "Responses to specific questions", sectionId: "questions" },
+  { ref: "Experience", title: "Relevant experience", sectionId: "experience" },
+  { ref: "Recommendations", title: "Recommendations for the future solicitation", sectionId: "recommendations" },
+  { ref: "Contacts", title: "Points of contact", sectionId: "contacts" },
+] as const;
+
 export function projectTypeLongLabel(type: ProjectType): string {
   return {
     rfp: "Request for Proposal",

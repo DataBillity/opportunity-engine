@@ -17,6 +17,7 @@ import {
 import {
   recDecisionLabel,
   resolveProjectType,
+  RFI_OUTLINE_SECTIONS,
   thresholdsFor,
 } from "./project-type";
 
@@ -561,11 +562,7 @@ function extractResponseSections(text: string, projectType: ProjectType): Solici
   }
   if (found.length) return found;
   if (projectType === "rfi") {
-    return [
-      { ref: "Overview", title: "Company & Capabilities", sectionId: "overview" },
-      { ref: "Experience", title: "Relevant Experience", sectionId: "experience" },
-      { ref: "Approach", title: "Approach to the Information Request", sectionId: "approach" },
-    ];
+    return RFI_OUTLINE_SECTIONS.map(section => ({ ...section }));
   }
   return [
     { ref: "Approach", title: "Technical Approach", sectionId: "tech" },

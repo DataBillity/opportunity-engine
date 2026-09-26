@@ -6,7 +6,7 @@ import {
 import { callModel, ModelGatewayError } from "./gateway";
 import { parseModelJson } from "./json";
 
-export const RESPONSE_DRAFT_PROMPT_VERSION = "response-draft-v1.0";
+export const RESPONSE_DRAFT_PROMPT_VERSION = "response-draft-v1.1";
 
 export interface ResponseGroundingFact {
   id: string;
@@ -16,6 +16,17 @@ export interface ResponseGroundingFact {
 
 export interface ResponseSectionDraft {
   body: string;
+  gaps?: {
+    id: string;
+    location: string;
+    gapType: string;
+    description: string;
+    owner: string;
+    priority: string;
+    due: string;
+    status: string;
+    notes: string;
+  }[];
   insights: ResponseGroundingFact[];
   modelVersion: string;
   provider: "claude" | "gemini";
@@ -33,7 +44,6 @@ Hard rules:
 - Past Performance and Key Personnel may only name people and engagements in the grounding facts.
 - Write prose paragraphs for the named section only. No cover letter, no other volumes, no HTML, no markdown headings.
 - If response-format facts give a page limit, font, or margin rule, stay inside that limit. Those rules shape the draft. They are not a reason the opportunity fits.
-- For an RFI, answer the listed questions using capability and experience facts. Do not invent coverage for challenges we do not list a capability for.
 - 220–420 words unless a page limit or thin facts require less; then write a short, honest section and say what is missing.
 - Tone: precise, operator-facing, no hype, no "synergies", no "world-class".
 
@@ -86,6 +96,21 @@ export function collectResponseFacts(briefing: ResponseDraftBriefingType): Respo
     push("rfp", `Source excerpt: ${pursuit.sourceExcerpt.trim()}`);
   }
 
+  if (briefing.projectType === "rfi") {
+    push("account", "DataBillity responds as Prime. Do not invent UEI, CAGE, NAICS, size, or socioeconomic status.");
+  }
+  for (const partner of briefing.partners ?? []) {
+    const covers = partner.covers.filter(Boolean);
+    push(
+      "account",
+      `Teaming partner ${partner.name}${partner.role ? `. Directory type: ${partner.role}` : ""}. ${
+        partner.confirmed
+          ? "Confirmed on this response. Gap owner, if needed: Partner: " + partner.name + "."
+          : "Not confirmed on this response. Do not assign gaps to this partner; assign Prime and mention the partner in notes."
+      }${covers.length ? ` Covers: ${covers.join(", ")}.` : ""}${partner.summary ? ` ${partner.summary}` : ""}`,
+    );
+  }
+
   for (const person of briefing.people) {
     const roles = [person.assignedRole, person.role, ...(person.roles ?? [])].filter(Boolean);
     const uniqueRoles = [...new Set(roles.map(role => role!.trim()).filter(Boolean))];
@@ -93,6 +118,7 @@ export function collectResponseFacts(briefing: ResponseDraftBriefingType): Respo
     const industries = (person.industries ?? []).filter(Boolean);
     const parts = [
       person.name,
+      person.partnerName ? `Partner: ${person.partnerName}` : "",
       uniqueRoles.length ? `Roles: ${uniqueRoles.join(", ")}` : "",
       person.expertise?.trim(),
       tech.length ? `Technologies: ${tech.join(", ")}` : "",
@@ -143,6 +169,9 @@ export function buildResponseDraftPrompt(
   if (briefing.instructions?.trim()) {
     lines.push("", "OPERATOR INSTRUCTIONS:", briefing.instructions.trim());
   }
+  if (briefing.projectType === "rfi" && briefing.existingGapIds?.length) {
+    lines.push("", "EXISTING GAP IDS (number new placeholders after the highest of these):", briefing.existingGapIds.join(", "));
+  }
 
   return lines.join("\n");
 }
@@ -151,10 +180,16 @@ export async function generateResponseDraft(rawBriefing: unknown): Promise<Respo
   const briefing = ResponseDraftBriefing.parse(rawBriefing);
   const facts = collectResponseFacts(briefing);
 
+  const rfi = briefing.projectType === "rfi";
+  const { RFI_SECTION_PROMPT, normalizeSectionGaps } = rfi
+    ? await import("./rfi-response")
+    : { RFI_SECTION_PROMPT: SYSTEM_PROMPT, normalizeSectionGaps: null };
+  const fallbackDue = briefing.pursuit.dueDate ?? "";
+
   const result = await callModel({
     tier: "judgment",
-    promptVersion: RESPONSE_DRAFT_PROMPT_VERSION,
-    systemPrompt: SYSTEM_PROMPT,
+    promptVersion: rfi ? "rfi-response-v1.0" : RESPONSE_DRAFT_PROMPT_VERSION,
+    systemPrompt: rfi ? RFI_SECTION_PROMPT : SYSTEM_PROMPT,
     prompt: buildResponseDraftPrompt(briefing, facts),
     classification: "internal",
     redactionProfile: "response-draft-v1",
@@ -173,16 +208,19 @@ export async function generateResponseDraft(rawBriefing: unknown): Promise<Respo
     parsed = { body: result.content.trim(), usedInsightIds: [] };
   }
 
-  let draft: { body: string; usedInsightIds: string[] };
+  let draft: { body: string; usedInsightIds: string[]; gaps: { id: string; location: string; gapType: string; description: string; owner: string; priority: string; due: string; status: string; notes: string }[] };
   try {
-    draft = ResponseDraftOutput.parse(parsed);
+    const normalized = parsed && typeof parsed === "object"
+      ? { ...parsed as object, gaps: normalizeSectionGaps ? normalizeSectionGaps(parsed, fallbackDue) : [] }
+      : parsed;
+    draft = ResponseDraftOutput.parse(normalized);
   } catch {
     const raw = result.content.trim();
     if (!raw) {
       throw new ModelGatewayError("Model returned a draft that could not be parsed", "empty_response");
     }
     usedFallback = true;
-    draft = { body: raw, usedInsightIds: [] };
+    draft = { body: raw, usedInsightIds: [], gaps: [] };
   }
 
   const byId = new Map(facts.map(fact => [fact.id, fact]));
@@ -192,10 +230,11 @@ export async function generateResponseDraft(rawBriefing: unknown): Promise<Respo
 
   return {
     body: draft.body.trim(),
+    gaps: draft.gaps,
     insights: insights.length ? insights : facts.slice(0, 6),
     modelVersion: result.modelVersion,
     provider: result.provider,
-    promptVersion: RESPONSE_DRAFT_PROMPT_VERSION,
+    promptVersion: rfi ? "rfi-response-v1.0" : RESPONSE_DRAFT_PROMPT_VERSION,
     latencyMs: result.latencyMs,
     usedFallback,
   };
