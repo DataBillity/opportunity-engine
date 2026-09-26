@@ -53,6 +53,14 @@ const TEAMING_OPTIONS: { value: "na" | "pending" | "signed"; label: string; flag
   { value: "signed", label: "Signed", flag: true },
 ];
 
+const TEAMING_FILTER_OPTIONS = TEAMING_OPTIONS.map(({ value, label }) => ({ value, label }));
+
+const PARTNER_STATUS_OPTIONS = [
+  { value: "Active", label: "Active" },
+  { value: "Pending", label: "Pending" },
+  { value: "Archived", label: "Archived" },
+];
+
 function teamingValue(flag: boolean | null): "na" | "pending" | "signed" {
   if (flag === true) return "signed";
   if (flag === false) return "pending";
@@ -125,7 +133,7 @@ function SortableHeader({
   return (
     <th
       className={cn(
-        "text-left text-[10px] uppercase tracking-wider font-semibold px-4 py-2.5 cursor-pointer select-none group transition-colors",
+        "text-left text-[10px] uppercase tracking-wider font-semibold px-4 py-2.5 cursor-pointer select-none transition-colors whitespace-nowrap",
         active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
         className,
       )}
@@ -133,18 +141,72 @@ function SortableHeader({
     >
       <span className="inline-flex items-center gap-1">
         {label}
-        {active ? (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="shrink-0 opacity-90">
-            {current.dir === "asc"
-              ? <path d="M12 19V5M5 12l7-7 7 7" />
-              : <path d="M12 5v14M5 12l7 7 7-7" />}
-          </svg>
-        ) : (
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 opacity-0 group-hover:opacity-40 transition-opacity">
-            <path d="M7 15l5 5 5-5M7 9l5-5 5 5" />
-          </svg>
-        )}
+        <svg width="10" height="10" viewBox="0 0 10 10" className="inline-block shrink-0" aria-hidden="true">
+          <path d="M5 1l3 3.5H2z" fill="currentColor" opacity={active && current.dir === "asc" ? 1 : 0.35} />
+          <path d="M5 9l3-3.5H2z" fill="currentColor" opacity={active && current.dir === "desc" ? 1 : 0.35} />
+        </svg>
       </span>
+    </th>
+  );
+}
+
+function textMatch(value: string, filter: string): boolean {
+  const q = filter.trim().toLowerCase();
+  if (!q) return true;
+  return value.toLowerCase().includes(q);
+}
+
+function exactMatch(value: string, filter: string): boolean {
+  if (!filter) return true;
+  return value === filter;
+}
+
+function partnersMatch(ids: string[], filter: string): boolean {
+  if (!filter) return true;
+  return ids.includes(filter);
+}
+
+function filtersActive(filters: Record<string, string>): boolean {
+  return Object.values(filters).some(value => value.trim());
+}
+
+function ColumnFilter({
+  label,
+  value,
+  onChange,
+  options,
+  className,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+  options?: { value: string; label: string }[];
+  className?: string;
+}) {
+  return (
+    <th className={cn("px-3 py-2 align-middle font-normal", className)}>
+      {options ? (
+        <select
+          aria-label={`Filter ${label}`}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className="oe-select text-[11px] py-1.5 w-full min-w-[6.5rem]"
+        >
+          <option value="">All</option>
+          {options.map(option => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      ) : (
+        <input
+          aria-label={`Filter ${label}`}
+          type="search"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder="Filter"
+          className="oe-field text-[11px] py-1.5 w-full min-w-[5.5rem]"
+        />
+      )}
     </th>
   );
 }
@@ -305,6 +367,11 @@ export function SourcesView({
   const [credSort, setCredSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
   const [peopleSort, setPeopleSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
   const [partnerSort, setPartnerSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
+  const [capFilters, setCapFilters] = useState<Record<string, string>>({});
+  const [expFilters, setExpFilters] = useState<Record<string, string>>({});
+  const [credFilters, setCredFilters] = useState<Record<string, string>>({});
+  const [peopleFilters, setPeopleFilters] = useState<Record<string, string>>({});
+  const [partnerFilters, setPartnerFilters] = useState<Record<string, string>>({});
 
   const [editCred, setEditCred] = useState<GraphCredential | null>(null);
   const [credDocFiles, setCredDocFiles] = useState<File[]>([]);
@@ -320,6 +387,22 @@ export function SourcesView({
 
   const activePartners = partners.filter(p => p.status !== "Archived");
   const partnerOptions = activePartners.map(p => ({ value: p.id, label: p.name }));
+  const credTypeFilterOptions = Array.from(new Set([
+    ...CREDENTIAL_TYPES.map(option => option.value),
+    ...credentials.map(item => item.credType).filter(Boolean),
+  ])).map(value => ({ value, label: value }));
+  const partnerTypeFilterOptions = Array.from(new Set([
+    ...PARTNER_TYPES.map(option => option.value),
+    ...partners.map(item => item.type).filter(Boolean),
+  ])).map(value => ({
+    value,
+    label: PARTNER_TYPES.find(option => option.value === value)?.label ?? value,
+  }));
+  const columnFilters = tab === "capabilities" ? capFilters
+    : tab === "experience" ? expFilters
+    : tab === "credentials" ? credFilters
+    : tab === "people" ? peopleFilters
+    : partnerFilters;
   const partnerName2 = (id: string) => partners.find(p => p.id === id)?.name ?? id;
   const detailPartner = detailPartnerId ? partners.find(p => p.id === detailPartnerId) ?? null : null;
   const liveCap = detailCap ? capabilities.find(item => item.id === detailCap.id) ?? detailCap : null;
@@ -705,7 +788,12 @@ export function SourcesView({
     return name.toLowerCase().includes(q) || id.toLowerCase().includes(q);
   };
   const visibleCapabilities = capabilities.filter(c =>
-    isActive(c.status) && matchesBasic(c.name, c.id)
+    isActive(c.status)
+    && matchesBasic(c.name, c.id)
+    && textMatch(c.id, capFilters.id ?? "")
+    && textMatch(c.name, capFilters.name ?? "")
+    && partnersMatch(c.partners, capFilters.partners ?? "")
+    && textMatch(c.updated, capFilters.updated ?? "")
   ).sort((a, b) => {
     const { field, dir } = capSort;
     if (field === "id") return cmp(a.id, b.id, dir);
@@ -714,7 +802,12 @@ export function SourcesView({
     return cmp(a.name, b.name, dir);
   });
   const visibleExperience = experience.filter(e =>
-    isActive(e.status) && matchesBasic(e.name, e.id)
+    isActive(e.status)
+    && matchesBasic(e.name, e.id)
+    && textMatch(e.id, expFilters.id ?? "")
+    && textMatch(e.name, expFilters.name ?? "")
+    && textMatch(e.industry || "", expFilters.industry ?? "")
+    && partnersMatch(e.partners, expFilters.partners ?? "")
   ).sort((a, b) => {
     const { field, dir } = expSort;
     if (field === "id") return cmp(a.id, b.id, dir);
@@ -723,7 +816,13 @@ export function SourcesView({
     return cmp(a.name, b.name, dir);
   });
   const visibleCredentials = credentials.filter(c =>
-    isActive(c.status) && matchesBasic(c.name, c.id)
+    isActive(c.status)
+    && matchesBasic(c.name, c.id)
+    && textMatch(c.id, credFilters.id ?? "")
+    && textMatch(c.name, credFilters.name ?? "")
+    && exactMatch(c.credType, credFilters.credType ?? "")
+    && exactMatch(c.partner, credFilters.partner ?? "")
+    && textMatch(c.expiration, credFilters.expiration ?? "")
   ).sort((a, b) => {
     const { field, dir } = credSort;
     if (field === "id") return cmp(a.id, b.id, dir);
@@ -733,7 +832,13 @@ export function SourcesView({
     return cmp(a.name, b.name, dir);
   });
   const visiblePeople = people.filter(p =>
-    isActive(p.status) && matchesBasic(p.name, p.id)
+    isActive(p.status)
+    && matchesBasic(p.name, p.id)
+    && textMatch(p.id, peopleFilters.id ?? "")
+    && textMatch(p.name, peopleFilters.name ?? "")
+    && exactMatch(p.partner, peopleFilters.partner ?? "")
+    && textMatch((p.roles ?? [p.role]).filter(Boolean).join(", ") || p.role, peopleFilters.role ?? "")
+    && textMatch(p.expertise, peopleFilters.expertise ?? "")
   ).sort((a, b) => {
     const { field, dir } = peopleSort;
     if (field === "id") return cmp(a.id, b.id, dir);
@@ -743,7 +848,14 @@ export function SourcesView({
     return cmp(a.name, b.name, dir);
   });
   const visiblePartners = partners.filter(p =>
-    (showArchived || isActive(p.status)) && matchesQuery(p.name, p.id)
+    (showArchived || isActive(p.status))
+    && matchesQuery(p.name, p.id)
+    && textMatch(p.name, partnerFilters.name ?? "")
+    && exactMatch(p.type, partnerFilters.type ?? "")
+    && textMatch(p.contact || "", partnerFilters.contact ?? "")
+    && textMatch(p.contactEmail || "", partnerFilters.email ?? "")
+    && exactMatch(teamingValue(p.teamingAgreementSigned), partnerFilters.teaming ?? "")
+    && exactMatch(p.status, partnerFilters.status ?? "")
   ).sort((a, b) => {
     const { field, dir } = partnerSort;
     if (field === "type") return cmp(a.type, b.type, dir);
@@ -803,6 +915,21 @@ export function SourcesView({
                 Show archived
               </label>
             )}
+            {filtersActive(columnFilters) && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (tab === "capabilities") setCapFilters({});
+                  else if (tab === "experience") setExpFilters({});
+                  else if (tab === "credentials") setCredFilters({});
+                  else if (tab === "people") setPeopleFilters({});
+                  else setPartnerFilters({});
+                }}
+                className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer whitespace-nowrap"
+              >
+                Clear column filters
+              </button>
+            )}
           </div>
           <button
             onClick={() => {
@@ -830,6 +957,12 @@ export function SourcesView({
                   <SortableHeader label="Partners" field="partners" current={capSort} onClick={() => setCapSort(s => toggleSort(s, "partners"))} />
                   <SortableHeader label="Updated" field="updated" current={capSort} onClick={() => setCapSort(s => toggleSort(s, "updated"))} />
                 </tr>
+                <tr className="border-b border-border bg-card">
+                  <ColumnFilter label="ID" value={capFilters.id ?? ""} onChange={value => setCapFilters(prev => ({ ...prev, id: value }))} />
+                  <ColumnFilter label="Capability" value={capFilters.name ?? ""} onChange={value => setCapFilters(prev => ({ ...prev, name: value }))} />
+                  <ColumnFilter label="Partners" value={capFilters.partners ?? ""} onChange={value => setCapFilters(prev => ({ ...prev, partners: value }))} options={partnerOptions} />
+                  <ColumnFilter label="Updated" value={capFilters.updated ?? ""} onChange={value => setCapFilters(prev => ({ ...prev, updated: value }))} />
+                </tr>
               </thead>
               <tbody>
                 {visibleCapabilities.map(c => (
@@ -841,7 +974,7 @@ export function SourcesView({
                   </tr>
                 ))}
                 {visibleCapabilities.length === 0 && (
-                  <EmptyFilterRow colSpan={4} noun="capabilities" filtered={Boolean(searchQ)} />
+                  <EmptyFilterRow colSpan={4} noun="capabilities" filtered={Boolean(searchQ) || filtersActive(capFilters)} />
                 )}
               </tbody>
             </table>
@@ -860,6 +993,12 @@ export function SourcesView({
                   <SortableHeader label="Industry" field="industry" current={expSort} onClick={() => setExpSort(s => toggleSort(s, "industry"))} />
                   <SortableHeader label="Partners" field="partners" current={expSort} onClick={() => setExpSort(s => toggleSort(s, "partners"))} />
                 </tr>
+                <tr className="border-b border-border bg-card">
+                  <ColumnFilter label="ID" value={expFilters.id ?? ""} onChange={value => setExpFilters(prev => ({ ...prev, id: value }))} />
+                  <ColumnFilter label="Experience" value={expFilters.name ?? ""} onChange={value => setExpFilters(prev => ({ ...prev, name: value }))} />
+                  <ColumnFilter label="Industry" value={expFilters.industry ?? ""} onChange={value => setExpFilters(prev => ({ ...prev, industry: value }))} />
+                  <ColumnFilter label="Partners" value={expFilters.partners ?? ""} onChange={value => setExpFilters(prev => ({ ...prev, partners: value }))} options={partnerOptions} />
+                </tr>
               </thead>
               <tbody>
                 {visibleExperience.map(e => (
@@ -871,7 +1010,7 @@ export function SourcesView({
                   </tr>
                 ))}
                 {visibleExperience.length === 0 && (
-                  <EmptyFilterRow colSpan={4} noun="experience" filtered={Boolean(searchQ)} />
+                  <EmptyFilterRow colSpan={4} noun="experience" filtered={Boolean(searchQ) || filtersActive(expFilters)} />
                 )}
               </tbody>
             </table>
@@ -891,6 +1030,13 @@ export function SourcesView({
                   <SortableHeader label="Partner" field="partner" current={credSort} onClick={() => setCredSort(s => toggleSort(s, "partner"))} />
                   <SortableHeader label="Expiration" field="expiration" current={credSort} onClick={() => setCredSort(s => toggleSort(s, "expiration"))} />
                 </tr>
+                <tr className="border-b border-border bg-card">
+                  <ColumnFilter label="ID" value={credFilters.id ?? ""} onChange={value => setCredFilters(prev => ({ ...prev, id: value }))} />
+                  <ColumnFilter label="Credential" value={credFilters.name ?? ""} onChange={value => setCredFilters(prev => ({ ...prev, name: value }))} />
+                  <ColumnFilter label="Type" value={credFilters.credType ?? ""} onChange={value => setCredFilters(prev => ({ ...prev, credType: value }))} options={credTypeFilterOptions} />
+                  <ColumnFilter label="Partner" value={credFilters.partner ?? ""} onChange={value => setCredFilters(prev => ({ ...prev, partner: value }))} options={partnerOptions} />
+                  <ColumnFilter label="Expiration" value={credFilters.expiration ?? ""} onChange={value => setCredFilters(prev => ({ ...prev, expiration: value }))} />
+                </tr>
               </thead>
               <tbody>
                 {visibleCredentials.map(c => (
@@ -903,7 +1049,7 @@ export function SourcesView({
                   </tr>
                 ))}
                 {visibleCredentials.length === 0 && (
-                  <EmptyFilterRow colSpan={5} noun="credentials" filtered={Boolean(searchQ)} />
+                  <EmptyFilterRow colSpan={5} noun="credentials" filtered={Boolean(searchQ) || filtersActive(credFilters)} />
                 )}
               </tbody>
             </table>
@@ -923,6 +1069,13 @@ export function SourcesView({
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Role</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5 hidden xl:table-cell">Expertise</th>
                 </tr>
+                <tr className="border-b border-border bg-card">
+                  <ColumnFilter label="ID" value={peopleFilters.id ?? ""} onChange={value => setPeopleFilters(prev => ({ ...prev, id: value }))} />
+                  <ColumnFilter label="Name" value={peopleFilters.name ?? ""} onChange={value => setPeopleFilters(prev => ({ ...prev, name: value }))} />
+                  <ColumnFilter label="Partner" value={peopleFilters.partner ?? ""} onChange={value => setPeopleFilters(prev => ({ ...prev, partner: value }))} options={partnerOptions} />
+                  <ColumnFilter label="Role" value={peopleFilters.role ?? ""} onChange={value => setPeopleFilters(prev => ({ ...prev, role: value }))} />
+                  <ColumnFilter label="Expertise" value={peopleFilters.expertise ?? ""} onChange={value => setPeopleFilters(prev => ({ ...prev, expertise: value }))} className="hidden xl:table-cell" />
+                </tr>
               </thead>
               <tbody>
                 {visiblePeople.map(p => (
@@ -935,7 +1088,7 @@ export function SourcesView({
                   </tr>
                 ))}
                 {visiblePeople.length === 0 && (
-                  <EmptyFilterRow colSpan={5} noun="people" filtered={Boolean(searchQ)} />
+                  <EmptyFilterRow colSpan={5} noun="people" filtered={Boolean(searchQ) || filtersActive(peopleFilters)} />
                 )}
               </tbody>
             </table>
@@ -956,6 +1109,15 @@ export function SourcesView({
                   <SortableHeader label="Teaming Agreement" field="teaming" current={partnerSort} onClick={() => setPartnerSort(s => toggleSort(s, "teaming"))} />
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Actions</th>
+                </tr>
+                <tr className="border-b border-border bg-card">
+                  <ColumnFilter label="Partner" value={partnerFilters.name ?? ""} onChange={value => setPartnerFilters(prev => ({ ...prev, name: value }))} />
+                  <ColumnFilter label="Type" value={partnerFilters.type ?? ""} onChange={value => setPartnerFilters(prev => ({ ...prev, type: value }))} options={partnerTypeFilterOptions} />
+                  <ColumnFilter label="Contact" value={partnerFilters.contact ?? ""} onChange={value => setPartnerFilters(prev => ({ ...prev, contact: value }))} />
+                  <ColumnFilter label="Email" value={partnerFilters.email ?? ""} onChange={value => setPartnerFilters(prev => ({ ...prev, email: value }))} />
+                  <ColumnFilter label="Teaming Agreement" value={partnerFilters.teaming ?? ""} onChange={value => setPartnerFilters(prev => ({ ...prev, teaming: value }))} options={TEAMING_FILTER_OPTIONS} />
+                  <ColumnFilter label="Status" value={partnerFilters.status ?? ""} onChange={value => setPartnerFilters(prev => ({ ...prev, status: value }))} options={PARTNER_STATUS_OPTIONS} />
+                  <th className="px-3 py-2" />
                 </tr>
               </thead>
               <tbody>
@@ -990,7 +1152,7 @@ export function SourcesView({
                   </tr>
                 ))}
                 {visiblePartners.length === 0 && (
-                  <EmptyFilterRow colSpan={7} noun="partners" filtered={Boolean(searchQ)} />
+                  <EmptyFilterRow colSpan={7} noun="partners" filtered={Boolean(searchQ) || filtersActive(partnerFilters)} />
                 )}
               </tbody>
             </table>
