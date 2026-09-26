@@ -3,13 +3,14 @@ import { z } from "zod";
 import { ResponseDraftBriefing } from "@opportunity-engine/contracts";
 import {
   generateResponseDraft,
+  generateRfiResponsePackage,
   getAvailableProviders,
   describeMissingKeys,
   ModelGatewayError,
 } from "@opportunity-engine/ai";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 20;
@@ -65,8 +66,16 @@ export async function POST(request: Request) {
   }
 
   try {
-    const draft = await generateResponseDraft(parsed.data.briefing);
-    return NextResponse.json(draft);
+    const briefing = parsed.data.briefing;
+    if (briefing.mode === "package") {
+      if (briefing.projectType !== "rfi") {
+        return NextResponse.json({ error: "Package drafts are for RFI responses." }, { status: 400 });
+      }
+      const draft = await generateRfiResponsePackage(briefing);
+      return NextResponse.json({ kind: "package", ...draft });
+    }
+    const draft = await generateResponseDraft(briefing);
+    return NextResponse.json({ kind: "section", ...draft });
   } catch (err) {
     if (err instanceof ModelGatewayError) {
       const status = err.code === "keys_missing" ? 503 : 502;

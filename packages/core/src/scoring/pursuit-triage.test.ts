@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { scorePursuitTriage } from "./pursuit-triage";
+import { extractSolicitationHeuristic, scorePursuitTriage } from "./pursuit-triage";
 import { isRfiDocument, recDecisionLabel, resolveProjectType } from "./project-type";
 import type { SolicitationExtraction } from "@opportunity-engine/contracts";
 
@@ -50,6 +50,21 @@ function emptyExtraction(requirements = infoRequests): SolicitationExtraction {
     constraints: [],
   };
 }
+
+describe("extractSolicitationHeuristic", () => {
+  it("uses the RFI response outline when the notice has no prescribed headings", () => {
+    const extraction = extractSolicitationHeuristic(overlapText, "Agency_RFI_2026.pdf", "rfi");
+    expect(extraction.responseSections.map(section => section.sectionId)).toEqual([
+      "cover",
+      "company",
+      "understanding",
+      "questions",
+      "experience",
+      "recommendations",
+      "contacts",
+    ]);
+  });
+});
 
 describe("resolveProjectType", () => {
   it("overrides an RFP selection when the document is an RFI", () => {

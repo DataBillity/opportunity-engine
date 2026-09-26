@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   type GraphCapability,
   type GraphCredential,
@@ -229,6 +229,120 @@ function EmptyFilterRow({
   );
 }
 
+const CAPABILITY_PAGE_SIZES = [20, 25, 30, 40, 50] as const;
+
+function pageWindow(page: number, pageCount: number): Array<number | "ellipsis"> {
+  if (pageCount <= 7) return Array.from({ length: pageCount }, (_, index) => index + 1);
+  const anchors = [1, pageCount, page - 1, page, page + 1].filter(value => value >= 1 && value <= pageCount);
+  const sorted = [...new Set(anchors)].sort((a, b) => a - b);
+  const window: Array<number | "ellipsis"> = [];
+  let previous: number | null = null;
+  for (const value of sorted) {
+    if (previous !== null && value - previous > 1) window.push("ellipsis");
+    window.push(value);
+    previous = value;
+  }
+  return window;
+}
+
+function CapabilityPagination({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+}) {
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(Math.max(page, 1), pageCount);
+  const start = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const end = Math.min(safePage * pageSize, total);
+  const pages = pageWindow(safePage, pageCount);
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-xs text-muted-foreground">
+        Showing <span className="font-medium text-foreground tabular-nums">{start}–{end}</span> of{" "}
+        <span className="font-medium text-foreground tabular-nums">{total}</span>
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="whitespace-nowrap">Rows per page</span>
+          <span className="relative">
+            <select
+              aria-label="Rows per page"
+              value={pageSize}
+              onChange={event => onPageSizeChange(Number(event.target.value))}
+              className="oe-select text-[11px] py-1.5 w-[5.5rem]"
+            >
+              {CAPABILITY_PAGE_SIZES.map(size => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+            <svg
+              className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </span>
+        </label>
+        <nav aria-label="Capabilities pages" className="inline-flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onPageChange(safePage - 1)}
+            disabled={safePage <= 1}
+            className="px-2.5 py-1.5 text-[11px] font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+          >
+            Previous
+          </button>
+          {pages.map((entry, index) => entry === "ellipsis" ? (
+            <span key={`ellipsis-${index}`} className="px-1 text-[11px] text-muted-foreground" aria-hidden>
+              …
+            </span>
+          ) : (
+            <button
+              key={entry}
+              type="button"
+              onClick={() => onPageChange(entry)}
+              aria-current={entry === safePage ? "page" : undefined}
+              className={cn(
+                "min-w-7 px-2 py-1.5 text-[11px] font-medium rounded-md cursor-pointer tabular-nums",
+                entry === safePage
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted",
+              )}
+            >
+              {entry}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => onPageChange(safePage + 1)}
+            disabled={safePage >= pageCount || total === 0}
+            className="px-2.5 py-1.5 text-[11px] font-medium rounded-md text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+          >
+            Next
+          </button>
+        </nav>
+      </div>
+    </div>
+  );
+}
+
 function PartnerMultiSelect({
   selected,
   options,
@@ -362,6 +476,8 @@ export function SourcesView({
 
   const [actionTarget, setActionTarget] = useState<{ pursuitId: string; item: ResponseActionItem } | null>(null);
 
+  const [capPage, setCapPage] = useState(1);
+  const [capPageSize, setCapPageSize] = useState<number>(20);
   const [capSort, setCapSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
   const [expSort, setExpSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
   const [credSort, setCredSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
@@ -372,6 +488,10 @@ export function SourcesView({
   const [credFilters, setCredFilters] = useState<Record<string, string>>({});
   const [peopleFilters, setPeopleFilters] = useState<Record<string, string>>({});
   const [partnerFilters, setPartnerFilters] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setCapPage(1);
+  }, [searchQ, capFilters, capSort, capPageSize]);
 
   const [editCred, setEditCred] = useState<GraphCredential | null>(null);
   const [credDocFiles, setCredDocFiles] = useState<File[]>([]);
@@ -801,6 +921,12 @@ export function SourcesView({
     if (field === "updated") return cmp(a.updated, b.updated, dir);
     return cmp(a.name, b.name, dir);
   });
+  const capabilityPageCount = Math.max(1, Math.ceil(visibleCapabilities.length / capPageSize));
+  const capabilityPage = Math.min(capPage, capabilityPageCount);
+  const pagedCapabilities = visibleCapabilities.slice(
+    (capabilityPage - 1) * capPageSize,
+    capabilityPage * capPageSize,
+  );
   const visibleExperience = experience.filter(e =>
     isActive(e.status)
     && matchesBasic(e.name, e.id)
@@ -965,7 +1091,7 @@ export function SourcesView({
                 </tr>
               </thead>
               <tbody>
-                {visibleCapabilities.map(c => (
+                {pagedCapabilities.map(c => (
                   <tr key={c.id} className="oe-table-row border-b border-border last:border-b-0 cursor-pointer" onClick={() => setDetailCap(c)}>
                     <td className="px-4 py-3 font-mono text-[11px] text-primary">{c.id}</td>
                     <td className="px-4 py-3 font-semibold text-foreground">{c.name}</td>
@@ -979,6 +1105,13 @@ export function SourcesView({
               </tbody>
             </table>
           </div>
+          <CapabilityPagination
+            page={capabilityPage}
+            pageSize={capPageSize}
+            total={visibleCapabilities.length}
+            onPageChange={setCapPage}
+            onPageSizeChange={setCapPageSize}
+          />
         </div>
       )}
 

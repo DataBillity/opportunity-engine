@@ -1,5 +1,5 @@
-import type { GraphExperience, GraphPerson, Organization, Pursuit } from "@/lib/mock-data";
-import type { ResponseDraftBriefing, ResponseDraftExperience, ResponseDraftPerson } from "@opportunity-engine/contracts";
+import type { GraphExperience, GraphPerson, Organization, Partner, Pursuit } from "@/lib/mock-data";
+import type { ResponseDraftBriefing, ResponseDraftExperience, ResponseDraftPerson, ResponseDraftSection } from "@opportunity-engine/contracts";
 
 function cleanText(text: string | undefined): string | undefined {
   const trimmed = text?.replace(/\u0000/g, "").trim();
@@ -9,6 +9,7 @@ function cleanText(text: string | undefined): string | undefined {
 export function peopleForDraft(
   assignments: Record<string, string>,
   people: GraphPerson[],
+  partners: Partner[] = [],
 ): ResponseDraftPerson[] {
   const byId = new Map(people.map(person => [person.id, person]));
   const out: ResponseDraftPerson[] = [];
@@ -27,6 +28,7 @@ export function peopleForDraft(
       technologies: person.technologies,
       industries: person.industries,
       assignedRole,
+      partnerName: partners.find(partner => partner.id === person.partner)?.name,
       resumeText: cleanText(person.resumeText),
     });
   }
@@ -56,14 +58,19 @@ export function buildResponseDraftBriefing(input: {
   pursuit: Pursuit;
   org?: Organization;
   section: { id: string; name: string; ref: string };
+  sections?: ResponseDraftSection[];
   assignments: Record<string, string>;
   people: GraphPerson[];
   experience?: GraphExperience[];
   capabilities?: string[];
+  partners?: Partner[];
   existingDraft?: string;
   instructions?: string;
+  mode?: "section" | "package";
+  existingGapIds?: string[];
 }): ResponseDraftBriefing {
-  const assignedPeople = peopleForDraft(input.assignments, input.people);
+  const partners = (input.partners ?? []).filter(partner => partner.status !== "Archived");
+  const assignedPeople = peopleForDraft(input.assignments, input.people, partners);
   const assignedIds = new Set(Object.values(input.assignments).filter(Boolean));
   const assignedGraphPeople = input.people.filter(person =>
     assignedIds.has(person.id) && person.status !== "Archived",
@@ -75,8 +82,19 @@ export function buildResponseDraftBriefing(input: {
       name: input.section.name,
       ref: input.section.ref || undefined,
     },
+    sections: input.sections ?? [],
+    mode: input.mode ?? "section",
+    projectType: input.pursuit.projectType,
     instructions: cleanText(input.instructions),
     existingDraft: cleanText(input.existingDraft),
+    existingGapIds: input.existingGapIds ?? [],
+    partners: partners.map(partner => ({
+      name: partner.name,
+      role: partner.type || undefined,
+      covers: partner.covers,
+      summary: cleanText(partner.summary),
+      confirmed: partner.teamingAgreementSigned === true,
+    })),
     organization: {
       name: input.org?.name || "Unknown account",
       industry: input.org?.industry || undefined,

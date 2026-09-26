@@ -39,7 +39,11 @@ function isBulletLine(line: string): boolean {
 }
 
 function listItemHtml(line: string): string {
-  return `<li><p>${line.replace(/^([•\-*]|\d+[.)])\s+/, "")}</p></li>`;
+  return `<li><p>${markGaps(line.replace(/^([•\-*]|\d+[.)])\s+/, ""))}</p></li>`;
+}
+
+function markGaps(escapedLine: string): string {
+  return escapedLine.replace(/\[GAP-\d{3}[^\]]*\]/g, match => `<strong>${match}</strong>`);
 }
 
 export function plainTextToHtml(text: string): string {
@@ -72,7 +76,7 @@ export function plainTextToHtml(text: string): string {
           continue;
         }
         flushList();
-        parts.push(`<p>${line}</p>`);
+        parts.push(`<p>${markGaps(line)}</p>`);
       }
       flushList();
       return parts.join("");

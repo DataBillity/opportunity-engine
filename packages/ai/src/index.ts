@@ -27,3 +27,10 @@ export {
   RESPONSE_DRAFT_PROMPT_VERSION,
 } from "./response-draft";
 export type { ResponseGroundingFact, ResponseSectionDraft } from "./response-draft";
+export {
+  generateRfiResponsePackage,
+  fallbackRfiPackage,
+  reconcileRfiPackage,
+  RFI_RESPONSE_PROMPT_VERSION,
+} from "./rfi-response";
+export type { RfiResponseDraft } from "./rfi-response";

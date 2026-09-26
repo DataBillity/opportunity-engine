@@ -19,6 +19,7 @@ export {
   isRfiDocument,
   resolveProjectType,
   thresholdsFor,
+  RFI_OUTLINE_SECTIONS,
 } from "./scoring/project-type";
 export type { ProjectType } from "./scoring/project-type";
 export {

@@ -133,6 +133,7 @@ export const ResponseDraftPerson = z.object({
   technologies: z.array(z.string()).default([]),
   industries: z.array(z.string()).default([]),
   assignedRole: z.string().optional(),
+  partnerName: z.string().optional(),
   resumeText: z.string().optional(),
 });
 
@@ -144,14 +145,59 @@ export const ResponseDraftExperience = z.object({
   summary: z.string().optional(),
 });
 
+export const ResponseDraftPartner = z.object({
+  name: z.string().min(1),
+  role: z.string().optional(),
+  covers: z.array(z.string()).default([]),
+  summary: z.string().optional(),
+  confirmed: z.boolean().default(false),
+});
+
+export const ResponseDraftSection = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  ref: z.string().optional(),
+});
+
+export const RfiGapType = z.enum([
+  "missing_information",
+  "unverified_claim",
+  "capability_gap",
+  "partner_input",
+  "decision_needed",
+  "clarification",
+  "compliance_risk",
+]);
+
+export const RfiGapLogEntry = z.object({
+  id: z.string().min(1),
+  location: z.string().default(""),
+  gapType: RfiGapType,
+  description: z.string().min(1),
+  owner: z.string().min(1),
+  priority: z.enum(["High", "Medium", "Low"]),
+  due: z.string().default(""),
+  status: z.enum(["Open", "In progress", "Resolved"]).default("Open"),
+  notes: z.string().default(""),
+});
+
+export const RfiComplianceRow = z.object({
+  requirement: z.string().min(1),
+  rfiRef: z.string().default(""),
+  responseSection: z.string().default(""),
+  owner: z.string().default("Prime"),
+  status: z.string().default("Open"),
+});
+
 export const ResponseDraftBriefing = z.object({
-  section: z.object({
-    id: z.string().min(1),
-    name: z.string().min(1),
-    ref: z.string().optional(),
-  }),
+  section: ResponseDraftSection,
+  sections: z.array(ResponseDraftSection).default([]),
+  mode: z.enum(["section", "package"]).default("section"),
+  projectType: ProjectType.optional(),
   instructions: z.string().optional(),
   existingDraft: z.string().optional(),
+  existingGapIds: z.array(z.string()).default([]),
+  partners: z.array(ResponseDraftPartner).default([]),
   organization: z.object({
     name: z.string().min(1),
     industry: z.string().optional(),
@@ -186,6 +232,22 @@ export const ResponseDraftBriefing = z.object({
 
 export const ResponseDraftOutput = z.object({
   body: z.string().min(1),
+  usedInsightIds: z.array(z.string()).default([]),
+  gaps: z.array(RfiGapLogEntry).default([]),
+});
+
+export const RfiResponsePackageOutput = z.object({
+  reviewerSummary: z.string().min(1),
+  sections: z.array(z.object({
+    id: z.string().min(1),
+    ref: z.string().default(""),
+    title: z.string().min(1),
+    body: z.string().min(1),
+  })).min(1),
+  compliance: z.array(RfiComplianceRow).default([]),
+  gaps: z.array(RfiGapLogEntry).default([]),
+  questions: z.array(z.string()).default([]),
+  strategicNotes: z.string().default(""),
   usedInsightIds: z.array(z.string()).default([]),
 });
 
@@ -303,9 +365,15 @@ export type OutreachBriefing = z.infer<typeof OutreachBriefing>;
 export type OutreachPursuitBrief = z.infer<typeof OutreachPursuitBrief>;
 export type OutreachDraftOutput = z.infer<typeof OutreachDraftOutput>;
 export type ResponseDraftPerson = z.infer<typeof ResponseDraftPerson>;
+export type ResponseDraftPartner = z.infer<typeof ResponseDraftPartner>;
+export type ResponseDraftSection = z.infer<typeof ResponseDraftSection>;
 export type ResponseDraftExperience = z.infer<typeof ResponseDraftExperience>;
 export type ResponseDraftBriefing = z.infer<typeof ResponseDraftBriefing>;
 export type ResponseDraftOutput = z.infer<typeof ResponseDraftOutput>;
+export type RfiGapType = z.infer<typeof RfiGapType>;
+export type RfiGapLogEntry = z.infer<typeof RfiGapLogEntry>;
+export type RfiComplianceRow = z.infer<typeof RfiComplianceRow>;
+export type RfiResponsePackageOutput = z.infer<typeof RfiResponsePackageOutput>;
 export type SolicitationRequirement = z.infer<typeof SolicitationRequirement>;
 export type SolicitationExtraction = z.infer<typeof SolicitationExtraction>;
 export type PursuitDocumentMeta = z.infer<typeof PursuitDocumentMeta>;

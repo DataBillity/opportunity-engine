@@ -548,6 +548,7 @@ export default function CommandCenter() {
             {activeView === "draft" && selectedPursuit?.rec !== "go" && (
               <ResponseBuilderEmptyState
                 orgName={currentOrg?.name}
+                projectType={selectedPursuit?.projectType}
                 onOpenOpportunity={() => setActiveView(selectedPursuit && currentOrg ? "decision" : currentOrg ? "org" : "pipeline")}
               />
             )}

@@ -116,6 +116,7 @@ export interface Pursuit {
     retention: string;
   };
   responseActionItems?: ResponseActionItem[];
+  rfiResponse?: RfiResponseMeta;
   complianceMatrix?: { ref: string; title: string; sectionId: string }[];
   draftStatus?: "In Draft" | "Submitted" | "On Hold" | "Canceled";
   draftStatusDate?: string;
@@ -136,6 +137,26 @@ export interface GapItem {
   crit: string;
   demand: string;
   closure: string;
+}
+
+export interface RfiGapLogItem {
+  id: string;
+  location: string;
+  gapType: string;
+  description: string;
+  owner: string;
+  priority: "High" | "Medium" | "Low";
+  dueAt: string;
+  status: "Open" | "In progress" | "Resolved";
+  notes: string;
+}
+
+export interface RfiResponseMeta {
+  reviewerSummary: string;
+  strategicNotes: string;
+  questions: string[];
+  compliance: { requirement: string; rfiRef: string; responseSection: string; owner: string; status: string }[];
+  gaps: RfiGapLogItem[];
 }
 
 export interface ResponseActionItem {
