@@ -6,7 +6,7 @@ import {
 import { callModel, ModelGatewayError } from "./gateway";
 import { parseModelJson } from "./json";
 
-export const SOLICITATION_EXTRACT_PROMPT_VERSION = "solicitation-extract-v1.3";
+export const SOLICITATION_EXTRACT_PROMPT_VERSION = "solicitation-extract-v1.4";
 
 const RFP_SOW_PROMPT = `You extract facts from an RFP or Statement of Work for DataBillity bid triage.
 
@@ -19,12 +19,12 @@ Hard rules:
 
 const RFI_PROMPT = `You extract facts from a Request for Information (RFI) for DataBillity pursuit triage.
 
-An RFI is market research, not a bid. Score the opportunity on the work the issuer is trying to do, not on how they want the response formatted.
+An RFI is market research, but it exists because the issuer has a real problem to solve. Capture the underlying work, not the research exercise.
 
 Hard rules:
 - Use only the document text. Do not invent agencies, dates, certifications, or answers.
-- objective: why they issued the RFI — the scope and outcome they are researching. Not the questions they ask vendors.
-- challenges: problems in the current system or process they are trying to resolve.
+- objective: the end outcome the issuer ultimately wants a future solution to deliver — the system, modernization, capability, or business result they intend to acquire. Write it as a concrete Opportunity Scope Summary a bid team can act on. Infer it from the background, scope, vision, and challenges even when the RFI only says it is "gathering information", "conducting market research", or "informing a future procurement". NEVER state the objective as gathering information, market research, issuing a future RFP/RFQ, vendor outreach, or "for planning purposes" — those describe the RFI process, not the objective. If the document truly never implies an end objective, infer the most likely one from the challenges and services and phrase it plainly.
+- challenges: problems in the current system or process that are driving this effort (legacy/aging systems, manual work, limitations, compliance gaps).
 - services: business and technology services a future solution would likely include.
 - deliverables: systems, modules, or work products a future solution would likely produce. Not the RFI response itself.
 - requirements: the questions the issuer asked vendors to answer, numbered as the RFI numbers them. Do not put those questions in objective, challenges, services, or deliverables.
@@ -73,8 +73,8 @@ export function buildSolicitationExtractPrompt(input: {
       solicitationRef: refHint,
       dueDate: "YYYY-MM-DD or null",
       issuer: "issuing org or empty",
-      objective: projectType === "rfi" ? ["why they issued the RFI and the outcome they want"] : ["..."],
-      challenges: projectType === "rfi" ? ["current-state problems they are trying to resolve"] : ["..."],
+      objective: projectType === "rfi" ? ["the end system/modernization/capability the issuer ultimately wants — inferred from scope and challenges, never 'gather information' or 'market research'"] : ["..."],
+      challenges: projectType === "rfi" ? ["current-state problems (legacy, manual, limitations) driving the effort"] : ["..."],
       services: projectType === "rfi" ? ["business or technology services a future solution would likely include"] : ["..."],
       deliverables: projectType === "rfi" ? ["systems or work products a future solution would likely produce"] : ["..."],
       requirements: [{

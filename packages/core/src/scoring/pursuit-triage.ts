@@ -32,6 +32,10 @@ const PASS_FAIL = /\b(pass[\s/-]*fail|mandatory|must have|shall possess|fedramp|
 const RFI_ELIGIBILITY = /\b(must be registered|mandatory registration|eligibility|nda required|non[- ]disclosure)\b/i;
 const INFO_REQUEST = /\b(provide information|please (?:describe|provide|explain|identify|outline)|how would you|what (?:is|are) your|describe your|describe the|describe if|do you have|how will|how does|is data |does the solution)\b/i;
 const RESPONSE_FORMAT = /\b(\d+\s*pages?|page limit|single[- ]spaced|point font|one-inch margins|font size|submission format|file format|margins)\b/i;
+// Sentences that describe the RFI *process*, not the work the issuer needs.
+const MARKET_RESEARCH = /\b(gather(?:ing)? (?:information|input|feedback)|market research|market survey|request for information|responses? to this rfi|this rfi (?:is|seeks|will)|for (?:planning|informational) purposes|no (?:award|contract|obligation)|will not (?:result in|lead to|constitute)|not a (?:solicitation|commitment|request for proposal|obligation)|does not (?:constitute|obligate)|solely to (?:gather|inform|understand)|inform(?:ing)? (?:a |an |the )?(?:future|potential|possible|upcoming) (?:acquisition|procurement|solicitation|rfp|strategy)|(?:issue|release|develop) (?:a |an )?(?:future |subsequent |potential )?(?:rfp|rfq|solicitation)|vendor (?:capabilit|outreach|community|responses?)|determine (?:the )?(?:availability|interest))\b/i;
+// Verbs/nouns that signal the substantive work behind an RFI.
+const OBJECTIVE_SIGNAL = /\b(moderniz|replace|implement|automat|integrat|migrat|streamlin|improv|enhanc|establish|develop|deploy|upgrad|consolidat|digitiz|transform|redesign|re-?engineer|acquir|procur|stand up|build|seeking a|intend(?:s|ed)? to|plan(?:s|ned)? to|need(?:s)? (?:a|to|for)|require(?:s)? (?:a|to|for)|solution|system|platform|application|portal|workflow|capabilit|infrastructure|case management|claims|payment|benefit|grant|data (?:platform|management|warehouse))\b/i;
 
 export function capSourceText(text: string): { text: string; truncated: boolean } {
   const normalized = text.replace(/\u0000/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
@@ -605,6 +609,48 @@ function isScopeStatement(text: string): boolean {
   return true;
 }
 
+/**
+ * A meaningful RFI objective describes the work the issuer ultimately needs,
+ * never the RFI process. A sentence that is purely market-research boilerplate
+ * (with no substantive scope signal) is rejected; a sentence that blends the
+ * research framing with real scope ("...to inform a claims-system modernization")
+ * is kept.
+ */
+function isObjectiveStatement(text: string): boolean {
+  if (!isScopeStatement(text)) return false;
+  if (MARKET_RESEARCH.test(text) && !OBJECTIVE_SIGNAL.test(text)) return false;
+  return true;
+}
+
+/**
+ * Drop pure market-research boilerplate from an objective list so the Scope
+ * Summary never reduces to "gather information". Returns the substantive lines;
+ * callers supply a fallback when nothing meaningful remains.
+ */
+export function sanitizeRfiObjective(objective: string[]): string[] {
+  return uniqueLines(objective).filter(line => {
+    const value = line.trim();
+    if (value.length < 12) return false;
+    if (MARKET_RESEARCH.test(value) && !OBJECTIVE_SIGNAL.test(value)) return false;
+    return true;
+  });
+}
+
+/**
+ * Infer the end objective when the RFI never states it outright: prefer the
+ * strongest scope-signal sentences in the document, then fall back to the
+ * services or challenges that describe the real work.
+ */
+function inferRfiObjective(text: string, challenges: string[], services: string[]): string[] {
+  const fromDoc = uniqueLines(sentencesMatching(text, OBJECTIVE_SIGNAL))
+    .filter(isObjectiveStatement)
+    .slice(0, 2);
+  if (fromDoc.length) return fromDoc;
+  if (services.length) return services.slice(0, 2);
+  if (challenges.length) return challenges.slice(0, 2);
+  return [];
+}
+
 function extractResponseConstraints(text: string): string[] {
   return sentencesMatching(text, RESPONSE_FORMAT).slice(0, 6);
 }
@@ -627,34 +673,45 @@ function extractScopeNarrative(text: string, projectType: ProjectType): {
     };
   }
 
-  const purpose = sectionBody(text, /project purpose|purpose of this rfi/i);
-  const challenges = sectionBody(text, /current challenges|challenge statement/i);
-  const vision = sectionBody(text, /project vision/i);
-  const background = sectionBody(text, /project background/i);
-  const intro = sectionBody(text, /introduction and overview/i);
-
-  const objective = uniqueLines([
-    ...sentencesMatching(purpose, /seeking|objective|intent|moderniz|replace|market research|configurable/i),
-    ...sentencesMatching(intro, /issuing this|solicit|moderniz|replace/i),
-  ]).filter(isScopeStatement).slice(0, 4);
+  const purpose = sectionBody(text, /project purpose|purpose of this rfi|purpose and background|objective|overview|summary|background|introduction/i);
+  const challenges = sectionBody(text, /current challenges|challenge statement|current state|problem statement|pain points|limitations/i);
+  const vision = sectionBody(text, /project vision|desired (?:state|outcome|solution)|goals and objectives|future state|scope of (?:work|services)/i);
+  const background = sectionBody(text, /project background|background/i);
+  const intro = sectionBody(text, /introduction and overview|introduction|overview/i);
 
   const challengeLines = collapseContained(uniqueLines([
     ...numberedItems(challenges),
-    ...sentencesMatching(challenges, /lack of|limitation|manual|cannot|unable|challenge/i),
+    ...sentencesMatching(challenges, /lack of|limitation|manual|cannot|unable|challenge|outdated|legacy|aging|inefficien|no longer|end of life|unsupported/i),
   ]).filter(isScopeStatement)).slice(0, 8);
 
   const serviceLines = collapseContained(uniqueLines([
-    ...sentencesMatching(`${vision}\n${purpose}`, /system|workflow|automat|integrat|configur|platform|solution|claims|payment|migrat/i),
-  ]).filter(isScopeStatement).filter(line => !objective.some(item => item.toLowerCase() === line.toLowerCase()))).slice(0, 6);
+    ...sentencesMatching(`${vision}\n${purpose}`, /system|workflow|automat|integrat|configur|platform|solution|claims|payment|benefit|grant|migrat|case management|portal|data/i),
+  ]).filter(isObjectiveStatement)).slice(0, 6);
+
+  // The objective is the end outcome the issuer wants, not the RFI process.
+  const objective = uniqueLines([
+    ...sentencesMatching(purpose, OBJECTIVE_SIGNAL),
+    ...sentencesMatching(vision, OBJECTIVE_SIGNAL),
+    ...sentencesMatching(intro, OBJECTIVE_SIGNAL),
+    ...sentencesMatching(background, OBJECTIVE_SIGNAL),
+  ]).filter(isObjectiveStatement).slice(0, 4);
+
+  const resolvedObjective = objective.length
+    ? objective
+    : inferRfiObjective(text, challengeLines, serviceLines);
+
+  const serviceLinesTrimmed = collapseContained(
+    serviceLines.filter(line => !resolvedObjective.some(item => item.toLowerCase() === line.toLowerCase())),
+  ).slice(0, 6);
 
   const deliverableLines = uniqueLines([
-    ...sentencesMatching(`${vision}\n${background}`, /system|module|workflow|application|engine|portal|migration/i),
-  ]).filter(isScopeStatement).slice(0, 6);
+    ...sentencesMatching(`${vision}\n${background}`, /system|module|workflow|application|engine|portal|migration|dashboard|report|integration/i),
+  ]).filter(isObjectiveStatement).slice(0, 6);
 
   return {
-    objective: objective.length ? objective : sentencesMatching(text, /seeking information|moderniz|replace the current/i).filter(isScopeStatement).slice(0, 3),
+    objective: resolvedObjective,
     challenges: challengeLines,
-    services: serviceLines,
+    services: serviceLinesTrimmed,
     deliverables: deliverableLines,
   };
 }

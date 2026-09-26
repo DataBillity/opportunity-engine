@@ -3,6 +3,7 @@ export type { ScoringInputs, IntentSignal, AccountValue } from "./scoring/opport
 export {
   extractSolicitationHeuristic,
   mergeSolicitationExtractions,
+  sanitizeRfiObjective,
   scorePursuitTriage,
   capSourceText,
 } from "./scoring/pursuit-triage";
