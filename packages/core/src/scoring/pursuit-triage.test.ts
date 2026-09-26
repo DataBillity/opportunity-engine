@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractSolicitationHeuristic, scorePursuitTriage } from "./pursuit-triage";
+import { extractSolicitationHeuristic, sanitizeRfiObjective, scorePursuitTriage } from "./pursuit-triage";
 import { isRfiDocument, recDecisionLabel, resolveProjectType } from "./project-type";
 import type { SolicitationExtraction } from "@opportunity-engine/contracts";
 
@@ -51,6 +51,20 @@ function emptyExtraction(requirements = infoRequests): SolicitationExtraction {
   };
 }
 
+const modernizationRfi = [
+  "Introduction and Overview",
+  "The California Victim Compensation Board (CalVCB) is issuing this Request for Information to conduct market research and gather information from vendors. This RFI is for planning purposes only and will not result in an award.",
+  "Project Purpose and Background",
+  "CalVCB intends to modernize its aging claims management system to replace the legacy mainframe application that supports victim compensation claims processing.",
+  "Current Challenges",
+  "1. The current system is a 25-year-old legacy platform that cannot support online claims intake.",
+  "2. Manual adjudication workflows create backlogs and delay payments to victims.",
+  "Project Vision",
+  "The desired solution is a configurable, cloud-based claims platform with automated workflows, a claimant portal, and integrated payment processing.",
+  "Response Instructions",
+  "Responses must be no more than 10 pages, single spaced in 12-point font.",
+].join("\n");
+
 describe("extractSolicitationHeuristic", () => {
   it("uses the RFI response outline when the notice has no prescribed headings", () => {
     const extraction = extractSolicitationHeuristic(overlapText, "Agency_RFI_2026.pdf", "rfi");
@@ -63,6 +77,42 @@ describe("extractSolicitationHeuristic", () => {
       "recommendations",
       "contacts",
     ]);
+  });
+
+  it("derives an end-objective for an RFI instead of restating 'gather information'", () => {
+    const extraction = extractSolicitationHeuristic(modernizationRfi, "26-001_CalVCB_RFI.pdf", "rfi");
+    const objectiveText = extraction.objective.join(" ").toLowerCase();
+    expect(extraction.objective.length).toBeGreaterThan(0);
+    expect(objectiveText).not.toMatch(/gather(ing)? information|market research|planning purposes|will not result in an award/);
+    expect(objectiveText).toMatch(/moderniz|replace|claims|platform/);
+  });
+
+  it("still infers an objective when the RFI only frames itself as market research", () => {
+    const extraction = extractSolicitationHeuristic(overlapText, "Agency_RFI_2026.pdf", "rfi");
+    const objectiveText = extraction.objective.join(" ").toLowerCase();
+    expect(extraction.objective.length).toBeGreaterThan(0);
+    expect(objectiveText).not.toMatch(/^\s*(this rfi|gather|market research)/);
+    expect(objectiveText).toMatch(/moderniz|data platform|customer data/);
+  });
+});
+
+describe("sanitizeRfiObjective", () => {
+  it("drops pure market-research boilerplate but keeps substantive scope", () => {
+    const cleaned = sanitizeRfiObjective([
+      "The purpose of this RFI is to gather information from the vendor community.",
+      "This is market research for planning purposes only.",
+      "The agency intends to modernize its legacy claims management system.",
+    ]);
+    expect(cleaned).toEqual([
+      "The agency intends to modernize its legacy claims management system.",
+    ]);
+  });
+
+  it("keeps a blended sentence that pairs the research framing with real scope", () => {
+    const cleaned = sanitizeRfiObjective([
+      "The agency is conducting market research to inform a modernization of its payment platform.",
+    ]);
+    expect(cleaned).toHaveLength(1);
   });
 });
 

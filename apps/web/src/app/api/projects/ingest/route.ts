@@ -5,6 +5,7 @@ import {
   extractSolicitationHeuristic,
   mergeSolicitationExtractions,
   resolveProjectType,
+  sanitizeRfiObjective,
   scorePursuitTriage,
 } from "@opportunity-engine/core";
 import {
@@ -112,7 +113,8 @@ export async function POST(request: Request) {
     filename: primaryName,
   });
   const projectType = resolvedType.projectType;
-  let extraction = extractSolicitationHeuristic(capped.text, primaryName, projectType);
+  const heuristic = extractSolicitationHeuristic(capped.text, primaryName, projectType);
+  let extraction = heuristic;
   let provider: "claude" | "gemini" | "heuristic" = "heuristic";
   let modelVersion = "heuristic-triage-v1";
   let usedModel = false;
@@ -134,7 +136,7 @@ export async function POST(request: Request) {
           organizationIndustry,
           documentText: capped.text,
         });
-        extraction = mergeSolicitationExtractions(extraction, model.extraction);
+        extraction = mergeSolicitationExtractions(heuristic, model.extraction);
         provider = model.provider;
         modelVersion = model.modelVersion;
         usedModel = true;
@@ -144,6 +146,17 @@ export async function POST(request: Request) {
           : "Model extraction failed. Used the heuristic parser.";
       }
     }
+  }
+
+  // Keep the Opportunity Scope Summary meaningful: never let an RFI objective
+  // reduce to the market-research framing. Fall back to the heuristic-inferred
+  // objective (already substantive) when the model returns only boilerplate.
+  if (projectType === "rfi") {
+    const cleaned = sanitizeRfiObjective(extraction.objective);
+    extraction = {
+      ...extraction,
+      objective: cleaned.length ? cleaned : heuristic.objective,
+    };
   }
 
   const workspace = await readSharedWorkspace().catch(() => null);
