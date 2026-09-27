@@ -23,7 +23,7 @@ import {
 import { readSharedWorkspace } from "@/lib/shared-workspace-store";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 240;
 
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 12;

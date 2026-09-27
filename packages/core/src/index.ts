@@ -9,6 +9,12 @@ export {
 } from "./scoring/pursuit-triage";
 export type { OrgTriageContext } from "./scoring/pursuit-triage";
 export {
+  buildHeuristicRfiSummary,
+  inferRfiServices,
+  mergeRfiSummaries,
+  themeRfiChallenges,
+} from "./scoring/rfi-summary";
+export {
   BID_REC_THRESHOLDS,
   RFI_REC_THRESHOLDS,
   laneForProjectType,

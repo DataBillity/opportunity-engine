@@ -20,6 +20,7 @@ import {
   RFI_OUTLINE_SECTIONS,
   thresholdsFor,
 } from "./project-type";
+import { buildHeuristicRfiSummary, mergeRfiSummaries } from "./rfi-summary";
 
 export interface OrgTriageContext {
   name: string;
@@ -65,6 +66,7 @@ export function mergeSolicitationExtractions(
     responseSections: overlay.responseSections?.length ? overlay.responseSections : base.responseSections,
     responseConstraints: pickList(overlay.responseConstraints, base.responseConstraints),
     constraints: pickList(overlay.constraints, base.constraints),
+    rfiSummary: mergeRfiSummaries(overlay.rfiSummary, base.rfiSummary),
   };
 }
 
@@ -78,6 +80,17 @@ export function extractSolicitationHeuristic(
   const solicitationRef = extractSolicitationRef(text) || undefined;
   const requirements = extractRequirements(text, projectType);
   const scope = extractScopeNarrative(text, projectType);
+  const rfiSummary = projectType === "rfi"
+    ? buildHeuristicRfiSummary({
+      text,
+      challenges: scope.challenges,
+      questions: requirements
+        .map(item => item.requirementText)
+        .filter(item => INFO_REQUEST.test(item) || item.trim().endsWith("?")),
+      endStateLines: scope.deliverables,
+    })
+    : undefined;
+  const explicitServices = rfiSummary?.services.filter(item => item.type === "explicit").map(item => item.service) ?? [];
   return {
     inferredName: extractTitle(text, projectType) || stem || "Untitled solicitation",
     solicitationRef,
@@ -85,8 +98,9 @@ export function extractSolicitationHeuristic(
     issuer: extractIssuer(text),
     objective: scope.objective,
     challenges: scope.challenges,
-    services: scope.services,
+    services: explicitServices.length ? explicitServices : scope.services,
     deliverables: scope.deliverables,
+    ...(rfiSummary ? { rfiSummary } : {}),
     requirements,
     responseSections: extractResponseSections(text, projectType),
     responseConstraints: extractResponseConstraints(text),

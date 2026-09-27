@@ -8,6 +8,7 @@ import { ActionItemResponseModal } from "@/components/action-items/action-item-r
 import { useToast } from "@/components/ui/toast";
 import { OutreachComposer } from "@/components/outreach/outreach-composer";
 import { DocumentDropzone } from "@/components/pursuit/document-dropzone";
+import { RfiScopeSummaryBody } from "./rfi-scope-summary";
 import { applyIngestToPursuit, ingestPursuitDocuments, recLabel } from "@/lib/create-pursuit";
 import { recShortLabel } from "@opportunity-engine/core";
 import { useOperator } from "@/components/auth/operator-provider";
@@ -277,6 +278,9 @@ export function OpportunityView({
           <div className="px-5 py-3.5 border-b border-border">
             <h3 className="oe-card-title">Scope Summary</h3>
           </div>
+          {pursuit.projectType === "rfi" && pursuit.docSummary.rfi ? (
+            <RfiScopeSummaryBody docSummary={pursuit.docSummary} rfi={pursuit.docSummary.rfi} />
+          ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 divide-border">
             {([
               ["Objective", pursuit.docSummary.objective],
@@ -298,6 +302,7 @@ export function OpportunityView({
               </div>
             ))}
           </div>
+          )}
           {(pursuit.docSummary.responseConstraints ?? []).length > 0 && (
             <div className="px-5 py-4 border-t border-border bg-muted/20">
               <h4 className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">
