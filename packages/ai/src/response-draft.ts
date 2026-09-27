@@ -86,6 +86,21 @@ export function collectResponseFacts(briefing: ResponseDraftBriefingType): Respo
   for (const item of pursuit.docSummary?.services ?? []) push("rfp", `Likely service: ${item}`);
   for (const item of pursuit.docSummary?.deliverables ?? []) push("rfp", `Likely deliverable: ${item}`);
   for (const item of pursuit.docSummary?.responseConstraints ?? []) push("rfp", `Response format (shape the draft; do not treat as a reason to pursue): ${item}`);
+  const rfi = pursuit.docSummary?.rfiSummary;
+  if (rfi) {
+    if (rfi.procurementObjective) push("rfp", `Procurement objective: ${rfi.procurementObjective}`);
+    for (const theme of rfi.challengeThemes) push("rfp", `Challenge theme${theme.rootCause ? " (root cause)" : ""}: ${theme.theme} — ${theme.detail}`);
+    for (const item of rfi.consequences) push("rfp", `Consequence the issuer names: ${item}`);
+    if (rfi.endState) push("rfp", `Target end state: ${rfi.endState}`);
+    for (const item of rfi.endStateConstraints) push("rfp", `End-state constraint: ${item}`);
+    if (rfi.nextStep) push("rfp", `Next procurement step: ${rfi.nextStep}`);
+    for (const item of rfi.services) {
+      push("rfp", item.type === "explicit"
+        ? `Requested service: ${item.service} (${item.evidence})`
+        : `Inferred service — our reading, not an issuer requirement (${item.confidence ?? "Low"} confidence): ${item.service}. Evidence: ${item.evidence}`);
+    }
+    for (const item of rfi.gaps) push("rfp", `Known gap in the RFI package: ${item}`);
+  }
   for (const item of pursuit.informationRequests ?? []) push("rfp", `Question to answer: ${item}`);
   for (const item of pursuit.capabilities ?? []) push("experience", `Capability we can cite: ${item}`);
   for (const item of pursuit.mappedRequirements) push("rfp", `Mapped requirement: ${item}`);

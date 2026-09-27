@@ -125,6 +125,56 @@ export const OutreachDraftOutput = z.object({
   usedInsightIds: z.array(z.string()).default([]),
 });
 
+const Confidence = z.enum(["High", "Medium", "Low"]);
+
+function toConfidence(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const raw = value.trim().toLowerCase();
+  if (raw.startsWith("h")) return "High";
+  if (raw.startsWith("l")) return "Low";
+  if (raw.startsWith("m")) return "Medium";
+  return undefined;
+}
+
+export const RfiServiceItem = z.object({
+  service: z.string().min(1),
+  type: z.preprocess(
+    value => typeof value === "string" && value.trim().toLowerCase().startsWith("inf") ? "inferred" : "explicit",
+    z.enum(["explicit", "inferred"]),
+  ),
+  evidence: z.string().default(""),
+  confidence: z.preprocess(toConfidence, Confidence.optional()),
+});
+
+export const RfiChallengeTheme = z.object({
+  theme: z.string().min(1),
+  detail: z.string().default(""),
+  rootCause: z.preprocess(value => value === true || value === "true", z.boolean()).default(false),
+  evidence: z.string().default(""),
+});
+
+export const RfiScopeSummary = z.object({
+  workType: z.preprocess(
+    value => {
+      const raw = typeof value === "string" ? value.toLowerCase() : "";
+      if (raw.includes("both") || (raw.includes("tech") && raw.includes("consult"))) return "both";
+      if (raw.includes("consult") || raw.includes("strategy")) return "consulting";
+      if (/\btech|\bit\b|system|solution/.test(raw)) return "technical";
+      return "other";
+    },
+    z.enum(["technical", "consulting", "both", "other"]),
+  ),
+  objectiveConfidence: z.preprocess(toConfidence, Confidence.optional()),
+  procurementObjective: z.string().default(""),
+  challengeThemes: z.array(RfiChallengeTheme).default([]),
+  consequences: z.array(z.string()).default([]),
+  endState: z.string().default(""),
+  endStateConstraints: z.array(z.string()).default([]),
+  nextStep: z.string().default(""),
+  services: z.array(RfiServiceItem).default([]),
+  gaps: z.array(z.string()).default([]),
+});
+
 export const ResponseDraftPerson = z.object({
   name: z.string().min(1),
   role: z.string().optional(),
@@ -217,6 +267,7 @@ export const ResponseDraftBriefing = z.object({
       services: z.array(z.string()).default([]),
       deliverables: z.array(z.string()).default([]),
       responseConstraints: z.array(z.string()).default([]),
+      rfiSummary: RfiScopeSummary.optional(),
     }).optional(),
     informationRequests: z.array(z.string()).default([]),
     capabilities: z.array(z.string()).default([]),
@@ -275,6 +326,7 @@ export const SolicitationExtraction = z.object({
     sectionId: z.string().optional(),
   })).default([]),
   constraints: z.array(z.string()).default([]),
+  rfiSummary: RfiScopeSummary.optional(),
 });
 
 export const PursuitDocumentMeta = z.object({
@@ -376,6 +428,9 @@ export type RfiComplianceRow = z.infer<typeof RfiComplianceRow>;
 export type RfiResponsePackageOutput = z.infer<typeof RfiResponsePackageOutput>;
 export type SolicitationRequirement = z.infer<typeof SolicitationRequirement>;
 export type SolicitationExtraction = z.infer<typeof SolicitationExtraction>;
+export type RfiScopeSummary = z.infer<typeof RfiScopeSummary>;
+export type RfiServiceItem = z.infer<typeof RfiServiceItem>;
+export type RfiChallengeTheme = z.infer<typeof RfiChallengeTheme>;
 export type PursuitDocumentMeta = z.infer<typeof PursuitDocumentMeta>;
 export type PursuitTriageView = z.infer<typeof PursuitTriageView>;
 export type PursuitIngestResult = z.infer<typeof PursuitIngestResult>;

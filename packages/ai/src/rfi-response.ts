@@ -351,6 +351,8 @@ export function fallbackRfiPackage(briefing: ResponseDraftBriefingType): RfiResp
     briefing.pursuit.docSummary?.objective?.[0]
       ? briefing.pursuit.docSummary.objective[0]
       : `${issuer} is researching a future requirement. The extracted packet does not yet support a fuller statement of need.`,
+    briefing.pursuit.docSummary?.rfiSummary?.procurementObjective ?? "",
+    briefing.pursuit.docSummary?.rfiSummary?.endState ?? "",
     unmapped.length
       ? "Areas with no mapped team capability are marked below for the reviewer."
       : "",

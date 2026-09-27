@@ -2,6 +2,7 @@
  * Mock data layer — mirrors the UI POV's demonstration dataset.
  * Will be replaced by real DB queries as phases complete.
  */
+import type { RfiScopeSummary } from "@opportunity-engine/contracts";
 
 export interface Organization {
   id: string;
@@ -100,6 +101,7 @@ export interface Pursuit {
     services: string[];
     deliverables: string[];
     responseConstraints?: string[];
+    rfi?: RfiScopeSummary;
   };
   informationRequests?: string[];
   rationale: string[];

@@ -114,6 +114,7 @@ export function buildResponseDraftBriefing(input: {
         services: input.pursuit.docSummary.services,
         deliverables: input.pursuit.docSummary.deliverables,
         responseConstraints: input.pursuit.docSummary.responseConstraints ?? [],
+        rfiSummary: input.pursuit.docSummary.rfi,
       },
       informationRequests: input.pursuit.informationRequests ?? [],
       capabilities: input.capabilities ?? [],

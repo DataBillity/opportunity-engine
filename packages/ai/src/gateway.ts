@@ -59,7 +59,7 @@ const APPROVED_REGIONS: Record<string, string[]> = {
 };
 
 const CLAUDE_MODELS = ["claude-sonnet-5", "claude-sonnet-4-6"];
-const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
+const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-flash-latest"];
 
 const CLAUDE_INPUT_USD = 2 / 1_000_000;
 const CLAUDE_OUTPUT_USD = 10 / 1_000_000;
