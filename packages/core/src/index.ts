@@ -9,6 +9,11 @@ export {
 } from "./scoring/pursuit-triage";
 export type { OrgTriageContext } from "./scoring/pursuit-triage";
 export {
+  combineSolicitationDocuments,
+  normalizeSolicitationText,
+  orderSolicitationDocuments,
+} from "./scoring/document-text";
+export {
   buildHeuristicRfiSummary,
   inferRfiServices,
   mergeRfiSummaries,

@@ -129,26 +129,38 @@ describe("challenge themes", () => {
 });
 
 describe("merging model and heuristic summaries", () => {
+  const heuristic = extractSolicitationHeuristic(claimsRfi, "rfi.txt", "rfi");
+  const modelOverlay = {
+    objective: ["Replace CaRes with a configurable claims platform so victims are paid faster."],
+    rfiSummary: {
+      workType: "technical" as const,
+      procurementObjective: "Decide between COTS, MOTS, and custom (§1.A).",
+      challengeThemes: [],
+      consequences: [],
+      endState: "",
+      endStateConstraints: [],
+      nextStep: "",
+      services: [{ service: "Solution demonstration", type: "explicit" as const, evidence: "§1.G", confidence: undefined }],
+      gaps: [],
+      issuerQuestions: [],
+    },
+  };
+
   it("prefers the model and fills empty fields from the heuristic", () => {
-    const heuristic = extractSolicitationHeuristic(claimsRfi, "rfi.txt", "rfi");
-    const merged = mergeSolicitationExtractions(heuristic, {
-      objective: ["Replace CaRes with a configurable claims platform so victims are paid faster."],
-      rfiSummary: {
-        workType: "technical",
-        procurementObjective: "Decide between COTS, MOTS, and custom (§1.A).",
-        challengeThemes: [],
-        consequences: [],
-        endState: "",
-        endStateConstraints: [],
-        nextStep: "",
-        services: [{ service: "Solution demonstration", type: "explicit", evidence: "§1.G", confidence: undefined }],
-        gaps: [],
-      },
-    });
+    const merged = mergeSolicitationExtractions(heuristic, modelOverlay);
     expect(merged.rfiSummary?.procurementObjective).toBe("Decide between COTS, MOTS, and custom (§1.A).");
     expect(merged.rfiSummary?.services).toHaveLength(1);
     expect(merged.rfiSummary?.challengeThemes.length).toBeGreaterThan(0);
     expect(merged.rfiSummary?.endState).toMatch(/configurable/);
     expect(mergeRfiSummaries(undefined, heuristic.rfiSummary)).toBe(heuristic.rfiSummary);
+  });
+
+  it("keeps the model's scope fields as returned when the model wrote the summary", () => {
+    const merged = mergeSolicitationExtractions(heuristic, modelOverlay, { trustOverlayScope: true });
+    expect(merged.objective).toEqual(modelOverlay.objective);
+    expect(merged.challenges).toEqual([]);
+    expect(merged.rfiSummary?.challengeThemes).toEqual([]);
+    expect(merged.rfiSummary?.endState).toBe("");
+    expect(merged.requirements).toEqual(heuristic.requirements);
   });
 });

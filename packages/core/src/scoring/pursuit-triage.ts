@@ -21,6 +21,7 @@ import {
   thresholdsFor,
 } from "./project-type";
 import { buildHeuristicRfiSummary, mergeRfiSummaries } from "./rfi-summary";
+import { DOCUMENT_LABEL, normalizeSolicitationText } from "./document-text";
 
 export interface OrgTriageContext {
   name: string;
@@ -43,15 +44,33 @@ export function capSourceText(text: string): { text: string; truncated: boolean 
   return { text: normalized, truncated: false };
 }
 
+/**
+ * Overlay model fields on the heuristic extraction. With `trustOverlayScope`, the model's
+ * scope fields stand as returned: an empty field stays empty rather than being filled
+ * with heuristic sentence matches.
+ */
 export function mergeSolicitationExtractions(
   base: SolicitationExtraction,
   overlay: Partial<SolicitationExtraction> | null | undefined,
+  options: { trustOverlayScope?: boolean } = {},
 ): SolicitationExtraction {
   if (!overlay) return base;
   const pickList = (preferred?: string[], fallback?: string[]) => {
     const next = (preferred ?? []).map(s => s.trim()).filter(Boolean);
     return next.length ? next : (fallback ?? []);
   };
+  if (options.trustOverlayScope) {
+    const merged = mergeSolicitationExtractions(base, overlay);
+    const own = (list?: string[]) => (list ?? []).map(s => s.trim()).filter(Boolean);
+    return {
+      ...merged,
+      objective: own(overlay.objective),
+      challenges: own(overlay.challenges),
+      services: own(overlay.services),
+      deliverables: own(overlay.deliverables),
+      rfiSummary: overlay.rfiSummary ?? base.rfiSummary,
+    };
+  }
   const overlayReqs = (overlay.requirements ?? []).filter(r => r.requirementText?.trim());
   return {
     inferredName: overlay.inferredName?.trim() || base.inferredName,
@@ -71,10 +90,11 @@ export function mergeSolicitationExtractions(
 }
 
 export function extractSolicitationHeuristic(
-  text: string,
+  rawText: string,
   filename: string,
   projectType: ProjectType = "rfp",
 ): SolicitationExtraction {
+  const text = normalizeSolicitationText(rawText.replace(DOCUMENT_LABEL, ""));
   const stem = filename.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
   const due = extractDueDate(text);
   const solicitationRef = extractSolicitationRef(text) || undefined;
@@ -482,7 +502,17 @@ function sectorFromOrg(org: OrgTriageContext, text: string): string {
 
 function extractTitle(text: string, projectType: ProjectType): string {
   const generic = /^(request for (?:proposals?|information)|statement of work|solicitation|rfp|rfi|sow|purpose|objective|overview|scope of work)$/i;
-  const fromPurpose = sectionBullets(text, /purpose|objective/i)[0];
+  const coverTitle = text.split(/\n+/).map(l => l.trim()).filter(Boolean).slice(0, 16).find(line => {
+    if (/[.:;?!]$|:/.test(line) || /\b(?:RFP|RFQ|RFI|SOL)[-\s]*[A-Z0-9]/i.test(line)) return false;
+    const letters = line.replace(/[^A-Za-z]/g, "");
+    if (!letters || letters === letters.toUpperCase()) return false;
+    const words = line.split(/\s+/);
+    if (words.length < 3 || words.length > 12) return false;
+    const titled = words.filter(word => /^[A-Z(&]/.test(word) || /^(?:and|of|the|for|to|in|on|&)$/.test(word)).length;
+    return titled / words.length >= 0.8 && !/^state of /i.test(line);
+  });
+  if (projectType === "rfi" && coverTitle) return coverTitle;
+  const fromPurpose = sectionBullets(text, /^\s*(?:[A-Z0-9]{1,2}\.\s*)?(?:project\s+)?(?:purpose|objective)s?\s*$/im)[0];
   if (fromPurpose && fromPurpose.length <= 110) {
     return fromPurpose.replace(/[.]+$/, "");
   }
@@ -604,7 +634,7 @@ function sectionBullets(text: string, heading: RegExp): string[] {
 
 function sentencesMatching(text: string, pattern: RegExp): string[] {
   const items: string[] = [];
-  for (const sentence of text.split(/(?<=[.!?])\s+/)) {
+  for (const sentence of text.split(/(?<=[.!?])\s+|\n\s*\n/)) {
     const trimmed = sentence.replace(/\s+/g, " ").trim();
     if (trimmed.length > 28 && pattern.test(trimmed)) {
       items.push(trimmed);
@@ -696,7 +726,7 @@ function extractScopeNarrative(text: string, projectType: ProjectType): {
   const challengeLines = collapseContained(uniqueLines([
     ...numberedItems(challenges),
     ...sentencesMatching(challenges, /lack of|limitation|manual|cannot|unable|challenge|outdated|legacy|aging|inefficien|no longer|end of life|unsupported/i),
-  ]).filter(isScopeStatement)).slice(0, 8);
+  ]).filter(line => isScopeStatement(line) && !/[•▪●]/.test(line))).slice(0, 12);
 
   const serviceLines = collapseContained(uniqueLines([
     ...sentencesMatching(`${vision}\n${purpose}`, /system|workflow|automat|integrat|configur|platform|solution|claims|payment|benefit|grant|migrat|case management|portal|data/i),
@@ -718,9 +748,12 @@ function extractScopeNarrative(text: string, projectType: ProjectType): {
     serviceLines.filter(line => !resolvedObjective.some(item => item.toLowerCase() === line.toLowerCase())),
   ).slice(0, 6);
 
-  const deliverableLines = uniqueLines([
-    ...sentencesMatching(`${vision}\n${background}`, /system|module|workflow|application|engine|portal|migration|dashboard|report|integration/i),
-  ]).filter(isObjectiveStatement).slice(0, 6);
+  const endStatePattern = /system|module|workflow|application|engine|portal|migration|dashboard|report|integration|solution/i;
+  const fromVision = uniqueLines(sentencesMatching(vision, endStatePattern)).filter(isObjectiveStatement);
+  const deliverableLines = (fromVision.length >= 2
+    ? fromVision
+    : uniqueLines([...fromVision, ...sentencesMatching(background, endStatePattern)]).filter(isObjectiveStatement)
+  ).slice(0, 6);
 
   return {
     objective: resolvedObjective,
@@ -738,7 +771,7 @@ function scopeTextForScoring(extraction: SolicitationExtraction, sourceText: str
     ...extraction.deliverables,
   ].filter(isScopeStatement);
   if (projectType === "rfi") {
-    const narrative = extractScopeNarrative(sourceText, "rfi");
+    const narrative = extractScopeNarrative(normalizeSolicitationText(sourceText), "rfi");
     const fromDoc = [...narrative.objective, ...narrative.challenges, ...narrative.services, ...narrative.deliverables];
     if (fromDoc.length) return uniqueLines([...listed, ...fromDoc]).join("\n");
   }
@@ -788,9 +821,14 @@ function sectionBody(text: string, heading: RegExp): string {
 }
 
 function numberedItems(text: string): string[] {
-  return text
-    .split(/(?:^|\n)\s*\d+\.\s+/)
-    .map(line => line.replace(/\s+/g, " ").trim())
+  const chunks = text.split(/(?:^|\n)\s*\d+\.\s+/);
+  const items = /^\s*\d+\.\s+/.test(text) ? chunks : chunks.slice(1);
+  return items
+    .map(chunk => chunk
+      .split(/\n\s*\n|\n\s*[•▪●]/)[0]!
+      .replace(/\s+/g, " ")
+      .replace(/\s*(?:^|(?<=[.!?]))\s*[^.!?]*:\s*$/, "")
+      .trim())
     .filter(line => line.length > 28);
 }
 

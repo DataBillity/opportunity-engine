@@ -1,0 +1,682 @@
+===== DOCUMENT: 26-001_CalVCB_2026_RFI_Modernization_Solution_final.pdf =====
+
+RFI No. 26-001
+Compensation and Restitution System Modernization
+
+RELEASE DATE: August 24th, 2026
+
+RESPONSE REQUESTED NO LATER THAN: September 24th, 2026 2:00PM (PST)
+
+ISSUED BY: State of California
+
+REQUEST FOR INFORMATION (RFI)
+
+1. INTRODUCTION AND OVERVIEW
+
+The California Victims Compensation Board (CalVCB) is issuing this Request for
+Information (RFI) to solicit innovative input from qualified vendors (Respondents) for
+a modernization solution to replace CalVCB's current claims processing system.
+RFI responses will be reviewed and analyzed by CalVCB to determine if solutions
+are available to satisfy CalVCB’s technical and business needs. This RFI is for
+information and planning purposes only and does not constitute a competitive
+solicitation. No award or contract will result from this RFI. Any future solicitation
+resulting from this RFI is anticipated to be released on the California State Contract
+Register (CSCR) system (CaleProcure).
+
+A. PROJECT PURPOSE
+
+CalVCB is seeking information and best practices from qualified Respondents to
+assist CalVCB in determining what is currently available in the marketplace based
+on the objectives and requirements as described herein. The intent of this RFI is not
+to select a proposed solution or supplier. The objective is to conduct market
+research that will assist CalVCB in investigating alternatives to modernizing the
+current processes with a highly configurable solution. Responses may or may not
+assist CalVCB in the development of a future procurement strategy.
+Respondents are invited to respond to this RFI with potential products and/or
+suggested approaches to assist CalVCB in determining if solutions such as a
+Commercial-Off-The-Shelf (COTS), Modified-Off-The-Shelf (MOTS), integrated
+product set (i.e., integration of multiple products), COTS Configurable, or a custom
+solution would best address the required functions described in this RFI. Multiple
+products may be described in the response.
+
+B. PROJECT BACKGROUND
+
+The California Victim Compensation Board (CalVCB) is a three-member Board
+dedicated to assisting victims of violent crimes. CalVCB administers the Victim
+Compensation Program, which provides reimbursement for crime-related expenses
+to victims who suffer physical injury or the threat of physical injury because of a
+violent crime. CalVCB also administers the Erroneously Convicted Persons
+Program, the Restitution Recovery Program, the Good Samaritan Program, and the
+Missing Children Reward Program.
+CalVCB reimburses victims of violent crimes, once all other payment sources have
+been exhausted. Applicants file claims for reimbursement for out-of-pocket costs for
+medical and dental, mental health, income loss, relocation, residential security, and
+other such sub-categories. CalVCB has a claim maximum benefit amount that
+includes sub-categories with benefit limits. Benefits are payable over the life of the
+claimant, up to these limits.
+The Compensation and Restitution System (CaRes) provides a means to capture
+and process all the information associated with a claim to determine eligibility. Bills
+are also captured and processed for benefit determination and then payments are
+processed and sent to the claimants and/or providers.
+CaRes is currently a workflow-based system that follows the claim through its life
+cycle. Work flows within the current system through work items generated and
+presented in queues for staff, with designated permissions. Reports are generated to
+review aging, assigned and processed work. The application comes in (online, via
+mail or email), and if accompanied by appropriate supporting information, an
+eligibility determination is made. If supporting information is absent, the application
+must be held and the supporting information requested – either from the claimant or
+external sources (i.e., crime reporting agencies, Department of Justice, etc.). Once a
+determination can be made, the application is either approved
+or denied, and any associated bills can be reviewed for processing. There is an
+emergency award process that allows for expedited reviews in dire circumstances.
+Both documentation of the emergency request and independent processing of
+the application must be available.
+If an application is denied, an appeals process is triggered. Currently, a denied
+application generates a letter with appeal rights and timelines explained. Without a
+request for an appeal, the denial becomes final in 55 days. If an appeal is requested,
+the claim moves into an appeals status to allow legal to review and process the
+appeal. The appeal process is similar for both eligibility of applications and denial of
+bills. No pending bills are eligible for processing while a claim is in appeal status.
+Once an application is determined to be eligible for benefits, any bills submitted are
+reviewed for completeness, crime relatedness and processed for payment.
+If submitted via standard form CMS 1450/1500 the bills are initially processed
+through a third-party vendor that adjudicates the bills. The adjudicated bills are
+received from the vendor and loaded into CaRes. CaRes runs the bills through a
+rules engine to allow for automatic payment. Bills that cannot be paid through the
+rules engine or those that are required to be manually reviewed are presented to
+staff for processing. All bill denials are presented with the opportunity to appeal and
+follow the same process described above for application denials.
+Appeals of both eligibility and bill determinations are documented, assigned and
+processed. Letters are generated, timelines are calendared and claim statuses are
+updated.
+CaRes also provides the ability to track criminal disposition cases and offenders,
+providing court staff and judges with the necessary information to impose fines and
+orders. This serves to collect offender fines towards the Board's restitution
+fund. The CaRes system supports approximately three hundred users at
+the CalVCB as well as users throughout the state in county Joint Power (JP) and
+Criminal Restitution Compact (CRC) offices.
+In some instances, CalVCB receives returned benefits for a variety of reasons,
+including returned warrants, settlements, and overpayments (adjustments).
+Returned benefits must be credited to the claimant’s benefit limits for potential future
+disbursements.
+
+C. PROJECT VISION
+
+CalVCB is seeking an agile, robust, highly configurable claims compensation and
+restitution system. The goal is to support the end-to-end processes within the claim
+compensation and restitution lifecycle. The solution should streamline, integrate,
+and automate process workflows for internal and external users to track and manage
+their claims, compensation and restitution. The ultimate resolution would be based
+on cohesive claims compensation and restitution business model with a single
+solution to effectively manage and monitor the claims, compensation and
+restitution. The system should be agile enough to accommodate CalVCB’s future
+business needs, updates to policy/process/procedure, and statutory or
+regulatory changes.
+
+D. CURRENT CHALLENGES
+
+Due to missing functionality and system limitations, external business processes and
+documentation practices have been created to accommodate needed
+workflows. When additional functionality is requested, updates often take several
+months due to coding requirements.
+1. Lack of agility in making updates or additions to functionality within the current
+system. Changes are heavily dependent on coding, resulting in time consuming
+and less agile updates.
+2. Lack of an adjustments module results in code updates to make required
+changes and dependency on external databases. (i.e., if a payment is returned,
+there is no automated way to add the money back to their available benefit)
+3. Lack of appeals workflow resulting in external processes that are manually
+integrated into the system of record. (i.e., ability to create, track and document
+appeals status, documents and resolution)
+4. No communication/correspondence engine. Not all letters and forms are
+available in the system, so the use of manual, offline, and custom letters
+is required. Updates to letters are all required to be hard coded. Multilingual
+correspondence is not available – only English and Spanish are supported.
+5. Lack of attribute auditing throughout the claim; specifically, who took what
+actions at what phase.
+6. Lack of integrated online application process. Current process links an external
+online process to system of record.
+7. Data that is entered into the application as well as supporting documentation and
+bills cannot be renamed. The document must be uploaded a second time with
+the correct name.
+8. Lack of integration between claim and provider information.
+9. Separation of duties must be managed manually, and the system does not
+provide any warning or notification if someone violates the separation of duties.
+The system can’t call out that someone might be processing a bill on an
+application that they allowed.
+10. Lack of agility in customization of reports in a timely manner.
+The current process results in:
+• Higher number of phone calls and emails
+• Increased escalations
+• Lack of visibility into status or progress
+• Inconsistent information
+across divisions, claimants, providers and advocates/representatives
+• Increased time to approval and payment
+• Manual document and recordkeeping development
+• Inefficient workarounds
+
+E. SUBMISSION OF QUESTIONS
+
+Respondents seeking clarification on this RFI must contact CalVCB’s designated
+representative shown below. No other representative of CalVCB is authorized to
+communicate with Respondents with respect to this RFI. Questions must be
+submitted no later than the date provided in Table 1, Key Action Dates.
+Name: Heidi Smith.
+E-mail: ITAcquisitions@victims.ca.gov.
+At its discretion, the State may contact Respondents to seek clarification of any
+inquiry received. Responses to questions submitted timely will be provided to all
+Vendors. Questions and answers will be posted on the California State Contracts
+Register (CSCR) at https://caleprocure.ca.gov. The parties submitting questions
+will not be publicized in the Response to Questions.
+
+F. RFI RESPONSE INSTRUCTIONS
+
+Respondents shall submit written responses including RFI Response Worksheet
+(Attachment 1.) electronically by the date and time stated in Table 1, Key Action
+Dates.
+RFI responses must be submitted to the RFI Contact:
+ITAcquisitions@victims.ca.gov. CalVCB assumes no responsibility if the
+response is not received prior to the RFI submission deadline.
+Respondents providing estimated costing models and budgetary range
+information in response to this RFI is for information planning purposes and is not
+represented as a proposal/bid from the Respondent. Any sizing assumptions or
+constraints that affect the estimated cost range/pricing model should be
+referenced. The estimated costs provided are non-binding and will be used for
+informational and planning purposes only.
+
+G. SOLUTION DEMONSTRATION
+
+CalVCB, at its own discretion, may invite selected Respondents to conduct a
+demonstration of their solution(s), presentation of their approach, and
+explanation of the costing model. Respondents invited will be notified by e-mail,
+according to Table 1, Key Actions and Dates. CalVCB may extend the
+demonstration schedule should the quality and quantity of responses warrant
+additional demonstrations.
+After the Respondent’s response to this RFI is received by CalVCB, a
+demonstration of the solution(s) may be scheduled.
+
+H. RFI KEY ACTION DATES
+
+Listed below are the important key actions and dates. CalVCB may make
+changes to this schedule by posting changes to all interested parties on the
+CSCR at https://caleprocure.ca.gov.
+Table 1: Key Actions and Dates
+
+KEY ACTIONS DATE
+
+RFI Release August 24, 2026
+Last Day to Submit Questions September 2, 2026
+Release of Response to Questions September 9, 2026
+RFI Response September 24, 2026 - 2:00pm (PST)
+RFI Respondent Demonstrations* October 2026 - (Invites TBD)
+*Please note that relevance of your RFI response will determine selection of
+vendors who will be invited to share demonstrations, please see Section 1. G.,
+Solution Demonstration.
+
+I. DISCLAIMER
+
+This RFI is for information and planning purposes only and does not constitute a
+competitive solicitation.
+A response to this RFI is not an offer and cannot be accepted by CalVCB to form
+a binding contract. No award or contract will result from this RFI.
+CalVCB is not responsible for any expenses associated with responding to this
+RFI.
+Responding to this RFI creates no obligation on the part of any Respondent to
+CalVCB. Conversely, issuing this RFI and considering responses creates no
+obligation on the part of CalVCB to any Respondent.
+Respondents are advised that all documents submitted in response to this RFI
+become the property of the State of California and will be regarded as public
+records under the California Public Records Act (Government Code Section
+7921.000 et seq.) and subject to review by the public.
+The State does not request any proprietary information be submitted, nor shall it
+be liable for any consequential damages for proprietary information if submitted.
+Any information submitted in response of this RFI is subject to disclosure under
+the Freedom of Information Act, 5 USC 552 (a) and the California Public Records
+Act. CalVCB may, at its sole discretion, choose not to consider or evaluate any
+response, or any portion of a response because of this RFI.
+Please read this RFI document thoroughly and adhere to the response
+submission instructions.
+CalVCB reserves the right to invite Respondents who submit a qualified RFI to
+participate in demonstrations.
+
+2. GENERAL PROVISIONS
+
+The following terms and conditions, or their successor, will be incorporated into any
+solicitation resulting from this RFI. The State will not modify these terms and
+conditions. The following General Provisions are not included in hard copy but may
+be viewed at the website link provided below:
+Department of General Services Procurement Division, INFORMATION
+
+TECHNOLOGY - GENERAL PROVISIONS CLOUD - COMPUTING SERVICES,
+
+DGS PD 402-ITGP (Cloud)
+Current Version (Revised and Effective 2/20/2025)
+Department of General Services Procurement Division, INFORMATION
+
+TECHNOLOGY - GENERAL PROVISIONS - NON-CLOUD GOODS & SERVICES,
+
+DGS PD 403-ITGP (Non-Cloud)
+Current Version (Revised and Effective 2/20/2025)
+
+3. ATTACHMENTS
+
+A. ATTACHMENT 1 – RFI RESPONSE WORKSHEET
+
+B. ATTACHMENT 2 – LINKS TO IT AND SECURITY GUIDELINES AND STANDARDS
+
+===== DOCUMENT: 26-001_CalVCB_2026_RFI_Modernization_Solution_Attachment_1.docx =====
+
+ATTACHMENT 1
+
+RFI RESPONSE WORKSHEET
+
+INSTRUCTIONS: To respond to RFI 26-001, please include this RFI Response Worksheet and submit a completed response package as instructed in the RFI: RFI responses must be submitted to the RFI Contact: ITAcquisitions@victims.ca.gov.
+
+Your responses are needed to assist CalVCB in fully understanding the breadth of alternatives available to complete the modernization effort. Please provide detailed and specific responses to each question, with your total submission being no more than 10 pages, single spaced in 12-point font, with one-inch margins.
+
+PART I: Company Information and Experience
+
+Company Name
+
+Mailing Address
+
+City, State, Zip
+
+Website
+
+Contact Person Name
+
+Email
+
+Phone
+
+Title
+
+By signing below, I certify the information in the response is true and accurate to the best of my knowledge at the time of the submittal.
+
+Signature:
+
+Date:
+
+Provide a background about your company including its size and when it started.
+
+Provide technical details about your solution including whether it is home grown or based on another organization’s platform.
+
+Do you have experience implementing your solution with other government agencies? Please share the names of the state departments and what applications were implemented.
+
+PART II: Solution
+
+Describe your proposed solution. Please highlight in your solution the specific areas where, after reviewing the background and challenges, you believe your proposed approach can automate existing work or streamline current workflows.
+
+Describe the product(s) and associated modules that will be included in your proposed solution.
+
+Describe the scalability and flexibility of the proposed solution for meeting future information security, accessibility, maintenance, and platform changes and compliance requirements and standards.
+
+Describe if the solution (product, process, or service) is off-the-shelf or requires configuration or customization to address the challenge statement.
+
+PART III - Integration (Inputs and Outputs)
+
+Describe the input/output capabilities of your proposed solution.
+
+PART IV: Approach
+
+Project methodology and high-level timeline.
+
+What is your overall approach to providing a solution?
+
+What is a typical timeline for solution implementation? Please provide examples of implementations within the last 5 years.
+
+What is your approach to understanding our business and creating a solution that meets our current needs and can easily adapt to our future needs?
+
+What is your approach to User Acceptance testing?
+
+Data migration
+
+How will existing data be validated prior to migration?
+
+What is your approach to data migration and what tools do you use?
+
+Is data migration part of the cost or is it extra?
+
+Updates and enhancements
+
+How does your solution define system/platform upgrades?
+
+What is the process for system/platform upgrades?
+
+How often are upgrades made available?
+
+How does your solution define enhancements?
+
+What is the process for enhancement?
+
+Do you have an enhancement schedule? If so, what is it?
+
+How does your solution define configuration changes?
+
+What is the process for configuration changes?
+
+For each item described below, please indicate which category it applies to by placing an X or check mark in the appropriate column.
+
+Description
+
+System Upgrade
+
+Enhancement
+
+Configuration
+
+New benefit type (service category) with multiple subtypes (service codes)
+
+Increase the benefit limit for relocation expenses on a prospective basis
+
+Implement the workflow for a new claims-adjacent program
+
+Establishment of new data sets
+
+Establishment or changes in role functions
+
+Bulk data exchange
+
+Direct data exchange
+
+Global changes to the header in all letter templates
+
+Add a new provider type with unique data elements not previously collected
+
+Technical Support
+
+Provide your approach for IT technical support services?
+
+Provide your approach for functional support?
+
+Security
+
+Does the solution meet information technology and security standards as indicated in Attachment 2, Links to IT and Security Guidelines and Standards?
+
+PART V – Costing Model
+
+Please describe the estimated costing model and budgetary range of your proposed solution, including the implementation, product, maintenance, support, and training. Any sizing assumptions/constraints that affect the cost range/pricing model should be referenced.
+
+PART VI - Evaluation
+
+CalVCB wishes to thank you for your participation in the RFI process by providing us with your Response. If you have recommendations concerning this effort which have not been addressed by questions in this attachment or any additional requirements you think CalVCB should list that are not currently stated, please provide them below.
+
+===== DOCUMENT: 26-001_CalVCB_2026_RFI_Modernization_Solution_Attachment_2.pdf =====
+
+California Victim Compensation Board
+RFI 26-001
+Attachment 2
+
+ATTACHMENT 2
+
+LINKS TO IT AND SECURITY GUIDELINES AND STANDARDS
+
+State IT Policy, Standards, Instructions and Guidelines
+https://cdt.ca.gov/policy/
+Statewide Information Management Manual – Sections 10 through 80 and Sections 5300 et seq.
+https://cdt.ca.gov/policy/simm/
+California State Administrative Manual – Sections 4800 through 5900
+http://sam.dgs.ca.gov/TOC/4800.aspx
+Federal Information Security Modernization Act (FISMA)
+https://csrc.nist.gov/topics/laws-and-regulations/laws/fisma
+National Institute of Standards and Technology (NIST) Special Publications Index
+https://csrc.nist.gov/publications
+National Institute of Standards and Technology (NIST) Special Publication 800-53A
+https://csrc.nist.gov/publications/detail/sp/800-53a/rev-5/final
+
+===== DOCUMENT: 26-001CalVCB_2026_RFI_Modernization_Solution_Attachment_3.pdf =====
+
+Response to Vendor Questions
+RFI No. 26-001
+
+COMPENSATION & RESTITUTION SYSTEM MODERNIZATION
+
+Contact: Heidi Smith
+email: ITAcquisitions@victims.ca.gov
+The purpose of this Attachment is to inform potential Respondents of responses by
+California Victim Compensation Board (CalVCB) to questions received in for RFI 26-001:
+1. While reviewing the RFI, I did not see any mention of an incumbent vendor. I
+was wondering if there is currently a vendor providing these services?
+A: No.
+2. Is there an estimated value of a potential contract that may be awarded?
+A: No.
+3. Is there a projected timeline for pursuing this project beyond the RFI stage?
+A: No.
+
+REQUEST FOR INFORMATION (RFI)
+
+4. Approximately how many records and how many years of data currently reside
+in the CaRes system that would be in scope for migration to a modernized
+solution?
+A: Use this link: https://victims.ca.gov/publications/ and on the right is the
+5. Which external systems require integration (for example, the Department of
+Justice, crime reporting agencies, the third-party CMS 1450/1500 bill-
+adjudication vendor, and payment/warrant systems), and are documented APIs
+or interface specifications available for them?
+A: Bill Review Service, State Controller's OƯice, Franchise Tax Board,
+Employment Development Department, Total Agility (Document Upload).
+6. Does CalVCB expect the solution to be hosted within a state data center or a
+CDT-approved cloud environment, or is a vendor-provided California-compliant
+secure cloud acceptable?
+A: Any of these could be acceptable.
+7. Can CalVCB confirm total user counts — approximately 300 internal CalVCB
+users plus how many external users across county Joint Power (JP) and Criminal
+Restitution Compact (CRC) oƯices?
+A: Between 350-400 users. The system has role-based access.
+8. Is CalVCB open to a single, purpose-built custom platform, or does it prefer an
+integrated set of multiple products to meet the requirements?
+A: No preference.
+9. For the estimated costing model, does CalVCB prefer a particular format or
+level of breakdown (e.g., one-time vs. recurring costs, or costs itemized by
+module or by implementation phase)?
+A: All levels of breakdown are preferred (one-time vs. recurring, costs
+itemized by module, and costs by implementation phase), if applicable.
+10. Are there target dates or constraints CalVCB has in mind for the modernization
+eƯort (for example, a desired go-live window or funding/fiscal-year
+considerations) that respondents should account for in proposed timelines?
+A: No.
+11. One clarification we would find useful in a future solicitation: whether CalVCB
+intends to retain the existing third-party bill-adjudication vendor arrangement
+for CMS 1450/1500 processing, or whether adjudication is itself in scope for
+replacement. That single quest materially changes solution architecture and
+cost.
+A: Solutions should at minimum support the existing interface for bill
+adjudication, but integrated solutions may be entertained.
+12. Could you please confirm whether a budget estimate, funding range, or Not-to-
+Exceed (NTE) amount has been established for this RFI?
+A: These have not been established.
+13. Please confirm whether a Canada-based software vendor is eligible to
+participate in this market-research process?
+A: Yes, pending compliance requirements.
+14. Whether a custom-built solution hosted in an architecture compliant with
+California’s required IT/security standards would be considered on equal
+footing with COTS/MOTS approaches
+A: Yes.
+15. Sizing information. To support budgetary estimates, can CalVCB share
+approximate annual volumes (applications received, bills processed, payments
+issued), the number of active claims, the volume of historical claims and
+supporting documents in CaRes, and the approximate number of external users
+in county JP and CRC oƯices?
+A: Use this link: https://victims.ca.gov/publications/ and on the right is the
+16. Bill adjudication. Does CalVCB intend to continue using its third-party vendor
+for adjudication of CMS 1450/1500 bills (with the new solution integrating with
+that vendor), or may responses also describe adjudication capability within the
+proposed solution?
+A: See response 11 above.
+17. Data migration. What are CalVCB's expectations for historical data migration —
+full claim history or active claims plus a defined lookback period — and are
+supporting documents included? Are the external databases referenced in
+Section 1.D, Challenge 2, in scope for migration?
+A: Active claims with all history and supporting documents must be
+migrated. External databases are out of scope.
+18. Integrations. Which external interfaces should responses assume are in scope
+(for example, the state payment/warrant process, Department of Justice and
+crime-reporting data sources, print/mail services, and electronic signature)?
+A: See response 5 above.
+19. Languages. Beyond English and Spanish, which languages should
+correspondence and the applicant-facing portal support?
+A: See Form search for languages: https://victims.ca.gov/forms/
+20. Implementation timeline. What is CalVCB's estimated timeframe for
+implementation — the anticipated start date and target go-live date for the
+modernization solution?
+A: To be determined.
+21. Implementation budget. Has CalVCB established an estimated budget or
+budgetary range for the implementation of the modernization eƯort, and if so,
+can it be shared?
+A: These have not been established.
+22. What platform/technology underlies CaRes today (custom code, COTS product,
+mainframe, etc.), and is any of it slated to survive modernization (e.g., data
+warehouse, reporting layer)?
+A: Custom code. To be determined.
+23. How many claims are processed annually, and what volume of historical
+data/documents need to migrate?
+A: Use this link: https://victims.ca.gov/publications/ and on the right is the
+24. Of the ~300 users, how many are CalVCB internal staƯ vs. state / county JP/CRC
+users, and do county users need diƯerent roles, permissions, or a separate
+portal experience?
+A: See response 7 above.
+25. Is CalVCB targeting COTS/COTS-Configurable, an integrated multi-product
+stack, or is custom development still on the table?
+A: No preference.
+26. Is a cloud deployment acceptable, or is an on-premise/state data center
+deployment required or preferred? Is FedRAMP or StateRAMP authorization
+expected for cloud responses?
+A: Any of these could be acceptable.
+27. Is a phased/incremental rollout acceptable, or is a single cutover from CaRes
+expected?
+A: No preference.
+28. What are the required integrations — the third-party bill adjudicator, DOJ/crime-
+reporting agencies, courts (for oƯender/restitution tracking), and any state
+financial systems (e.g., FI$Cal)? Are APIs/specs available?
+A: See response 5 above.
+29. Are there existing enterprise standards CalVCB must align with (e.g., a state-
+mandated CRM, ECM, or low-code platform already licensed elsewhere in
+California)?
+
+A: NIST 800-53, SAM 5300.
+
+30. Beyond NIST 800-53/FISMA-aligned controls and SAM Ch. 5300, are there other
+applicable frameworks (e.g., CJIS, if criminal-history data is involved; IRS Pub.
+1075 for any federal tax data)?
+A: No.
+31. Is there an estimated budget range or funding source/mechanism for this
+modernization eƯort?
+A: No.
+32. What is the anticipated timeline from a future formal solicitation to contract
+award and go-live?
+A: To be determined.
+33. Does CalVCB have any restrictions, prohibitions, or security concerns regarding
+the use of AI/large language model technology as part of a proposed
+modernization solution (e.g., for data migration, intake processing,
+correspondence drafting, document review, or workflow automation)? If so, are
+there specific state AI-use policies or approved-vendor lists respondents
+should be aware of?
+A: Must follow SIMM 5305-F (GenAI), SAM 5300.
+34. What does CalVCB consider success criteria for a vendor demonstration,
+should one be requested after RFI review?
+A: Criteria have not been established.
+35. Does CalVCB have a target timeline to have a solution in place?
+A: No.
+36. How many total cases are processed annually?
+A: Use this link: https://victims.ca.gov/publications/ and on the right is the
+37. Is compatibility with CalVCB's existing bill adjudication vendor a hard
+requirement for the new system, or is there flexibility to consider a diƯerent
+approach to rules-engine processing?
+A: See response 11 above.
+38. How many total CMS 1450/1500 bills are sent annually to the third-party vendor
+for adjudication?
+A: Use this link: https://victims.ca.gov/publications/ and on the right is the
+39. How many total bills (including CMS 1450/1500) are processed annually?
+A: Use this link: https://victims.ca.gov/publications/ and on the right is the
+40. Do you have a headcount for users in the Joint Powers (JP) and Criminal
+Restitution Compact (CRC) oƯices?
+A: See response 7 above.
+41. Do JP and CRC users work directly in CaRes, or do they use their own system
+that integrates with CalVCB? Could you also briefly describe their current
+responsibilities?
+A: Work directly in Cares. JP users process applications and bills (same as
+headquarters users). CRC users manage criminal dispositions.
+42. How long has the current solution been used? Can you summarize any major
+enhancements that were implemented in the last 3 years?
+A: Cares2 went live in 2017. There were no major enhancements in the last
+three years.
+43. Can you provide the current technical stack used for the current system?
+A: JavaScript, Microsoft SSRS, Microsoft VB.net and C Sharp, Power BI, SQL
+Server.
+44. Please provide approximate record counts and data volumes for claims, bills,
+payments, providers, appeals, restitution cases, correspondence, and
+document attachments, and clarify how many years of historical data and audit
+history are expected to be migrated into the modernized system.
+A: Use this link: https://victims.ca.gov/publications/ and on the right is the
+45. Please identify the current and anticipated external interfaces, including the
+medical bill adjudication vendor, payment or accounting systems, online
+application service, identity provider, document repositories, law-enforcement
+or court data sources, and county-oƯice systems, together with available
+protocols and expected transaction frequencies.
+A: See response 11 above for bill adjudication.
+46. What security categorization and control baseline should respondents assume
+for planning purposes, and will a future solution require a particular CDT-
+approved hosting environment, independent security authorization, FedRAMP
+authorization, or compliance beyond the cited SIMM, SAM, FISMA, and NIST
+standards?
+A: See response 29 above.
+47. In addition to the approximately 300 CalVCB users, what numbers of county-
+oƯice users, claimants, providers, advocates, court personnel, and other
+external users should respondents assume when developing capacity and
+licensing estimates?
+A: See response 7 above.
+48. For comparable costing models, what contract term, implementation period,
+parallel-operation period, support hours, and expected production go-live date
+should respondents assume, and should data cleansing and remediation be
+included in the base estimate or presented as optional services?
+A: These have not been established. Yes.
+49. Would CalVCB permit respondents to include supplemental materials as
+appendices or separate attachments, such as supporting pricing information,
+product literature, or other reference materials, in addition to the primary
+response document?
+A: No.
+50. How does CalVCB envision the scope of the future modernization
+procurement? Specifically, is the agency seeking a technology replacement of
+the existing CaRes platform, or a broader business transformation initiative
+that includes operating model redesign, process optimization, user experience
+modernization, organizational change management, and continuous
+improvement capabilities? Response guidance: Please describe modernization
+objectives, future operating model goals, organizational impacts, training
+expectations, and measurable success criteria.
+A: No preference.
+51. Is CalVCB evaluating a phased modernization strategy (modular capability
+implementation) or a comprehensive end-to-end platform replacement
+approach? Response guidance: Please provide anticipated implementation
+phases, priority business capabilities, MVP scope, implementation timeline
+expectations, and funding considerations.
+A: No preference.
+52. Can CalVCB provide additional details regarding the current CaRes technology
+stack, including application architecture, workflow engine, reporting
+framework, document management solution, integration architecture, hosting
+model, database technologies, and supporting platforms? Response guidance:
+Please provide current technical stack, environment inventory, database sizes,
+hosting architecture, reporting tools, and document management
+technologies.
+A: See response 43 above.
+53. What are the most significant architectural limitations of the current platform
+from both business and technical perspectives that CalVCB believes should be
+eliminated within the future-state solution? Response guidance: Please identify
+top business pain points, technical debt concerns, operational bottlenecks,
+maintainability issues, and support challenges.
+A: Review the challenges listed in the RFI.
+54. Would CalVCB consider emerging technologies, such as GenAI and automation
+for processing claims, in addition to proactive fraud detection alerts? Response
+guidance: Please identify priority AI use cases and desired outcomes.
+A: No preference.
+55. What are the three to five most important business outcomes that would define
+a successful modernization eƯort three years after implementation? Response
+guidance: Where possible, please provide baseline and target values for claim
+processing times, appeal resolution times, emergency award turnaround,
+backlog reduction, automation rates, customer satisfaction improvements,
+payment accuracy, restitution collection improvements, and compliance
+outcomes.
+A: To be determined.
+56. Can CalVCB please identify the existing data and provide metrics on its
+volume?
+A: See responses 4 and 17 above.

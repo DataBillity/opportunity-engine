@@ -10,7 +10,7 @@ import { callModel, ModelGatewayError } from "./gateway";
 import { parseModelJson } from "./json";
 import { buildResponseDraftPrompt, collectResponseFacts, type ResponseGroundingFact } from "./response-draft";
 
-export const RFI_RESPONSE_PROMPT_VERSION = "rfi-response-v1.0";
+export const RFI_RESPONSE_PROMPT_VERSION = "rfi-response-v1.1";
 
 const GAP_TYPE_ALIASES: Record<string, RfiGapLogEntry["gapType"]> = {
   missing_information: "missing_information",
@@ -70,9 +70,9 @@ An RFI is market research, not a binding offer. The response must do three thing
 
 Work in this order, then return the package below:
 1. Compliance: issuer, notice number, title, due date and time zone, question deadline, submission method, format rules, every numbered question, required administrative data, and acquisition signals (NAICS, set-aside, vehicle, period, budget, incumbent) when the facts include them.
-2. Need: the problem, why now, what the issuer seems unsure about, and constraints.
+2. Need: the problem, why now, what the issuer seems unsure about, and constraints. Build this from the objective, challenge themes, consequences, and target end state facts, so the draft shows what the issuer is trying to achieve, not only what it asked.
 3. Fit: for each area, Strong (direct past performance), Partial (related or partner-only), or Gap. Do not make the respond/pass call. Note which confirmed partner covers which area, and flag requirements that look written for a competitor.
-4. Draft sections that mirror the RFI's headings and numbering. If SECTIONS TO DRAFT lists a structure, use those ids, refs, and titles exactly.
+4. Draft sections that mirror the RFI's headings and numbering. If SECTIONS TO DRAFT lists a structure, use those ids, refs, and titles exactly. Response format facts are binding: when they say the issuer's worksheet is the response, or that appendices, attachments, or supplemental materials are not allowed, add no cover letter or material outside those sections and keep the whole response within the page limit. Where format rules conflict, follow the most restrictive reading and log a compliance_risk gap.
 5. For every answer: first sentence answers the question; the rest supports it with specific methods, tools, standards, and outcomes from the facts. Use the issuer's words. Add customer-focused insight (risks, ambiguities, better approaches, acquisition recommendations) without exceeding the ask.
 6. Gaps: anything missing, unverified, or undecided becomes a placeholder in the draft and one Gap Log row.
 7. Administrative information for the Prime and each confirmed partner: name, address, identifiers, size and socioeconomic status, NAICS, vehicles, and point of contact. Missing items are gaps owned by that company.
@@ -103,7 +103,7 @@ Return ONLY JSON with this shape:
   "compliance": [{ "requirement": "string", "rfiRef": "string", "responseSection": "section title", "owner": "Prime", "status": "Addressed or Open" }],
   "sections": [{ "id": "questions", "ref": "Questions", "title": "Responses to specific questions", "body": "prose with [GAP-### | Owner | Description] inline" }],
   "gaps": [{ "id": "GAP-001", "location": "Sec. title, Q3", "gapType": "missing_information", "description": "string", "owner": "Prime", "priority": "High", "due": "YYYY-MM-DD", "status": "Open", "notes": "string" }],
-  "questions": ["suggested question for the issuer, only if a questions deadline may still be open"],
+  "questions": ["question for the issuer: start from the 'Question for the issuer' facts, keep their wording and timing, and add others only when the facts raise them"],
   "strategicNotes": "requirements to influence, competitor signals, teaming ideas for capability gaps",
   "usedInsightIds": ["R1"]
 }`;
@@ -482,8 +482,9 @@ export async function generateRfiResponsePackage(rawBriefing: unknown): Promise<
   const prompt = [
     buildResponseDraftPrompt(briefing, facts),
     "",
-    "SECTIONS TO DRAFT (use these ids, refs, and titles exactly):",
+    "SECTIONS TO DRAFT (use these ids, refs, and titles exactly, and return a body for every one of them):",
     sectionListForPrompt(briefing),
+    "The single 'Section to draft' line above is not a limit. This is a complete package.",
   ].join("\n");
 
   let usedFallback = false;
@@ -492,23 +493,33 @@ export async function generateRfiResponsePackage(rawBriefing: unknown): Promise<
   let provider: "claude" | "gemini" = "claude";
   let latencyMs = 0;
 
-  try {
+  const draftWith = async (preferProvider: "claude" | "gemini") => {
     const result = await callModel({
       tier: "judgment",
+      preferProvider,
       promptVersion: RFI_RESPONSE_PROMPT_VERSION,
       systemPrompt: RFI_PACKAGE_PROMPT,
       prompt,
       classification: "internal",
       redactionProfile: "response-draft-v1",
-      maxTokens: 8000,
+      maxTokens: 14000,
       temperature: 0.3,
       jsonMode: true,
-      timeoutMs: 90_000,
+      timeoutMs: 130_000,
     });
     modelVersion = result.modelVersion;
     provider = result.provider;
     latencyMs = result.latencyMs;
-    parsed = RfiResponsePackageOutput.parse(normalizePackage(parseModelJson(result.content), fallbackDue));
+    return RfiResponsePackageOutput.parse(normalizePackage(parseModelJson(result.content), fallbackDue));
+  };
+
+  try {
+    try {
+      parsed = await draftWith("claude");
+    } catch (err) {
+      if (err instanceof ModelGatewayError) throw err;
+      parsed = await draftWith(provider === "claude" ? "gemini" : "claude");
+    }
   } catch (err) {
     if (err instanceof ModelGatewayError && err.code !== "empty_response" && err.code !== "keys_missing") {
       usedFallback = true;

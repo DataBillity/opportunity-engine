@@ -10,7 +10,7 @@ import {
 } from "@opportunity-engine/ai";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 20;
