@@ -47,7 +47,10 @@ describe("heuristic RFI scope summary", () => {
 
   it("builds a structured summary for RFIs only", () => {
     expect(summary).toBeDefined();
+    expect(summary.evaluationCriteria).toEqual([]);
+    expect(summary.commercialTerms).toEqual([]);
     expect(extractSolicitationHeuristic(claimsRfi, "rfp.txt", "rfp").rfiSummary).toBeUndefined();
+    expect(extractSolicitationHeuristic(claimsRfi, "sow.txt", "sow").rfiSummary).toBeUndefined();
   });
 
   it("classifies the work and captures the procurement objective separately", () => {
@@ -143,6 +146,8 @@ describe("merging model and heuristic summaries", () => {
       services: [{ service: "Solution demonstration", type: "explicit" as const, evidence: "§1.G", confidence: undefined }],
       gaps: [],
       issuerQuestions: [],
+      evaluationCriteria: [],
+      commercialTerms: [],
     },
   };
 
@@ -162,5 +167,17 @@ describe("merging model and heuristic summaries", () => {
     expect(merged.rfiSummary?.challengeThemes).toEqual([]);
     expect(merged.rfiSummary?.endState).toBe("");
     expect(merged.requirements).toEqual(heuristic.requirements);
+  });
+
+  it("keeps an RFP's model summary and fills empty scope fields from the parser", () => {
+    const rfp = extractSolicitationHeuristic(claimsRfi, "rfp.txt", "rfp");
+    const merged = mergeSolicitationExtractions(rfp, {
+      ...modelOverlay,
+      rfiSummary: { ...modelOverlay.rfiSummary, evaluationCriteria: ["Technical approach, 40 points (M.2)"] },
+    });
+    expect(merged.objective).toEqual(modelOverlay.objective);
+    expect(merged.challenges).toEqual(rfp.challenges);
+    expect(merged.rfiSummary?.evaluationCriteria).toEqual(["Technical approach, 40 points (M.2)"]);
+    expect(merged.rfiSummary?.gaps).toEqual([]);
   });
 });

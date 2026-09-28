@@ -86,9 +86,34 @@ describe("RFI extraction parsing", () => {
     expect(prompt).toContain("issuerQuestions");
   });
 
-  it("asks RFIs for the structured summary and leaves RFPs unchanged", () => {
+  it("asks every project type for the structured summary, with RFP and SOW fields", () => {
     const base = { filename: "doc.txt", lane: "B" as const, organizationName: "Agency", documentText: "text" };
-    expect(buildSolicitationExtractPrompt({ ...base, projectType: "rfi" })).toContain("rfiSummary");
-    expect(buildSolicitationExtractPrompt({ ...base, projectType: "rfp" })).not.toContain("rfiSummary");
+    const rfi = buildSolicitationExtractPrompt({ ...base, projectType: "rfi" });
+    const rfp = buildSolicitationExtractPrompt({ ...base, projectType: "rfp" });
+    const sow = buildSolicitationExtractPrompt({ ...base, projectType: "sow" });
+    expect(rfi).toContain("rfiSummary");
+    expect(rfi).not.toContain("evaluationCriteria");
+    for (const prompt of [rfp, sow]) {
+      expect(prompt).toContain("rfiSummary");
+      expect(prompt).toContain("issuerQuestions");
+      expect(prompt).toContain("evaluationCriteria");
+      expect(prompt).toContain("commercialTerms");
+    }
+    expect(buildSolicitationExtractPrompt({ ...base, projectType: "rfp", pass: "structure" })).toContain("shall or must statement");
+  });
+
+  it("keeps evaluation criteria and commercial terms from an RFP or SOW summary", () => {
+    const extraction = parseExtraction({
+      objective: ["Replace the permitting system (§C.1)."],
+      rfiSummary: {
+        workType: "technical",
+        services: [],
+        gaps: [],
+        evaluationCriteria: ["Technical approach, 40 points (M.2)", "", null],
+        commercialTerms: ["Liquidated damages of $1,000 per day (§H.4)"],
+      },
+    });
+    expect(extraction.rfiSummary?.evaluationCriteria).toEqual(["Technical approach, 40 points (M.2)"]);
+    expect(extraction.rfiSummary?.commercialTerms).toEqual(["Liquidated damages of $1,000 per day (§H.4)"]);
   });
 });

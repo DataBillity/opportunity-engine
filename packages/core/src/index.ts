@@ -32,6 +32,9 @@ export {
   resolveProjectType,
   thresholdsFor,
   RFI_OUTLINE_SECTIONS,
+  RFP_OUTLINE_SECTIONS,
+  SOW_OUTLINE_SECTIONS,
+  outlineSectionsFor,
 } from "./scoring/project-type";
 export type { ProjectType } from "./scoring/project-type";
 export {

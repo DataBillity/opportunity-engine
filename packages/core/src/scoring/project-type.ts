@@ -39,6 +39,30 @@ export const RFI_OUTLINE_SECTIONS = [
   { ref: "Contacts", title: "Points of contact", sectionId: "contacts" },
 ] as const;
 
+/** Used when an RFP does not prescribe its own volumes or sections. */
+export const RFP_OUTLINE_SECTIONS = [
+  { ref: "Technical", title: "Technical approach", sectionId: "tech" },
+  { ref: "Management", title: "Management approach", sectionId: "mgmt" },
+  { ref: "Personnel", title: "Key personnel", sectionId: "pers" },
+  { ref: "Past performance", title: "Past performance", sectionId: "past" },
+  { ref: "Price", title: "Price and cost", sectionId: "price" },
+] as const;
+
+/** Used when a client SOW does not prescribe a response structure. */
+export const SOW_OUTLINE_SECTIONS = [
+  { ref: "Understanding", title: "Understanding of the need", sectionId: "understanding" },
+  { ref: "Approach", title: "Approach and methodology", sectionId: "approach" },
+  { ref: "Deliverables", title: "Deliverables and acceptance", sectionId: "deliverables" },
+  { ref: "Team", title: "Team and roles", sectionId: "team" },
+  { ref: "Schedule", title: "Schedule and milestones", sectionId: "schedule" },
+  { ref: "Pricing", title: "Pricing", sectionId: "pricing" },
+  { ref: "Assumptions", title: "Assumptions and exclusions", sectionId: "assumptions" },
+] as const;
+
+export function outlineSectionsFor(type: ProjectType) {
+  return { rfi: RFI_OUTLINE_SECTIONS, rfp: RFP_OUTLINE_SECTIONS, sow: SOW_OUTLINE_SECTIONS }[type];
+}
+
 export function projectTypeLongLabel(type: ProjectType): string {
   return {
     rfp: "Request for Proposal",

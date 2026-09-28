@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { GraphExperience, GraphPerson, Organization, Partner, Pursuit, ResponseActionItem, RfiGapLogItem, RfiResponseMeta } from "@/lib/mock-data";
-import { RFI_OUTLINE_SECTIONS } from "@opportunity-engine/core";
+import { outlineSectionsFor, RFI_OUTLINE_SECTIONS } from "@opportunity-engine/core";
 import { getPartner } from "@/lib/mock-data";
 import { Modal, FormField, TextInput, TextArea, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
 import { ActionItemResponseModal } from "@/components/action-items/action-item-response-modal";
@@ -57,12 +57,13 @@ function sectionsForPursuit(pursuit: Pursuit): SectionMeta[] {
       trace: "none" as const, tracePct: "Not started", mandatory: true,
     }));
   }
-  return [
-    { id: "tech", name: "Technical Approach", ref: "Approach", trace: "none", tracePct: "Not started", mandatory: true },
-    { id: "scope", name: "Scope Response", ref: "Scope", trace: "none", tracePct: "Not started", mandatory: true },
-    { id: "mgmt", name: "Management & Delivery", ref: "Delivery", trace: "none", tracePct: "Not started", mandatory: false },
-  ];
+  return outlineSectionsFor(pursuit.projectType ?? "rfp").map(section => ({
+    id: section.sectionId, name: section.title, ref: section.ref,
+    trace: "none" as const, tracePct: "Not started", mandatory: true,
+  }));
 }
+
+const PACKAGE_LABEL = { rfi: "RFI response", rfp: "proposal", sow: "SOW response" } as const;
 
 function draftsForPursuit(pursuit: Pursuit, sections: SectionMeta[]): Record<string, string> {
   const saved = new Map(
@@ -298,6 +299,7 @@ export function ResponseBuilderView({
   const [actionItem, setActionItem] = useState<ResponseActionItem | null>(null);
   const [rfiPacket, setRfiPacket] = useState<RfiResponseMeta | null>(pursuit.rfiResponse ?? null);
   const isRfi = pursuit.projectType === "rfi";
+  const packageLabel = PACKAGE_LABEL[pursuit.projectType ?? "rfp"];
 
   // Upload final
   const [uploadFinalOpen, setUploadFinalOpen] = useState(false);
@@ -369,9 +371,9 @@ export function ResponseBuilderView({
       if (!res.ok || !data.reviewerSummary || !data.sections?.length) {
         setMessages(prev => [...prev, {
           role: "system",
-          text: data.error || data.hint || "RFI package unavailable.",
+          text: data.error || data.hint || `Full ${packageLabel} unavailable.`,
         }]);
-        toast(data.error || "RFI package unavailable", "warning");
+        toast(data.error || `Full ${packageLabel} unavailable`, "warning");
         return;
       }
 
@@ -422,12 +424,12 @@ export function ResponseBuilderView({
       setMessages(prev => [...prev, {
         role: "system",
         text: data.usedFallback
-          ? "Model draft unavailable. Saved an RFI shell with a Gap Log. Do not submit it."
-          : `RFI response drafted${data.provider ? ` via ${data.provider}` : ""}. ${packet.gaps.length} gap${packet.gaps.length === 1 ? "" : "s"} logged for review.`,
+          ? `Model draft unavailable. Saved a ${packageLabel} shell with a Gap Log. Do not submit it.`
+          : `${packageLabel[0]!.toUpperCase()}${packageLabel.slice(1)} drafted${data.provider ? ` via ${data.provider}` : ""}. ${packet.gaps.length} gap${packet.gaps.length === 1 ? "" : "s"} logged for review.`,
       }]);
-      toast(data.usedFallback ? "RFI shell saved — resolve the Gap Log before review" : "RFI response drafted for review", data.usedFallback ? "warning" : "success");
+      toast(data.usedFallback ? `${packageLabel} shell saved — resolve the Gap Log before review` : `Full ${packageLabel} drafted for review`, data.usedFallback ? "warning" : "success");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to generate the RFI response";
+      const message = err instanceof Error ? err.message : `Unable to generate the ${packageLabel}`;
       setMessages(prev => [...prev, { role: "system", text: message }]);
       toast(message, "warning");
     } finally {
@@ -477,7 +479,7 @@ export function ResponseBuilderView({
       }
 
       setDrafts(prev => ({ ...prev, [activeSection]: plainTextToHtml(data.body!.trim()) }));
-      if (isRfi && data.gaps?.length) {
+      if (data.gaps?.length) {
         const incoming = toGapItems(data.gaps);
         const prior = rfiPacket?.gaps ?? [];
         const merged = [...prior.filter(gap => !incoming.some(next => next.id === gap.id)), ...incoming];
@@ -570,14 +572,14 @@ export function ResponseBuilderView({
   }
 
   function handleExportWord() {
-    const summary = isRfi && rfiPacket
+    const summary = rfiPacket
       ? `<h1>Reviewer summary</h1><p>${escapeHtml(rfiPacket.reviewerSummary)}</p>${
         rfiPacket.questions.length
           ? `<h2>Suggested questions</h2><ul>${rfiPacket.questions.map(question => `<li>${escapeHtml(question)}</li>`).join("")}</ul>`
           : ""
       }${rfiPacket.strategicNotes.trim() ? `<h2>Strategic notes</h2><p>${escapeHtml(rfiPacket.strategicNotes)}</p>` : ""}`
       : "";
-    const gapTable = isRfi && rfiPacket
+    const gapTable = rfiPacket
       ? `<h1>Gap log</h1><table border="1" cellpadding="6" cellspacing="0"><tr><th>ID</th><th>Location</th><th>Type</th><th>Description</th><th>Owner</th><th>Priority</th><th>Due</th><th>Status</th></tr>${
         rfiPacket.gaps.map(gap => `<tr><td>${escapeHtml(gap.id)}</td><td>${escapeHtml(gap.location)}</td><td>${escapeHtml(gap.gapType)}</td><td>${escapeHtml(gap.description)}</td><td>${escapeHtml(gap.owner)}</td><td>${escapeHtml(gap.priority)}</td><td>${escapeHtml(gap.dueAt)}</td><td>${escapeHtml(gap.status)}</td></tr>`).join("")
       }</table>`
@@ -661,9 +663,10 @@ export function ResponseBuilderView({
         </div>
       </div>
 
-      {isRfi && rfiPacket && (
+      {rfiPacket && (
         <RfiResponsePackagePanel
           packet={rfiPacket}
+          projectType={pursuit.projectType ?? "rfp"}
           onOpenGap={id => {
             const existing = (pursuit.responseActionItems ?? []).find(item => item.id === id);
             const gap = rfiPacket.gaps.find(item => item.id === id);
@@ -790,7 +793,7 @@ export function ResponseBuilderView({
               <div className="absolute inset-0 bg-card/80 backdrop-blur-[1px] flex items-center justify-center z-10">
                 <div className="flex items-center gap-3">
                   <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                  <span className="text-sm text-muted-foreground">{isRfi ? "Drafting the RFI response, gap log, and reviewer summary…" : "Generating draft from the solicitation packet and team graph…"}</span>
+                  <span className="text-sm text-muted-foreground">{`Drafting the ${packageLabel}, gap log, and reviewer summary…`}</span>
                 </div>
               </div>
             )}
@@ -816,13 +819,11 @@ export function ResponseBuilderView({
 
           {/* Actions */}
           <div className="flex gap-2.5 flex-wrap">
-            {isRfi && (
-              <button onClick={() => void requestRfiPackage()} disabled={generating} className="text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm disabled:opacity-50">
-                {generating ? "Drafting…" : sections.some(section => !isEmptyRichText(drafts[section.id])) ? "Regenerate RFI response" : "Generate RFI response"}
-              </button>
-            )}
+            <button onClick={() => void requestRfiPackage()} disabled={generating} className="text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm disabled:opacity-50">
+              {generating ? "Drafting…" : sections.some(section => !isEmptyRichText(drafts[section.id])) ? `Regenerate ${packageLabel}` : `Generate ${packageLabel}`}
+            </button>
             {!isRfi && !hasDraft && (
-              <button onClick={handleGenerateDraft} disabled={generating} className="text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm disabled:opacity-50">Generate draft</button>
+              <button onClick={handleGenerateDraft} disabled={generating} className="text-xs font-medium px-4 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary disabled:opacity-50">Draft this section only</button>
             )}
             {hasDraft && (
               <button onClick={handleRegenerate} disabled={generating} className="text-xs font-medium px-4 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary disabled:opacity-50">{generating ? "Regenerating…" : "Regenerate section"}</button>
@@ -839,7 +840,7 @@ export function ResponseBuilderView({
           </div>
 
           {/* Action items panel */}
-          {!isRfi && pursuit.responseActionItems && pursuit.responseActionItems.length > 0 && (
+          {!rfiPacket && pursuit.responseActionItems && pursuit.responseActionItems.length > 0 && (
             <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
                 <h3 className="oe-card-title">Outstanding Action Items</h3>
@@ -1022,7 +1023,7 @@ export function ResponseBuilderView({
             item.id === actionItem.id ? { ...item, ...updates } : item
           );
           const resolved = updates.status === "Done" || updates.status === "Resolved";
-          const nextPacket = isRfi && rfiPacket
+          const nextPacket = rfiPacket
             ? {
               ...rfiPacket,
               gaps: rfiPacket.gaps.map(gap => gap.id === actionItem.id

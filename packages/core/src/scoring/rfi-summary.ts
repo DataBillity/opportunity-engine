@@ -360,6 +360,8 @@ export function buildHeuristicRfiSummary(input: {
     services: inferRfiServices(input.text, input.questions, workType),
     gaps,
     issuerQuestions: [],
+    evaluationCriteria: [],
+    commercialTerms: [],
   };
 }
 
@@ -386,5 +388,7 @@ export function mergeRfiSummaries(
     services: preferred.services.length ? preferred.services : fallback.services,
     gaps: preferred.gaps.length ? preferred.gaps : fallback.gaps,
     issuerQuestions: preferred.issuerQuestions?.length ? preferred.issuerQuestions : fallback.issuerQuestions ?? [],
+    evaluationCriteria: preferred.evaluationCriteria?.length ? preferred.evaluationCriteria : fallback.evaluationCriteria ?? [],
+    commercialTerms: preferred.commercialTerms?.length ? preferred.commercialTerms : fallback.commercialTerms ?? [],
   };
 }
