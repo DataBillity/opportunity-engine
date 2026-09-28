@@ -155,6 +155,25 @@ interface DraftApiResponse {
   hint?: string;
 }
 
+/**
+ * Read the generate route's reply without assuming it is JSON. When the host kills the
+ * function (timeout, crash) it returns a plain-text page, and res.json() would surface
+ * as "Unexpected token 'A', "An error o"... is not valid JSON".
+ */
+async function readDraftResponse(res: Response): Promise<DraftApiResponse> {
+  const raw = await res.text();
+  try {
+    return JSON.parse(raw) as DraftApiResponse;
+  } catch {
+    const timedOut = res.status === 504 || /timed out|FUNCTION_INVOCATION_TIMEOUT/i.test(raw);
+    return {
+      error: timedOut
+        ? "The draft took longer than the server allows and was cut off. Nothing was saved. Try again; if it repeats, generate one section at a time."
+        : `The server returned an unreadable response (HTTP ${res.status}). Try again in a moment.`,
+    };
+  }
+}
+
 const defaultPersonnelAssignments: Record<string, string> = {
   "Program Manager": "",
   "Lead Data Architect": "",
@@ -367,7 +386,7 @@ export function ResponseBuilderView({
         credentials: "same-origin",
         body: JSON.stringify({ briefing }),
       });
-      const data = await res.json() as DraftApiResponse;
+      const data = await readDraftResponse(res);
       if (!res.ok || !data.reviewerSummary || !data.sections?.length) {
         setMessages(prev => [...prev, {
           role: "system",
@@ -461,7 +480,7 @@ export function ResponseBuilderView({
         credentials: "same-origin",
         body: JSON.stringify({ briefing }),
       });
-      const data = await res.json() as DraftApiResponse;
+      const data = await readDraftResponse(res);
       if (!res.ok || !data.body?.trim()) {
         if (!options.regenerate) {
           const fallback = pursuit.id === "OPP-2219" && activeSection === "mgmt"
