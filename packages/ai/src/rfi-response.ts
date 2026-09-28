@@ -12,6 +12,11 @@ import { buildResponseDraftPrompt, collectResponseFacts, type ResponseGroundingF
 
 export const RFI_RESPONSE_PROMPT_VERSION = "rfi-response-v1.2";
 
+/** Total wall-clock budget for a package draft; the route allows 300s. */
+const PACKAGE_BUDGET_MS = 270_000;
+/** Longest a single provider gets, so the other provider can still run if the first is slow. */
+const PACKAGE_ATTEMPT_MS = 150_000;
+
 const GAP_TYPE_ALIASES: Record<string, RfiGapLogEntry["gapType"]> = {
   missing_information: "missing_information",
   missing_info: "missing_information",
@@ -697,6 +702,11 @@ export async function generateRfiResponsePackage(rawBriefing: unknown): Promise<
   let provider: "claude" | "gemini" = "claude";
   let latencyMs = 0;
 
+  // The route is capped at 300s (maxDuration). Every attempt, across both providers, shares
+  // this deadline so the request always ends with JSON (a draft or the honest shell) instead
+  // of the host's plain-text timeout page.
+  const deadlineAt = Date.now() + PACKAGE_BUDGET_MS;
+
   const draftWith = async (preferProvider: "claude" | "gemini") => {
     const result = await callModel({
       tier: "judgment",
@@ -709,7 +719,8 @@ export async function generateRfiResponsePackage(rawBriefing: unknown): Promise<
       maxTokens: 14000,
       temperature: 0.3,
       jsonMode: true,
-      timeoutMs: 130_000,
+      timeoutMs: PACKAGE_ATTEMPT_MS,
+      deadlineAt,
     });
     modelVersion = result.modelVersion;
     provider = result.provider;

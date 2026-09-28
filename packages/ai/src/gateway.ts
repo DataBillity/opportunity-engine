@@ -25,6 +25,12 @@ export interface GatewayCallInput {
   temperature?: number;
   jsonMode?: boolean;
   timeoutMs?: number;
+  /**
+   * Absolute epoch-ms deadline shared across every attempt in this call (all models and
+   * both providers). Each attempt's timeout is capped to the time remaining, so a slow
+   * provider cannot push the whole request past the host's function limit.
+   */
+  deadlineAt?: number;
   /** Overrides the tier's provider order; the other provider is still the fallback. */
   preferProvider?: "claude" | "gemini";
 }
@@ -69,6 +75,21 @@ const GEMINI_INPUT_USD = 0.15 / 1_000_000;
 const GEMINI_OUTPUT_USD = 0.60 / 1_000_000;
 
 const CALL_TIMEOUT_MS = 45_000;
+/** Do not start another attempt with less than this left before the deadline. */
+const MIN_ATTEMPT_MS = 8_000;
+
+function isTimeoutError(err: unknown): boolean {
+  return err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+}
+
+/** Per-attempt timeout, capped by the shared deadline. Returns 0 when the budget is spent. */
+function attemptTimeoutMs(input: GatewayCallInput): number {
+  const requested = input.timeoutMs ?? CALL_TIMEOUT_MS;
+  if (input.deadlineAt === undefined) return requested;
+  const remaining = input.deadlineAt - Date.now();
+  if (remaining < MIN_ATTEMPT_MS) return 0;
+  return Math.min(requested, remaining);
+}
 
 export function getAnthropicApiKey(): string {
   return (process.env.ANTHROPIC_API_KEY ?? "").trim();
@@ -163,6 +184,8 @@ async function callClaude(input: GatewayCallInput, region: string): Promise<Gate
 
   for (const model of unique) {
     const started = Date.now();
+    const timeoutMs = attemptTimeoutMs(input);
+    if (timeoutMs === 0) throw new Error(`${lastError} (time budget exhausted)`);
     try {
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -172,7 +195,7 @@ async function callClaude(input: GatewayCallInput, region: string): Promise<Gate
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify(buildClaudeRequestBody(model, input)),
-        signal: AbortSignal.timeout(input.timeoutMs ?? CALL_TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
 
       const payload = await response.json() as {
@@ -211,6 +234,9 @@ async function callClaude(input: GatewayCallInput, region: string): Promise<Gate
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
       if (err instanceof ModelGatewayError) throw err;
+      // A timeout means the provider is slow, not that this model id is wrong.
+      // Retrying the next model would burn the same budget again.
+      if (isTimeoutError(err)) throw new Error(`Claude timed out after ${Math.round(timeoutMs / 1000)}s`);
     }
   }
 
@@ -225,6 +251,8 @@ async function callGemini(input: GatewayCallInput, region: string): Promise<Gate
 
   for (const model of unique) {
     const started = Date.now();
+    const timeoutMs = attemptTimeoutMs(input);
+    if (timeoutMs === 0) throw new Error(`${lastError} (time budget exhausted)`);
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
       const generationConfig: Record<string, unknown> = {
@@ -246,7 +274,7 @@ async function callGemini(input: GatewayCallInput, region: string): Promise<Gate
           contents: [{ role: "user", parts: [{ text: input.prompt }] }],
           generationConfig,
         }),
-        signal: AbortSignal.timeout(input.timeoutMs ?? CALL_TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
 
       const payload = await response.json() as {
@@ -286,6 +314,7 @@ async function callGemini(input: GatewayCallInput, region: string): Promise<Gate
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
       if (err instanceof ModelGatewayError) throw err;
+      if (isTimeoutError(err)) throw new Error(`Gemini timed out after ${Math.round(timeoutMs / 1000)}s`);
     }
   }
 
