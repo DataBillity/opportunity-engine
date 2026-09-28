@@ -6,7 +6,21 @@ import type {
   GraphPerson,
 } from "@/lib/mock-data";
 
-export type PartnerIngestKind = "capabilities" | "experience" | "credentials" | "people";
+export type PartnerIngestKind = "capabilities" | "experience" | "credentials" | "people" | "corporate";
+
+export interface ParsedCorporateInfo {
+  name: string;
+  yearFounded: string;
+  hqAddress: string;
+  hqPhone: string;
+  hqEmail: string;
+  primaryContact: string;
+  employeeHeadcount: string;
+  ein: string;
+  uei: string;
+  summary: string;
+  website: string;
+}
 
 export interface ParsedCapability {
   name: string;
@@ -44,6 +58,7 @@ export interface PartnerIngestResult {
   experience: ParsedExperience[];
   credentials: ParsedCredential[];
   people: ParsedPerson[];
+  corporate?: ParsedCorporateInfo | null;
   warning?: string;
 }
 
@@ -205,6 +220,32 @@ export function parsePartnerDocument(kind: PartnerIngestKind, text: string, file
   const body = text.trim();
   if (!body) {
     return { ...empty, warning: `${filename} did not contain extractable text.` };
+  }
+
+  if (kind === "corporate") {
+    const emailMatch = body.match(/[\w.+-]+@[\w.-]+\.\w{2,}/);
+    const phoneMatch = body.match(/\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
+    const einMatch = body.match(/\b\d{2}-\d{7}\b/);
+    const ueiMatch = body.match(/\b[A-Z0-9]{12}\b/);
+    const yearMatch = body.match(/(?:founded|established|incorporated|since|formed)\s+(?:in\s+)?(\d{4})/i);
+    const headcountMatch = body.match(/(\d[\d,]*)\s*(?:\+?\s*)?(?:employees|staff|team members|headcount|personnel)/i);
+    const websiteMatch = body.match(/https?:\/\/[^\s,)]+/);
+    return {
+      ...empty,
+      corporate: {
+        name: linesOf(body)[0] || titleFromFilename(filename),
+        yearFounded: yearMatch?.[1] ?? "",
+        hqAddress: "",
+        hqPhone: phoneMatch?.[0] ?? "",
+        hqEmail: emailMatch?.[0] ?? "",
+        primaryContact: "",
+        employeeHeadcount: headcountMatch?.[1]?.replace(/,/g, "") ?? "",
+        ein: einMatch?.[0] ?? "",
+        uei: ueiMatch?.[0] ?? "",
+        summary: "",
+        website: websiteMatch?.[0] ?? "",
+      },
+    };
   }
 
   if (kind === "capabilities") {
@@ -435,6 +476,43 @@ export async function ingestPartnerDocuments(
     experience: data.experience ?? [],
     credentials: data.credentials ?? [],
     people: data.people ?? [],
+    corporate: data.corporate ?? null,
     warning: data.warning,
+  };
+}
+
+/**
+ * Process a single Partner Details file for corporate info extraction AND
+ * all four graph kinds (capabilities, experience, credentials, people).
+ * Each kind is processed independently through its own focused lens to
+ * minimize hallucination risk — the same approach as uploading the file
+ * separately for each kind, just automated.
+ */
+export async function ingestPartnerDetailsFile(
+  files: File[],
+): Promise<{
+  corporate: ParsedCorporateInfo | null;
+  results: PartnerIngestResult[];
+  warning?: string;
+}> {
+  if (!files.length) return { corporate: null, results: [] };
+
+  const [corpResult, capResult, expResult, credResult, peopleResult] = await Promise.all([
+    ingestPartnerDocuments("corporate", files),
+    ingestPartnerDocuments("capabilities", files),
+    ingestPartnerDocuments("experience", files),
+    ingestPartnerDocuments("credentials", files),
+    ingestPartnerDocuments("people", files),
+  ]);
+
+  const warnings = [
+    corpResult.warning, capResult.warning, expResult.warning,
+    credResult.warning, peopleResult.warning,
+  ].filter(Boolean);
+
+  return {
+    corporate: corpResult.corporate ?? null,
+    results: [capResult, expResult, credResult, peopleResult],
+    warning: warnings.join(" ") || undefined,
   };
 }
