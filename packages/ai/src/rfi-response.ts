@@ -482,8 +482,9 @@ export async function generateRfiResponsePackage(rawBriefing: unknown): Promise<
   const prompt = [
     buildResponseDraftPrompt(briefing, facts),
     "",
-    "SECTIONS TO DRAFT (use these ids, refs, and titles exactly):",
+    "SECTIONS TO DRAFT (use these ids, refs, and titles exactly, and return a body for every one of them):",
     sectionListForPrompt(briefing),
+    "The single 'Section to draft' line above is not a limit. This is a complete package.",
   ].join("\n");
 
   let usedFallback = false;

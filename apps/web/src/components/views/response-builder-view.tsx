@@ -65,12 +65,15 @@ function sectionsForPursuit(pursuit: Pursuit): SectionMeta[] {
 }
 
 function draftsForPursuit(pursuit: Pursuit, sections: SectionMeta[]): Record<string, string> {
-  if (pursuit.id === "OPP-2219") {
+  const saved = new Map(
+    (pursuit.rfiResponse?.sections ?? []).map(section => [section.id, plainTextToHtml(section.body)]),
+  );
+  if (pursuit.id === "OPP-2219" && saved.size === 0) {
     return Object.fromEntries(
       Object.entries(seedDraftContent).map(([id, text]) => [id, plainTextToHtml(text)]),
     );
   }
-  return Object.fromEntries(sections.map(section => [section.id, ""]));
+  return Object.fromEntries(sections.map(section => [section.id, saved.get(section.id) ?? ""]));
 }
 
 function outlineSection(pursuit: Pursuit, section: SectionMeta): string {
@@ -403,6 +406,12 @@ export function ResponseBuilderView({
         questions: data.questions ?? [],
         compliance: data.compliance ?? [],
         gaps: toGapItems(data.gaps ?? []),
+        sections: (data.sections ?? []).map(item => ({
+          id: item.id,
+          ref: item.ref,
+          title: item.title,
+          body: item.body,
+        })),
       };
       setRfiPacket(packet);
       onUpdatePursuit(pursuit.id, {
@@ -478,6 +487,7 @@ export function ResponseBuilderView({
           questions: rfiPacket?.questions ?? [],
           compliance: rfiPacket?.compliance ?? [],
           gaps: merged,
+          sections: rfiPacket?.sections,
         });
       }
       setSections(prev => {

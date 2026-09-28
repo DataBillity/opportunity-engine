@@ -1,0 +1,1 @@
+import fs from "fs"; const f = "packages/ai/src/solicitation.ts"; let c = fs.readFileSync(f, "utf8"); const s = c.indexOf("const RFI_SUMMARY_PROMPT = "); const e = c.indexOf("const RFI_STRUCTURE_PROMPT"); console.log(s, e); fs.writeFileSync(f, c.slice(0, s) + c.slice(e));

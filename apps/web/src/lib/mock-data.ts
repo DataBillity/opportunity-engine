@@ -154,12 +154,20 @@ export interface RfiGapLogItem {
   notes: string;
 }
 
+export interface RfiResponseSection {
+  id: string;
+  ref: string;
+  title: string;
+  body: string;
+}
+
 export interface RfiResponseMeta {
   reviewerSummary: string;
   strategicNotes: string;
   questions: string[];
   compliance: { requirement: string; rfiRef: string; responseSection: string; owner: string; status: string }[];
   gaps: RfiGapLogItem[];
+  sections?: RfiResponseSection[];
 }
 
 export interface ResponseActionItem {
