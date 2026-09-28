@@ -6,7 +6,7 @@ import {
 import { callModel, ModelGatewayError } from "./gateway";
 import { parseModelJson } from "./json";
 
-export const SOLICITATION_EXTRACT_PROMPT_VERSION = "solicitation-extract-v1.5";
+export const SOLICITATION_EXTRACT_PROMPT_VERSION = "solicitation-extract-v1.6";
 
 const RFP_SOW_PROMPT = `You extract facts from an RFP or Statement of Work for DataBillity bid triage.
 
@@ -17,7 +17,7 @@ Hard rules:
 - If a field is not present, use an empty string, empty array, or null.
 - Return ONLY JSON matching the schema.`;
 
-const RFI_PROMPT = `You summarize the purpose behind a Request for Information (RFI) for a DataBillity bid team. The RFI may seek IT services and technical solutions, business and strategy consulting, or both. It may be a narrative document, a questionnaire, a short sources-sought notice, or a multi-attachment package. Don't expect fixed section names; find the content wherever it appears.
+const RFI_SUMMARY_PROMPT = `You summarize the purpose behind a Request for Information (RFI) for a DataBillity bid team. The RFI may seek IT services and technical solutions, business and strategy consulting, or both. It may be a narrative document, a questionnaire, a short sources-sought notice, or a multi-attachment package. Don't expect fixed section names; find the content wherever it appears.
 
 Every RFI asks for information, so "gather market information", "market research", "for planning purposes", or "inform a future solicitation" is never the objective. Identify what the issuer is trying to accomplish, why now, what it wants in place at the end, and what services that will take.
 
@@ -56,16 +56,29 @@ Thin RFIs and sources-sought notices: build the objective from the title, NAICS 
 
 Questionnaire-only RFIs: piece the purpose together from the questions. The topics with the most or most detailed questions show what the issuer cares about. Read what each question assumes ("migrating 20 years of case records" means a legacy system, a migration, and long retention). Treat cost, licensing, and timeline questions as budget and procurement-strategy signals. Cite question numbers as evidence. Note in gaps anything conspicuously not asked.
 
-- requirements: the questions the issuer asked vendors to answer, numbered as the RFI numbers them. Do not put those questions in objective, challenges, services, or deliverables.
+Issuer Q&A (for example "Response to Vendor Questions" or an addendum) holds the issuer's own clarifications. Use its answers as facts in the summary — user counts, named integrations, migration scope, hosting options, standards — cited like "Att. 3 Q7". Vendor questions answered "No preference" or "To be determined" are unknowns for gaps, not requirements. An attachment whose text is present is not missing.
+
+Do not list the vendor questionnaire items here; another pass extracts them.
+- If a field is not present, use an empty string, empty array, or null.
+- Keep every string short. Return ONLY JSON matching the schema.`;
+
+const RFI_STRUCTURE_PROMPT = `You extract the response structure of a Request for Information (RFI) for a DataBillity bid team.
+
+Hard rules:
+- Use only the document text.
+- requirements: the questions and information requests vendors must answer in their response (the questionnaire or response worksheet, and any "describe" or "provide" requests in the RFI body), numbered and ordered as the RFI does. Shorten each to at most 25 words. sectionRef is the part, section, or question number. Skip form fields such as company name and address. Do not include questions that other vendors asked the issuer in a Q&A or addendum; those are clarifications, not questions for us.
 - responseSections: if the RFI specifies headings, a questionnaire, or a template, copy that structure and numbering. If it does not, use exactly these sectionIds: cover (Cover letter), company (Company and team overview), understanding (Understanding of the requirement), questions (Responses to specific questions), experience (Relevant experience), recommendations (Recommendations for the future solicitation), contacts (Points of contact).
-- responseConstraints: how to write and submit the response (page limit, font, margins, file type, naming, recipients, whether a cover letter counts, question deadline). Never put these in objective, services, deliverables, requirements, or constraints.
+- responseConstraints: how to write and submit the response (page limit, font, margins, file type, naming, recipients, whether attachments or appendices are allowed, question deadline).
 - constraints: eligibility or security gates that affect whether we can do the work. Not page count or formatting.
-- Mark passFail true only for eligibility to respond (registration, NDA, mandatory form). Never for an unanswered information request or a page limit.
+- Mark passFail true only for eligibility to respond (registration, NDA, mandatory form). Never for an information request or a page limit.
 - If a field is not present, use an empty string, empty array, or null.
 - Return ONLY JSON matching the schema.`;
 
-function systemPromptFor(projectType: ProjectType): string {
-  return projectType === "rfi" ? RFI_PROMPT : RFP_SOW_PROMPT;
+type RfiPass = "summary" | "structure";
+
+function systemPromptFor(projectType: ProjectType, pass: RfiPass = "summary"): string {
+  if (projectType !== "rfi") return RFP_SOW_PROMPT;
+  return pass === "structure" ? RFI_STRUCTURE_PROMPT : RFI_SUMMARY_PROMPT;
 }
 
 function laneLabel(projectType: ProjectType, lane: "B" | "C"): string {
@@ -81,13 +94,10 @@ export function buildSolicitationExtractPrompt(input: {
   organizationName: string;
   organizationIndustry?: string;
   documentText: string;
+  pass?: RfiPass;
 }): string {
   const projectType = input.projectType ?? (input.lane === "C" ? "sow" : "rfp");
-  const refHint = projectType === "rfi" ? "RFI number or empty" : "RFP or SOW number or empty";
-  const reqHint = projectType === "rfi"
-    ? "information request or question the issuer asked — not an answer we have already provided"
-    : "...";
-  return [
+  const header = [
     `Document file: ${input.filename}`,
     `Lane: ${laneLabel(projectType, input.lane)}`,
     `Project type: ${projectType.toUpperCase()}`,
@@ -97,16 +107,55 @@ export function buildSolicitationExtractPrompt(input: {
     input.documentText,
     "",
     "Return JSON:",
+  ];
+  const metadata = {
+    inferredName: "short project title",
+    solicitationRef: projectType === "rfi" ? "RFI number or empty" : "RFP or SOW number or empty",
+    dueDate: "YYYY-MM-DD or null",
+    issuer: "issuing org or empty",
+  };
+
+  if (projectType !== "rfi") {
+    return [...header, JSON.stringify({
+      ...metadata,
+      objective: ["..."],
+      challenges: ["..."],
+      services: ["..."],
+      deliverables: ["..."],
+      requirements: [{ requirementText: "...", sectionRef: "optional", passFail: false, weight: 0 }],
+      responseSections: [{ ref: "Vol I § 3.2", title: "Technical Approach", sectionId: "tech" }],
+      responseConstraints: [],
+      constraints: ["eligibility or security gates only — not page limits"],
+    })].join("\n");
+  }
+
+  if (input.pass === "structure") {
+    return [...header, JSON.stringify({
+      ...metadata,
+      requirements: [{
+        requirementText: "question or information request vendors must answer, at most 25 words",
+        sectionRef: "part, section, or question number",
+        passFail: false,
+        weight: 0,
+      }],
+      responseSections: [
+        { ref: "Cover", title: "Cover letter", sectionId: "cover" },
+        { ref: "Questions", title: "Responses to specific questions", sectionId: "questions" },
+      ],
+      responseConstraints: ["page limit, font, margins, or submission format — not scored"],
+      constraints: ["eligibility or security gates only — not page limits"],
+    })].join("\n");
+  }
+
+  return [
+    ...header,
     JSON.stringify({
-      inferredName: "short project title",
-      solicitationRef: refHint,
-      dueDate: "YYYY-MM-DD or null",
-      issuer: "issuing org or empty",
-      objective: projectType === "rfi" ? ["[Action] the [system/process/program] in order to [business outcome] for [who benefits] (§ cites) — never 'gather information'"] : ["..."],
-      challenges: projectType === "rfi" ? ["each stated problem, keeping the RFI's numbering and wording"] : ["..."],
-      services: projectType === "rfi" ? ["explicitly requested services only"] : ["..."],
-      deliverables: projectType === "rfi" ? ["target end state: solution type, business scope, user groups, key qualities"] : ["..."],
-      ...(projectType === "rfi" ? {
+      ...metadata,
+      objective: ["[Action] the [system/process/program] in order to [business outcome] for [who benefits] (§ cites) — never 'gather information'"],
+      challenges: ["each stated problem, keeping the RFI's numbering and wording"],
+      services: ["explicitly requested services only"],
+      deliverables: ["target end state: solution type, business scope, user groups, key qualities"],
+      ...{
         rfiSummary: {
           workType: "technical | consulting | both | other",
           objectiveConfidence: "High | Medium | Low",
@@ -122,21 +171,7 @@ export function buildSolicitationExtractPrompt(input: {
           ],
           gaps: ["missing attachment, unstated volume, ambiguity, or question for the issuer"],
         },
-      } : {}),
-      requirements: [{
-        requirementText: reqHint,
-        sectionRef: "optional",
-        passFail: false,
-        weight: 0,
-      }],
-      responseSections: projectType === "rfi"
-        ? [
-          { ref: "Cover", title: "Cover letter", sectionId: "cover" },
-          { ref: "Questions", title: "Responses to specific questions", sectionId: "questions" },
-        ]
-        : [{ ref: "Vol I § 3.2", title: "Technical Approach", sectionId: "tech" }],
-      responseConstraints: projectType === "rfi" ? ["page limit, font, margins, or submission format — not scored"] : [],
-      constraints: ["eligibility or security gates only — not page limits"],
+      },
     }),
   ].join("\n");
 }
@@ -210,35 +245,111 @@ export async function extractSolicitationWithModel(input: {
   documentText: string;
 }): Promise<{ extraction: SolicitationExtractionType; modelVersion: string; provider: "claude" | "gemini" }> {
   const projectType = input.projectType ?? (input.lane === "C" ? "sow" : "rfp");
-  const isRfi = projectType === "rfi";
-  const result = await callModel({
-    tier: isRfi ? "judgment" : "extraction",
-    promptVersion: SOLICITATION_EXTRACT_PROMPT_VERSION,
-    systemPrompt: systemPromptFor(projectType),
-    prompt: buildSolicitationExtractPrompt({ ...input, projectType }),
-    classification: "internal",
-    redactionProfile: "solicitation-extract-v1",
-    maxTokens: isRfi ? 7000 : 2500,
-    temperature: 0.1,
-    jsonMode: true,
-    timeoutMs: isRfi ? 100_000 : 60_000,
-  });
 
-  let parsed: unknown;
-  try {
-    parsed = parseModelJson(result.content);
-  } catch {
-    throw new ModelGatewayError("Model returned solicitation JSON that could not be parsed", "empty_response");
+  if (projectType !== "rfi") {
+    const pass = await runPass({
+      preferProvider: "gemini",
+      systemPrompt: systemPromptFor(projectType),
+      prompt: buildSolicitationExtractPrompt({ ...input, projectType }),
+      maxTokens: 2500,
+      timeoutMs: 60_000,
+    });
+    return { extraction: parseExtraction(pass.parsed), modelVersion: pass.modelVersion, provider: pass.provider };
   }
 
-  if (parsed && typeof parsed === "object" && "dueDate" in parsed && (parsed as { dueDate?: unknown }).dueDate === "") {
-    (parsed as { dueDate: null }).dueDate = null;
+  // Two passes in parallel so a long questionnaire can't crowd the scope summary out of the token budget.
+  const [summary, structure] = await Promise.allSettled([
+    runPass({
+      preferProvider: "claude",
+      systemPrompt: systemPromptFor("rfi", "summary"),
+      prompt: buildSolicitationExtractPrompt({ ...input, projectType, pass: "summary" }),
+      maxTokens: 8000,
+      timeoutMs: 90_000,
+    }),
+    runPass({
+      preferProvider: "gemini",
+      systemPrompt: systemPromptFor("rfi", "structure"),
+      prompt: buildSolicitationExtractPrompt({ ...input, projectType, pass: "structure" }),
+      maxTokens: 8000,
+      timeoutMs: 90_000,
+    }),
+  ]);
+
+  if (summary.status === "rejected" && structure.status === "rejected") {
+    const reason = summary.reason instanceof Error ? summary.reason.message : String(summary.reason);
+    throw summary.reason instanceof ModelGatewayError
+      ? summary.reason
+      : new ModelGatewayError(reason, "provider_error");
   }
 
-  const extraction = parseExtraction(parsed);
-  return {
-    extraction,
-    modelVersion: result.modelVersion,
-    provider: result.provider,
+  const summaryFields = summary.status === "fulfilled" ? summary.value.parsed : {};
+  const structureFields = structure.status === "fulfilled" ? structure.value.parsed : {};
+  const merged: Record<string, unknown> = {
+    ...pick(structureFields, ["inferredName", "solicitationRef", "dueDate", "issuer"]),
+    ...pickPresent(summaryFields, ["inferredName", "solicitationRef", "dueDate", "issuer"]),
+    ...pick(summaryFields, ["objective", "challenges", "services", "deliverables", "rfiSummary"]),
+    ...pick(structureFields, ["requirements", "responseSections", "responseConstraints", "constraints"]),
   };
+  const lead = summary.status === "fulfilled" ? summary.value : (structure as PromiseFulfilledResult<PassResult>).value;
+  return { extraction: parseExtraction(merged), modelVersion: lead.modelVersion, provider: lead.provider };
+}
+
+interface PassResult {
+  parsed: Record<string, unknown>;
+  modelVersion: string;
+  provider: "claude" | "gemini";
+}
+
+function pick(source: Record<string, unknown>, keys: string[]): Record<string, unknown> {
+  return Object.fromEntries(keys.filter(key => key in source).map(key => [key, source[key]]));
+}
+
+function pickPresent(source: Record<string, unknown>, keys: string[]): Record<string, unknown> {
+  return Object.fromEntries(keys
+    .filter(key => source[key] !== undefined && source[key] !== null && source[key] !== "")
+    .map(key => [key, source[key]]));
+}
+
+/** One model call. If the output can't be parsed, retry once with the other provider first. */
+async function runPass(options: {
+  preferProvider: "claude" | "gemini";
+  systemPrompt: string;
+  prompt: string;
+  maxTokens: number;
+  timeoutMs: number;
+}): Promise<PassResult> {
+  const attempt = async (preferProvider: "claude" | "gemini"): Promise<PassResult> => {
+    const result = await callModel({
+      tier: preferProvider === "claude" ? "judgment" : "extraction",
+      preferProvider,
+      promptVersion: SOLICITATION_EXTRACT_PROMPT_VERSION,
+      systemPrompt: options.systemPrompt,
+      prompt: options.prompt,
+      classification: "internal",
+      redactionProfile: "solicitation-extract-v1",
+      maxTokens: options.maxTokens,
+      temperature: 0.1,
+      jsonMode: true,
+      timeoutMs: options.timeoutMs,
+    });
+    let parsed: unknown;
+    try {
+      parsed = parseModelJson(result.content);
+    } catch {
+      throw new ModelGatewayError(`${result.provider} returned solicitation JSON that could not be parsed`, "empty_response");
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new ModelGatewayError(`${result.provider} returned a non-object solicitation payload`, "empty_response");
+    }
+    const record = parsed as Record<string, unknown>;
+    if (record.dueDate === "") record.dueDate = null;
+    return { parsed: record, modelVersion: result.modelVersion, provider: result.provider };
+  };
+
+  try {
+    return await attempt(options.preferProvider);
+  } catch (err) {
+    if (!(err instanceof ModelGatewayError) || err.code !== "empty_response") throw err;
+    return attempt(options.preferProvider === "claude" ? "gemini" : "claude");
+  }
 }

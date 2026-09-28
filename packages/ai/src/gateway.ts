@@ -25,6 +25,8 @@ export interface GatewayCallInput {
   temperature?: number;
   jsonMode?: boolean;
   timeoutMs?: number;
+  /** Overrides the tier's provider order; the other provider is still the fallback. */
+  preferProvider?: "claude" | "gemini";
 }
 
 export interface GatewayCallOutput {
@@ -100,7 +102,7 @@ export async function callModel(input: GatewayCallInput): Promise<GatewayCallOut
     throw new Error(`Unknown classification: ${input.classification}`);
   }
 
-  const preferred: "claude" | "gemini" = input.tier === "judgment" ? "claude" : "gemini";
+  const preferred: "claude" | "gemini" = input.preferProvider ?? (input.tier === "judgment" ? "claude" : "gemini");
   const available = getAvailableProviders();
   const order: Array<"claude" | "gemini"> = preferred === "claude"
     ? ["claude", "gemini"]

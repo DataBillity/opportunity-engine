@@ -152,7 +152,7 @@ const SERVICE_RULES: ServiceRule[] = [
 ];
 
 const THEMES: { theme: string; pattern: RegExp }[] = [
-  { theme: "Agility and change cost", pattern: /requires? (?:code|custom cod|developer)|hard[- ]?coded|take[s]? months|code changes/i },
+  { theme: "Agility and change cost", pattern: /requires? (?:code|custom cod|developer)|hard[- ]?coded|take[s]? (?:several )?months|code (?:changes|updates)|dependent on coding|coding requirements|lack of agility/i },
   { theme: "Controls and audit", pattern: /audit|track(?:s)? which user|separation of duties|compliance|who did/i },
   { theme: "Integration", pattern: /not integrated|re-?key|not linked|interface|integrat/i },
   { theme: "Manual workarounds", pattern: /manual|spreadsheet|outside the system|external process|workaround/i },
@@ -265,7 +265,27 @@ export function themeRfiChallenges(challenges: string[]): RfiChallengeTheme[] {
     });
 }
 
+function bulletedConsequences(text: string): string[] {
+  const lines = text.replace(/\r/g, "").split("\n");
+  const lead = lines.findIndex(line => /\b(result(?:s|ing)? in|lead(?:s|ing)? to|caus(?:e|es|ing))\b[^:]*:\s*$/i.test(line));
+  if (lead < 0) return [];
+  const items: string[] = [];
+  for (const raw of lines.slice(lead + 1)) {
+    const line = raw.trim();
+    if (!line) {
+      if (items.length) break;
+      continue;
+    }
+    if (/^[•▪●*-]\s*/.test(line)) items.push(line.replace(/^[•▪●*-]\s*/, ""));
+    else if (items.length && /^[a-z]/.test(line)) items[items.length - 1] += ` ${line}`;
+    else break;
+  }
+  return items;
+}
+
 export function extractRfiConsequences(text: string): string[] {
+  const bulleted = bulletedConsequences(text);
+  if (bulleted.length) return unique(bulleted).slice(0, 8);
   const sentence = sentences(text).find(line => /\b(result(?:s|ing)? in|lead(?:s|ing)? to|caus(?:e|es|ing)|consequence)\b/i.test(line));
   if (!sentence) return [];
   const tail = sentence.replace(/^.*?\b(?:result(?:s|ing)? in|lead(?:s|ing)? to|caus(?:e|es|ing))\b\s*/i, "").replace(/[.]$/, "");
@@ -290,6 +310,20 @@ function referencedAttachments(text: string): string[] {
   });
 }
 
+const UNRESOLVED_ANSWER = /^(?:to be determined|tbd|(?:these|this|criteria) (?:have|has) not been established|not (?:yet )?established|no preference)\.?$/i;
+
+/** Issuer Q&A answers that leave a question open ("To be determined", "No preference"). */
+function unresolvedIssuerAnswers(text: string): string[] {
+  const out: string[] = [];
+  for (const match of text.matchAll(/(?:^|\n)[ \t]*(\d{1,3})\.\s+((?:(?!\n[ \t]*\d{1,3}\.\s|\n\s*\n)[\s\S]){10,600}?)\n\s*A:\s*([^\n]+)/g)) {
+    const answer = match[3]!.trim();
+    if (!UNRESOLVED_ANSWER.test(answer)) continue;
+    const question = match[2]!.replace(/\s+/g, " ").trim().split(/(?<=\?)\s/)[0]!;
+    out.push(`Q${match[1]}: ${clip(question, 150)} Issuer answer: "${answer.replace(/\.$/, "")}".`);
+  }
+  return out.slice(0, 6);
+}
+
 export function buildHeuristicRfiSummary(input: {
   text: string;
   challenges: string[];
@@ -308,9 +342,10 @@ export function buildHeuristicRfiSummary(input: {
   const nextStep = firstMatching(input.text, /\b(demonstration|future solicitation|industry day|request for proposal|\brfp\b|cal ?eprocure|sam\.gov|one-on-one)\b/i);
 
   const gaps = referencedAttachments(input.text).map(name => `${name} is referenced but was not in the uploaded package. Get it before drafting.`);
-  if (!/\b\d[\d,]*\s+(?:claims|applications|cases|records|transactions|documents|bills)\b/i.test(input.text)) {
+  if (!/(?<![/\d])\b\d[\d,]*\s+(?:claims|applications|cases|records|transactions|documents|bills)\b/i.test(input.text)) {
     gaps.push("Volumes are not stated (cases, records, documents, or data to migrate). Sizing and cost models depend on them.");
   }
+  gaps.push(...unresolvedIssuerAnswers(input.text));
 
   const stated = input.challenges.length > 0 || Boolean(vision);
   return {

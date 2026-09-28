@@ -492,23 +492,33 @@ export async function generateRfiResponsePackage(rawBriefing: unknown): Promise<
   let provider: "claude" | "gemini" = "claude";
   let latencyMs = 0;
 
-  try {
+  const draftWith = async (preferProvider: "claude" | "gemini") => {
     const result = await callModel({
       tier: "judgment",
+      preferProvider,
       promptVersion: RFI_RESPONSE_PROMPT_VERSION,
       systemPrompt: RFI_PACKAGE_PROMPT,
       prompt,
       classification: "internal",
       redactionProfile: "response-draft-v1",
-      maxTokens: 8000,
+      maxTokens: 14000,
       temperature: 0.3,
       jsonMode: true,
-      timeoutMs: 90_000,
+      timeoutMs: 130_000,
     });
     modelVersion = result.modelVersion;
     provider = result.provider;
     latencyMs = result.latencyMs;
-    parsed = RfiResponsePackageOutput.parse(normalizePackage(parseModelJson(result.content), fallbackDue));
+    return RfiResponsePackageOutput.parse(normalizePackage(parseModelJson(result.content), fallbackDue));
+  };
+
+  try {
+    try {
+      parsed = await draftWith("claude");
+    } catch (err) {
+      if (err instanceof ModelGatewayError) throw err;
+      parsed = await draftWith(provider === "claude" ? "gemini" : "claude");
+    }
   } catch (err) {
     if (err instanceof ModelGatewayError && err.code !== "empty_response" && err.code !== "keys_missing") {
       usedFallback = true;
