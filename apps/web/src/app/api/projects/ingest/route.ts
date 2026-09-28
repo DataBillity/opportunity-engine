@@ -149,7 +149,14 @@ export async function POST(request: Request) {
         modelVersion = model.modelVersion;
         usedModel = true;
         if (model.summaryFromModel) {
-          summarySource = { engine: "model", model: `${model.provider} / ${model.modelVersion}` };
+          summarySource = {
+            engine: "model",
+            model: `${model.provider} / ${model.modelVersion}`,
+            structureModel: model.structureModel,
+          };
+          if (!model.structureModel) {
+            warning = "The model could not read the response questions and sections. They came from the text parser; check them before drafting.";
+          }
         } else {
           warning = `The model summary failed (${model.summaryError ?? "unknown error"}). The Scope Summary came from the text parser.`;
           summarySource = { engine: "heuristic", note: warning };

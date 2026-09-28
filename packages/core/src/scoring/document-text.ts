@@ -69,3 +69,35 @@ export function combineSolicitationDocuments(docs: { name: string; text: string 
     .map(doc => `===== DOCUMENT: ${doc.name} =====\n\n${normalizeSolicitationText(doc.text)}`)
     .join("\n\n");
 }
+
+const QA_TITLE = /response(?:s)? to (?:the )?(?:potential |prospective )?(?:vendor|respondent|bidder|offeror)s?['’]? questions|vendor questions|questions? (?:and|&) (?:answers|responses)|\bq\s*&\s*a\b/i;
+
+/**
+ * A document of vendor questions and the issuer's answers. Its questions were asked by
+ * other vendors, so they are never questions for us to answer or sections for us to draft.
+ */
+export function isQuestionAnswerDocument(name: string, text: string): boolean {
+  return QA_TITLE.test(name.replace(/[_.-]+/g, " ")) || QA_TITLE.test(text.slice(0, 600));
+}
+
+const LABEL_LINE = /^===== DOCUMENT: (.*) =====$/m;
+
+/** Split text built by combineSolicitationDocuments back into its labeled documents. */
+export function splitLabeledDocuments(text: string): { name: string; body: string }[] {
+  const parts = text.split(new RegExp(LABEL_LINE.source, "gm"));
+  const docs: { name: string; body: string }[] = [];
+  for (let i = 1; i < parts.length; i += 2) docs.push({ name: parts[i]!, body: parts[i + 1]!.trim() });
+  return docs;
+}
+
+/**
+ * Replace each vendor Q&A document with a one-line note, keeping every other document
+ * and its label. Text with no document labels is returned unchanged.
+ */
+export function omitQuestionAnswerDocuments(text: string, note = "vendor questions and issuer answers omitted"): string {
+  const docs = splitLabeledDocuments(text);
+  if (!docs.length) return text;
+  return docs
+    .map(doc => `===== DOCUMENT: ${doc.name} =====\n\n${isQuestionAnswerDocument(doc.name, doc.body) ? (note ? `[${note}]` : "") : doc.body}`)
+    .join("\n\n");
+}

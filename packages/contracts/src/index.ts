@@ -354,6 +354,7 @@ export const SolicitationExtraction = z.object({
 export const ScopeSummarySource = z.object({
   engine: z.enum(["model", "heuristic"]),
   model: z.string().optional(),
+  structureModel: z.string().optional(),
   note: z.string().optional(),
 });
 

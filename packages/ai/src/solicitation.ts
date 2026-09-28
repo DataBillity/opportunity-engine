@@ -8,14 +8,14 @@ import { parseModelJson } from "./json";
 import { RFI_SUMMARY_PROMPT } from "./rfi-summary-prompt";
 import { bidStructurePrompt, RFP_SUMMARY_PROMPT, SOW_SUMMARY_PROMPT } from "./scope-summary-prompts";
 
-export const SOLICITATION_EXTRACT_PROMPT_VERSION = "solicitation-extract-v2.1";
+export const SOLICITATION_EXTRACT_PROMPT_VERSION = "solicitation-extract-v2.2";
 
 const RFI_STRUCTURE_PROMPT = `You extract the response structure of a Request for Information (RFI) for a DataBillity bid team.
 
 Hard rules:
 - Use only the document text. Each uploaded file starts with a line "===== DOCUMENT: file name =====".
 - Ignore the cover page, table of contents, and page headers and footers.
-- requirements: the questions and information requests vendors must answer in their response (the questionnaire or response worksheet, and any "describe" or "provide" requests in the RFI body), numbered and ordered as the RFI does. Shorten each to at most 25 words. sectionRef is the part, section, or question number. Skip form fields such as company name and address. Do not include questions that other vendors asked the issuer in a Q&A or addendum; those are clarifications, not questions for us.
+- requirements: the questions and information requests vendors must answer in their response (the questionnaire or response worksheet, and any "describe" or "provide" requests in the RFI body), numbered and ordered as the RFI does. Shorten each to at most 25 words. sectionRef is the part, section, or question number. Skip form fields such as company name and address. The questions to answer come from the issuer's own response worksheet or questionnaire (usually an attachment titled "Response Worksheet") and the RFI body. Skip every document titled "Response to Vendor Questions", "Questions and Answers", or similar: those questions were asked by other vendors and answered by the issuer. They are clarifications, not questions for us, and never requirements or response sections.
 - responseSections: if the RFI specifies headings, a questionnaire, or a template, copy that structure and numbering. If it does not, use exactly these sectionIds: cover (Cover letter), company (Company and team overview), understanding (Understanding of the requirement), questions (Responses to specific questions), experience (Relevant experience), recommendations (Recommendations for the future solicitation), contacts (Points of contact).
 - responseConstraints: how to write and submit the response (page limit, font, margins, file type, naming, recipients, whether attachments or appendices are allowed, question deadline).
 - constraints: eligibility or security gates that affect whether we can do the work. Not page count or formatting.
@@ -290,6 +290,9 @@ export async function extractSolicitationWithModel(input: {
     modelVersion: lead.modelVersion,
     provider: lead.provider,
     summaryFromModel: summary.status === "fulfilled",
+    structureModel: structure.status === "fulfilled"
+      ? `${structure.value.provider} / ${structure.value.modelVersion}`
+      : undefined,
     summaryError: summary.status === "rejected"
       ? (summary.reason instanceof Error ? summary.reason.message : String(summary.reason))
       : undefined,
@@ -303,6 +306,8 @@ export interface ModelExtractionResult {
   /** False when the summary pass failed and only the structure pass returned. */
   summaryFromModel: boolean;
   summaryError?: string;
+  /** The model that read the requirements and response sections; undefined when that pass failed and the text parser filled in. */
+  structureModel?: string;
 }
 
 function pickNonEmptyLists(source: Record<string, unknown>, keys: string[]): Record<string, unknown> {

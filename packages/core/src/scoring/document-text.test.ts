@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { combineSolicitationDocuments, normalizeSolicitationText, orderSolicitationDocuments } from "./document-text";
+import {
+  combineSolicitationDocuments,
+  isQuestionAnswerDocument,
+  normalizeSolicitationText,
+  omitQuestionAnswerDocuments,
+  orderSolicitationDocuments,
+} from "./document-text";
 import { extractSolicitationHeuristic } from "./pursuit-triage";
 
 const header = "California Victim Compensation Board (CalVCB)\nRFI 26-001";
@@ -132,5 +138,52 @@ describe("heuristic scope summary on real PDF text", () => {
 
   it("describes the end state from the vision, not the current system", () => {
     expect(extraction.deliverables.join(" ")).toMatch(/highly configurable claims compensation/);
+  });
+});
+
+describe("vendor Q&A documents", () => {
+  const worksheet = `PART II: Solution
+Describe your proposed solution, highlighting where it can automate existing work.
+Describe the product(s) and associated modules that will be included in your proposed solution.
+What is your approach to User Acceptance testing?
+How will existing data be validated prior to migration?`;
+  const qa = `Response to Vendor Questions
+RFI No. 26-001
+40. Do you have a headcount for users in the Joint Powers offices and Criminal Restitution Compact offices?
+A: Between 350-400 users.
+44. Please provide approximate record counts and data volumes for claims, bills, and payments.
+A: Use the link on the publications page.
+50. How does CalVCB envision the scope of the future modernization effort?
+A: To be determined.`;
+  const docs = [
+    { name: "26-001_RFI_final.pdf", text: pdfText },
+    { name: "26-001_RFI_Attachment_1.docx", text: worksheet },
+    { name: "26-001_RFI_Attachment_3.pdf", text: qa },
+  ];
+  const combined = combineSolicitationDocuments(docs);
+
+  it("recognizes the Q&A by its title and leaves the worksheet alone", () => {
+    expect(isQuestionAnswerDocument("Attachment_3.pdf", qa)).toBe(true);
+    expect(isQuestionAnswerDocument("RFI_Questions_and_Answers.pdf", "1. Is there a budget?")).toBe(true);
+    expect(isQuestionAnswerDocument("Attachment_1.docx", worksheet)).toBe(false);
+    expect(isQuestionAnswerDocument("final.pdf", pdfText)).toBe(false);
+  });
+
+  it("replaces only the Q&A document and keeps every label", () => {
+    const stripped = omitQuestionAnswerDocuments(combined, "vendor Q&A omitted");
+    expect(stripped.match(/^===== DOCUMENT: .* =====$/gm)).toHaveLength(3);
+    expect(stripped).toContain("[vendor Q&A omitted]");
+    expect(stripped).not.toContain("headcount for users");
+    expect(stripped).toContain("What is your approach to User Acceptance testing?");
+    expect(omitQuestionAnswerDocuments("plain text with no labels")).toBe("plain text with no labels");
+  });
+
+  it("never turns vendor questions into questions to answer", () => {
+    const extraction = extractSolicitationHeuristic(combined, "26-001_RFI_final.pdf", "rfi");
+    const asked = extraction.requirements.map(item => item.requirementText).join("\n");
+    expect(asked).toContain("What is your approach to User Acceptance testing?");
+    expect(asked).not.toMatch(/headcount|record counts|future modernization/);
+    expect(extraction.responseSections.map(section => section.title).join(" ")).not.toMatch(/Vendor Questions/i);
+    expect(extraction.rfiSummary?.gaps.join("\n") ?? "").toMatch(/Q50/);
   });
 });

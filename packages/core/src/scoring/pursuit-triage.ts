@@ -21,7 +21,7 @@ import {
   thresholdsFor,
 } from "./project-type";
 import { buildHeuristicRfiSummary, mergeRfiSummaries } from "./rfi-summary";
-import { DOCUMENT_LABEL, normalizeSolicitationText } from "./document-text";
+import { DOCUMENT_LABEL, normalizeSolicitationText, omitQuestionAnswerDocuments } from "./document-text";
 
 export interface OrgTriageContext {
   name: string;
@@ -98,7 +98,8 @@ export function extractSolicitationHeuristic(
   const stem = filename.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
   const due = extractDueDate(text);
   const solicitationRef = extractSolicitationRef(text) || undefined;
-  const requirements = extractRequirements(text, projectType);
+  const ownText = normalizeSolicitationText(omitQuestionAnswerDocuments(rawText, "").replace(DOCUMENT_LABEL, ""));
+  const requirements = extractRequirements(ownText, projectType);
   const scope = extractScopeNarrative(text, projectType);
   const rfiSummary = projectType === "rfi"
     ? buildHeuristicRfiSummary({
@@ -122,7 +123,7 @@ export function extractSolicitationHeuristic(
     deliverables: scope.deliverables,
     ...(rfiSummary ? { rfiSummary } : {}),
     requirements,
-    responseSections: extractResponseSections(text, projectType),
+    responseSections: extractResponseSections(ownText, projectType),
     responseConstraints: extractResponseConstraints(text),
     constraints: sentencesMatching(text, /fedramp|hipaa|soc 2|iso 27001|bonding|ato\b|wcag|zero[- ]downtime/i)
       .filter(line => !RESPONSE_FORMAT.test(line)),
@@ -598,10 +599,11 @@ function extractRequirements(text: string, projectType: ProjectType): Solicitati
 
 function extractResponseSections(text: string, projectType: ProjectType): SolicitationExtraction["responseSections"] {
   const found: SolicitationExtraction["responseSections"] = [];
-  const re = /(?:volume|vol\.?|section|attachment)\s+([IVX0-9.]+)[:\s]+([A-Z][^\n]{6,})/gi;
+  const re = /(?:volume|vol\.?|section)\s+([IVX0-9.]+)[:\s]+([A-Z][^\n]{6,})/gi;
   let match: RegExpExecArray | null;
   while ((match = re.exec(text))) {
     const title = match[2]!.replace(/[.]+$/, "").trim();
+    if (!/^[A-Z]/.test(title)) continue;
     found.push({
       ref: `${/vol/i.test(match[0]) ? "Vol" : "§"} ${match[1]}`.trim(),
       title,

@@ -197,7 +197,14 @@ export function RfiScopeSummaryBody({ docSummary, rfi }: { docSummary: Pursuit["
 function SourceNote({ source }: { source?: ScopeSummarySource }) {
   if (!source) return null;
   if (source.engine === "model") {
-    return <p className="px-4 sm:px-5 py-3 text-[11px] text-muted-foreground">Summary written by {source.model ?? "the model"} from the uploaded documents.</p>;
+    return (
+      <p className="px-4 sm:px-5 py-3 text-[11px] text-muted-foreground">
+        Summary written by {source.model ?? "the model"} from the uploaded documents.{" "}
+        {source.structureModel
+          ? `Response questions and sections read by ${source.structureModel}.`
+          : "Response questions and sections came from the text parser; check them before drafting."}
+      </p>
+    );
   }
   return (
     <p className="px-4 sm:px-5 py-3 text-[11px] oe-status-cond">

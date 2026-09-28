@@ -10,8 +10,11 @@ export {
 export type { OrgTriageContext } from "./scoring/pursuit-triage";
 export {
   combineSolicitationDocuments,
+  isQuestionAnswerDocument,
   normalizeSolicitationText,
+  omitQuestionAnswerDocuments,
   orderSolicitationDocuments,
+  splitLabeledDocuments,
 } from "./scoring/document-text";
 export {
   buildHeuristicRfiSummary,

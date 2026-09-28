@@ -425,7 +425,7 @@ export function ResponseBuilderView({
         role: "system",
         text: data.usedFallback
           ? `Model draft unavailable. Saved a ${packageLabel} shell with a Gap Log. Do not submit it.`
-          : `${packageLabel[0]!.toUpperCase()}${packageLabel.slice(1)} drafted${data.provider ? ` via ${data.provider}` : ""}. ${packet.gaps.length} gap${packet.gaps.length === 1 ? "" : "s"} logged for review.`,
+          : `${packageLabel[0]!.toUpperCase()}${packageLabel.slice(1)} drafted${data.provider ? ` via ${data.provider}${data.modelVersion ? ` (${data.modelVersion})` : ""}` : ""}. ${packet.gaps.length} gap${packet.gaps.length === 1 ? "" : "s"} logged for review.`,
       }]);
       toast(data.usedFallback ? `${packageLabel} shell saved — resolve the Gap Log before review` : `Full ${packageLabel} drafted for review`, data.usedFallback ? "warning" : "success");
     } catch (err) {
@@ -504,7 +504,7 @@ export function ResponseBuilderView({
       setMessages(prev => [...prev, {
         role: "system",
         text: `${options.regenerate ? "Section regenerated" : "Draft generated"} for "${section.name}"${
-          data.provider ? ` via ${data.provider}` : ""
+          data.provider ? ` via ${data.provider}${data.modelVersion ? ` (${data.modelVersion})` : ""}` : ""
         }${factCount ? ` (${factCount} grounded facts)` : ""}.`,
       }]);
       toast(

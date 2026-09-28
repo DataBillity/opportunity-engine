@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ResponseDraftBriefing } from "@opportunity-engine/contracts";
-import { fallbackRfiPackage, reconcileRfiPackage } from "./rfi-response";
+import { collectResponseFacts } from "./response-draft";
+import { fallbackRfiPackage, reconcileRfiPackage, RFI_PACKAGE_PROMPT, RFI_SECTION_PROMPT } from "./rfi-response";
 
 const briefing: ResponseDraftBriefing = {
   section: { id: "cover", name: "Cover letter", ref: "Cover" },
@@ -78,5 +79,25 @@ describe("reconcileRfiPackage", () => {
     expect(packet.gaps).toEqual([
       expect.objectContaining({ id: "GAP-004", owner: "Prime", description: "Confirm the migration window" }),
     ]);
+  });
+});
+
+describe("vendor Q&A handling", () => {
+  it("tells the drafter that vendor questions are clarifications, not questions to answer", () => {
+    for (const prompt of [RFI_PACKAGE_PROMPT, RFI_SECTION_PROMPT]) {
+      expect(prompt).toMatch(/Response to Vendor Questions/);
+      expect(prompt).toMatch(/never answer those questions/);
+    }
+  });
+
+  it("keeps the source excerpt for an RFI when the caller asks for it", () => {
+    const withExcerpt: ResponseDraftBriefing = {
+      ...briefing,
+      pursuit: { ...briefing.pursuit, sourceExcerpt: "===== DOCUMENT: Attachment_1.docx =====\n\nPART II: Solution" },
+    };
+    const texts = (options?: { includeSourceExcerpt?: boolean }) =>
+      collectResponseFacts(withExcerpt, options).map(fact => fact.text).join("\n");
+    expect(texts()).toContain("Source excerpt: ===== DOCUMENT: Attachment_1.docx");
+    expect(texts({ includeSourceExcerpt: false })).not.toContain("Source excerpt");
   });
 });
