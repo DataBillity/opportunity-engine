@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import type { Partner, Pursuit, Organization, ResponseActionItem } from "@/lib/mock-data";
+import type { GraphData, Partner, Pursuit, Organization, ResponseActionItem } from "@/lib/mock-data";
 import { getPartner } from "@/lib/mock-data";
 import { Modal, FormField, TextArea, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
 import { ActionItemResponseModal } from "@/components/action-items/action-item-response-modal";
@@ -41,10 +41,11 @@ function StatusBadge({ status, label }: { status: string; label: string }) {
 }
 
 export function OpportunityView({
-  pursuit, org, partners, onBack, onDraft,   onConfirmDecision, onUpdatePursuit, onDeletePursuit,
+  pursuit, org, partners, graph, onBack, onDraft,   onConfirmDecision, onUpdatePursuit, onDeletePursuit,
 }: {
   pursuit: Pursuit; org: Organization;
   partners?: Partner[];
+  graph?: GraphData;
   onBack: () => void; onDraft: () => void;
   onConfirmDecision: (pursuitId: string, decision: "go" | "nogo") => void;
   onUpdatePursuit: (pursuitId: string, updates: Partial<Pursuit>) => void;
@@ -102,6 +103,75 @@ export function OpportunityView({
       setAdvisorMessages(prev => [...prev, { role: "assistant", text: response }]);
       setAdvisorTyping(false);
     }, 800);
+  }
+
+  const allPartners = partners ?? [];
+  const activePartners = allPartners.filter(p => p.status !== "Archived");
+
+  function computePartnerContributions(): { partnerId: string; partner: Partner; contributions: string[]; needed: boolean }[] {
+    if (!graph) return [];
+    const capsByPartner = new Map<string, string[]>();
+    const mappedNodes = new Set(pursuit.reqmap.filter(r => r.status === "mapped" && r.node).map(r => r.node!));
+    for (const cap of graph.capabilities) {
+      if (!mappedNodes.has(`${cap.id} ${cap.name}`) && !mappedNodes.has(cap.id)) {
+        const nameMatch = Array.from(mappedNodes).find(n => n.includes(cap.id) || n.includes(cap.name));
+        if (!nameMatch) continue;
+      }
+      for (const pid of cap.partners) {
+        const existing = capsByPartner.get(pid) ?? [];
+        existing.push(cap.name);
+        capsByPartner.set(pid, existing);
+      }
+    }
+    const gapPartners = new Map<string, string[]>();
+    for (const gap of pursuit.gaps) {
+      for (const p of allPartners) {
+        if (p.covers.includes(gap.id)) {
+          const existing = gapPartners.get(p.id) ?? [];
+          existing.push(`Covers gap: ${gap.title}`);
+          gapPartners.set(p.id, existing);
+        }
+      }
+    }
+    const included = pursuit.includedPartnerIds
+      ? new Set(pursuit.includedPartnerIds)
+      : new Set([...capsByPartner.keys(), ...gapPartners.keys()]);
+    const result: { partnerId: string; partner: Partner; contributions: string[]; needed: boolean }[] = [];
+    for (const p of activePartners) {
+      if (!included.has(p.id)) continue;
+      const contribs = [
+        ...(capsByPartner.get(p.id) ?? []).map(c => `Capability: ${c}`),
+        ...(gapPartners.get(p.id) ?? []),
+      ];
+      result.push({
+        partnerId: p.id,
+        partner: p,
+        contributions: contribs,
+        needed: contribs.length > 0,
+      });
+    }
+    return result;
+  }
+
+  const partnerComposition = computePartnerContributions();
+  const [addPartnerToOppOpen, setAddPartnerToOppOpen] = useState(false);
+
+  function handleRemovePartnerFromOpp(partnerId: string) {
+    const current = pursuit.includedPartnerIds ?? partnerComposition.map(p => p.partnerId);
+    onUpdatePursuit(pursuit.id, {
+      includedPartnerIds: current.filter(id => id !== partnerId),
+    });
+    toast("Partner removed from this opportunity", "success");
+  }
+
+  function handleAddPartnerToOpp(partnerId: string) {
+    const current = pursuit.includedPartnerIds ?? partnerComposition.map(p => p.partnerId);
+    if (current.includes(partnerId)) return;
+    onUpdatePursuit(pursuit.id, {
+      includedPartnerIds: [...current, partnerId],
+    });
+    toast("Partner added to this opportunity", "success");
+    setAddPartnerToOppOpen(false);
   }
 
   const advisorQuickPrompts = [
@@ -272,6 +342,96 @@ export function OpportunityView({
             </ul>
           </div>
         </div>
+
+        {/* Partner composition card */}
+        {allPartners.length > 0 && (
+          <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+              <h3 className="oe-card-title">Partner Composition</h3>
+              <button
+                onClick={() => setAddPartnerToOppOpen(true)}
+                className="text-xs font-medium px-3 py-1.5 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+              >
+                + Add Partner
+              </button>
+            </div>
+            <div className="p-5">
+              {partnerComposition.length > 0 ? (
+                <div className="divide-y divide-border">
+                  {partnerComposition.map(({ partnerId, partner, contributions, needed }) => (
+                    <div key={partnerId} className="py-3 first:pt-0 last:pb-0 flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-semibold text-foreground">{partner.name}</span>
+                          <span className={cn(
+                            "inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md",
+                            partner.type === "Prime" ? "oe-status-go" : "oe-status-trace",
+                          )}>{partner.type}</span>
+                          {needed ? (
+                            <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md oe-status-go">Contributing</span>
+                          ) : (
+                            <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md oe-status-pending">No mapped contribution</span>
+                          )}
+                        </div>
+                        {contributions.length > 0 ? (
+                          <ul className="list-disc pl-4 text-xs text-muted-foreground space-y-0.5">
+                            {contributions.map((c, i) => <li key={i}>{c}</li>)}
+                          </ul>
+                        ) : (
+                          <p className="text-xs text-muted-foreground italic">
+                            Not contributing capabilities, experience, credentials, or people to this opportunity.
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleRemovePartnerFromOpp(partnerId)}
+                        className="text-[10px] font-medium px-2 py-1 rounded border border-input bg-card text-destructive cursor-pointer hover:bg-destructive/10 shrink-0"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">
+                  No partners are included in this opportunity. Add partners to improve coverage and scoring.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        <Modal open={addPartnerToOppOpen} onClose={() => setAddPartnerToOppOpen(false)} title="Add Partner to Opportunity">
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Select a partner to include in the assessment and response for this opportunity. Partners that contribute capabilities, experience, credentials, or people will improve the score.
+            </p>
+            <div className="divide-y divide-border border border-border rounded-md max-h-60 overflow-y-auto">
+              {activePartners
+                .filter(p => !(pursuit.includedPartnerIds ?? partnerComposition.map(pc => pc.partnerId)).includes(p.id))
+                .map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => handleAddPartnerToOpp(p.id)}
+                    className="w-full text-left px-3 py-2.5 text-xs hover:bg-muted/40 cursor-pointer flex items-center justify-between gap-2"
+                  >
+                    <div>
+                      <span className="font-semibold text-foreground">{p.name}</span>
+                      <span className="text-muted-foreground ml-2">{p.type}</span>
+                    </div>
+                    <span className="text-primary text-[10px] font-medium shrink-0">Add →</span>
+                  </button>
+                ))
+              }
+              {activePartners.filter(p => !(pursuit.includedPartnerIds ?? partnerComposition.map(pc => pc.partnerId)).includes(p.id)).length === 0 && (
+                <div className="px-3 py-4 text-xs text-muted-foreground text-center italic">All active partners are already included.</div>
+              )}
+            </div>
+            <div className="flex justify-end pt-2">
+              <SecondaryButton onClick={() => setAddPartnerToOppOpen(false)}>Close</SecondaryButton>
+            </div>
+          </div>
+        </Modal>
 
         {/* Scope summary card */}
         <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
@@ -469,7 +629,9 @@ export function OpportunityView({
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-foreground mb-1">{item.description}</div>
                     <div className="text-[11px] text-muted-foreground">
-                      {item.assignedPartnerId ? getPartner(item.assignedPartnerId, partners)?.name : item.assignedInternal}
+                      {item.assignedPartnerId
+                        ? <>{getPartner(item.assignedPartnerId, partners)?.name ?? item.assignedPartnerId}{item.assignedInternal ? ` (${item.assignedInternal})` : ""}</>
+                        : item.assignedInternal ?? "Unassigned"}
                       {" · Due "}{item.dueAt}
                       {" · Blocks "}{item.gates.join(", ")}
                     </div>
@@ -752,7 +914,9 @@ export function OpportunityView({
         open={actionItem !== null}
         item={actionItem}
         pursuitName={pursuit.name}
-        assigneeLabel={actionItem?.assignedPartnerId ? getPartner(actionItem.assignedPartnerId, partners)?.name : actionItem?.assignedInternal ?? undefined}
+        assigneeLabel={actionItem?.assignedPartnerId
+          ? `${getPartner(actionItem.assignedPartnerId, partners)?.name ?? actionItem.assignedPartnerId}${actionItem.assignedInternal ? ` (${actionItem.assignedInternal})` : ""}`
+          : actionItem?.assignedInternal ?? undefined}
         onClose={() => setActionItem(null)}
         onSave={updates => {
           if (!actionItem) return;

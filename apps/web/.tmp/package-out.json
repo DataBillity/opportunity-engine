@@ -2,34 +2,33 @@
   "usedFallback": false,
   "provider": "claude",
   "modelVersion": "claude-sonnet-5",
-  "reviewerSummary": "RFI 26-001 (CalVCB Compensation and Restitution System Modernization) is due 2026-09-24, 2:00 PM Pacific, via email to ITAcquisitions@victims.ca.gov. NOTE: this due date is already past relative to typical review cycles — confirm via Cal eProcure whether this RFI has been amended, reissued, or superseded before submitting [GAP-001]. The response must be the completed Attachment 1 worksheet itself, signed certification in Part I, 10 pages max, single-spaced, 12-point font, one-inch margins, no appendices or supplemental attachments. This draft is built to fit that worksheet structure with no cover material added. Fit is Partial overall: DataBillity's positioning depends heavily on facts not yet supplied — company size, founding date, platform architecture (home-grown vs. built on another platform), prior government implementations, and confirmed partner roster are all open. Without those, Part I (Company Information and Experience) and much of Part II/IV cannot be substantiated beyond placeholders. High-priority gaps, all owned by Prime: confirm RFI currency/amendment status [GAP-001]; supply company background, founding date, size, and structure [GAP-002]; confirm platform origin and whether home-grown or third-party-based [GAP-003]; list prior government implementations with agency names and applications [GAP-004]; resolve the two page-count/format ambiguities flagged for the issuer (whether Part I and question text count toward the 10-page limit, and whether any cover material is permitted at all) [GAP-005, GAP-006]; confirm CMMI/security certifications if claimed [GAP-011]; supply administrative identifiers (UEI, CAGE, NAICS, socioeconomic status) [GAP-018]. Medium/low gaps cover cost sizing assumptions, integration scope questions, and demonstration readiness. Decisions needed from the reviewer: whether to answer the nine-item upgrade/enhancement/configuration classification table now with placeholders or wait for product detail; whether to name partners in this RFI response at all given the 10-page ceiling. Recommend treating this as a market-shaping opportunity — the issuer explicitly asks for recommendations on the future solicitation (Part VI) and has not fixed solution architecture, hosting model, or transformation scope, which is where DataBillity's answer can have the most influence.",
-  "strategicNotes": "This RFI is explicitly market research with no budget, timeline, or architecture preference fixed (R41, R59) — the highest-value contribution DataBillity can make is in Part VI (Evaluation/Recommendations), shaping how CalVCB frames the future solicitation around configurability rather than a specific product category. The ten challenge items (R5-R14) all trace back to one root cause CalVCB names implicitly: dependence on custom code for change. A response that repeatedly ties every answer back to 'configuration, not code' is likely to resonate more than a feature checklist. Watch for requirements that may be shaped around a specific incumbent or competitor: the emphasis on a rules-based auto-payment engine, attribute-level audit trails, and multilingual correspondence (items 2, 4, 5, 9) reads like functionality common to established GovTech claims platforms (e.g., established COTS players in state benefits/claims administration) — CalVCB's neutral framing (R41: 'no stated preference' among COTS, MOTS, integrated, or custom) is a genuine opening, but the specificity of the challenge list suggests CalVCB has already seen at least one vendor demo shape this list. Recommend the final response lean into recommendations that broaden evaluation criteria beyond any single architecture (e.g., recommending CalVCB score configurability-in-demo as heavily as feature checklists) to keep the field open rather than reinforce an existing frontrunner's narrative. No confirmed teaming partners exist in the current facts; capability gaps in specific platform certifications (GAP-011), accessibility conformance (GAP-009), and prior government implementation evidence (GAP-004) are candidates a systems-integrator or compliance-specialist partner could close if DataBillity decides to team before the future solicitation — this should be a decision made before, not during, final RFI drafting, since Part I explicitly asks about company experience and any partner named here becomes part of the public record (§1.I).",
+  "reviewerSummary": "RFI 26-001 (CalVCB Compensation and Restitution System Modernization) is due 2026-09-24, 2:00 PM Pacific, submitted electronically to ITAcquisitions@victims.ca.gov as the completed Attachment 1 worksheet only — no cover letter, appendices, or supplemental materials, 10 pages max, single-spaced, 12-point font, one-inch margins. Note: this due date appears to have already passed relative to today; check Cal eProcure for an amendment, extension, or successor solicitation before submitting [GAP-001 | DataBillity | Confirm current RFI status/amendments on Cal eProcure]. Fit is largely Partial-to-Gap on direct government past performance and unverified on core company facts: DataBillity's founding date, size, socioeconomic status, platform architecture, and any prior government implementations are not yet confirmed in the grounding facts, so Part I and several Part II/IV answers are placeholder-heavy. No confirmed partners are named in the facts, so all coverage is shown as DataBillity-direct or Gap. High-priority open items: (1) verify RFI is still live, (2) supply company background/size/founding year, (3) confirm platform architecture (home-grown vs. based on another platform) and any government references, (4) resolve the page-limit/cover-letter ambiguity per Att. 3 Q49 vs §1.F before drafting final copy, (5) decide whether to answer the nine-item upgrade/enhancement/configuration classification table, which requires product-specific detail not yet supplied. Several answers rely on the issuer's own unresolved ambiguities (page limit scope, external user counts, DOJ/court integrations, data cleansing cost treatment) — these are logged as questions to the issuer, not gaps in our response. Decisions needed from DataBillity leadership: whether to pursue, what cost figures (if any) to disclose as non-binding ROM, and who owns the signed certification in Part I.",
+  "strategicNotes": "This RFI is explicitly market research shaping a future Cal eProcure solicitation, with invite-only demonstrations anticipated October 2026 (R61) — logged as a High Prime gap since registration/demonstration mechanics are not yet confirmed [see GAP list]. The RFI shows no stated preference among COTS, MOTS, integrated product set, COTS Configurable, or custom (R41), and no incumbent is named in the facts, so this does not read as pre-written for a specific competitor; the strongest competitive lever will be configurability without custom code (directly answering the root-cause theme in R42) and a clean government-references narrative. Because grounding facts contain no confirmed DataBillity government past performance, the single biggest risk to a competitive response is Part I credibility — if no qualifying reference exists, teaming with a partner that holds direct state/local government claims or benefits-system implementation experience would materially strengthen Parts I, II, and VI; no such partner is currently confirmed, so this is noted as a teaming option rather than a commitment. Recommend closing the platform-lineage, security-framework, and hosting-model gaps (GAP-003, GAP-018, GAP-019) early, since these recur across Parts II, III, and IV and gate several other answers. The cost model (Part V) cannot be populated at all without DataBillity-supplied pricing; treat this as a hard blocker for a compliant submission, not a nice-to-have.",
   "questions": [
     "Does the 10-page limit in Attachment 1 include the worksheet's own question text, Part I company information, and the signature block, or only the respondent's answers?",
-    "Section 1.F references written responses including the Attachment 1 worksheet, while Attachment 3 Q49 prohibits supplemental appendices or attachments; may respondents include a brief cover letter, and does it count toward the 10-page limit?",
+    "Section 1.F references written responses including the Attachment 1 worksheet, while Att. 3 Q49 prohibits supplemental appendices or attachments; may respondents include a brief cover letter, and does it count toward the 10-page limit?",
     "For Q48, should data cleansing and remediation be included in the base cost estimate or presented as an optional/separate line item?",
     "Are exchanges with the Department of Justice, crime-reporting agencies, and courts in scope as required system integrations?",
     "Is the external online application service intended to be replaced by the new solution, or integrated with it going forward?",
-    "Beyond the 350-400 internal, JP, and CRC users, how many external users (claimants, providers, advocates, court personnel) should respondents assume for capacity and licensing?",
-    "Is the September 24, 2026 response deadline still current, or has this RFI been amended, extended, or superseded by a later posting on Cal eProcure?"
+    "Beyond the 350-400 internal, JP, and CRC users, how many external users (claimants, providers, advocates, court personnel) should respondents assume for capacity and licensing?"
   ],
   "compliance": [
     {
       "requirement": "Submit via email to ITAcquisitions@victims.ca.gov by 2026-09-24, 2:00 PM Pacific",
       "rfiRef": "§1.F, §1.H",
-      "responseSection": "N/A - submission logistics",
+      "responseSection": "Cover/Submission",
       "owner": "Prime",
       "status": "Open"
     },
     {
-      "requirement": "Response is the completed Attachment 1 worksheet with signed certification in Part I",
-      "rfiRef": "§1.F; Att. 1",
-      "responseSection": "Part I - Company Information and Experience",
+      "requirement": "Use completed Attachment 1 worksheet as the response, with signed certification in Part I",
+      "rfiRef": "§1.F, Att. 1",
+      "responseSection": "Part I | Company Information and Experience",
       "owner": "Prime",
       "status": "Open"
     },
     {
-      "requirement": "10 pages maximum total, single spaced, 12-point font, one-inch margins",
+      "requirement": "10 pages maximum, single-spaced, 12-point font, one-inch margins",
       "rfiRef": "Att. 1 instructions",
       "responseSection": "All sections",
       "owner": "Prime",
@@ -43,381 +42,258 @@
       "status": "Addressed"
     },
     {
-      "requirement": "Cost estimates non-binding, planning purposes only, sizing assumptions stated",
+      "requirement": "State cost estimates as non-binding, for planning only, with sizing assumptions",
       "rfiRef": "§1.F",
-      "responseSection": "Part V - Costing Model",
+      "responseSection": "Part V | Costing Model",
       "owner": "Prime",
-      "status": "Addressed"
+      "status": "Open"
     },
     {
-      "requirement": "Responses become public records under CPRA; no proprietary markings relied upon",
+      "requirement": "Acknowledge responses become public records under CPRA; no proprietary markings relied upon",
       "rfiRef": "§1.I",
-      "responseSection": "N/A - submission logistics",
-      "owner": "Prime",
-      "status": "Addressed"
-    },
-    {
-      "requirement": "Provide company background including size and founding date",
-      "rfiRef": "Att. 1 Part I",
-      "responseSection": "Part I - Company Information and Experience",
+      "responseSection": "Cover/Submission",
       "owner": "Prime",
       "status": "Open"
     },
     {
-      "requirement": "Provide technical details: home grown vs. based on another platform",
-      "rfiRef": "Att. 1 Part I",
-      "responseSection": "Part I - Company Information and Experience",
-      "owner": "Prime",
-      "status": "Open"
-    },
-    {
-      "requirement": "Share government implementation experience with department names and applications",
-      "rfiRef": "Att. 1 Part I",
-      "responseSection": "Part I - Company Information and Experience",
-      "owner": "Prime",
-      "status": "Open"
-    },
-    {
-      "requirement": "Describe proposed solution and where it automates/streamlines CalVCB challenges",
-      "rfiRef": "Att. 1 Part II.1",
-      "responseSection": "Part II - Solution",
-      "owner": "Prime",
-      "status": "Addressed"
-    },
-    {
-      "requirement": "Describe products/modules included",
-      "rfiRef": "Att. 1 Part II.2, II.4; §1.A",
-      "responseSection": "Part II - Solution",
-      "owner": "Prime",
-      "status": "Open"
-    },
-    {
-      "requirement": "Describe scalability/flexibility for future security, accessibility, compliance",
-      "rfiRef": "Att. 1 Part II.3",
-      "responseSection": "Part II - Solution",
-      "owner": "Prime",
-      "status": "Addressed"
-    },
-    {
-      "requirement": "Describe off-the-shelf vs. configured vs. customized",
-      "rfiRef": "Att. 1 Part II",
-      "responseSection": "Part II - Solution",
-      "owner": "Prime",
-      "status": "Open"
-    },
-    {
-      "requirement": "Describe input/output capabilities",
-      "rfiRef": "Att. 1 Part III",
-      "responseSection": "Part III - Integration",
-      "owner": "Prime",
-      "status": "Open"
-    },
-    {
-      "requirement": "Describe implementation methodology, timeline, business-understanding approach",
-      "rfiRef": "Att. 1 Part IV",
-      "responseSection": "Part IV - Approach",
-      "owner": "Prime",
-      "status": "Open"
-    },
-    {
-      "requirement": "Describe UAT approach",
-      "rfiRef": "Att. 1 Part IV",
-      "responseSection": "Part IV - Approach",
-      "owner": "Prime",
-      "status": "Addressed"
-    },
-    {
-      "requirement": "Describe data validation and migration approach, tools, cost treatment",
-      "rfiRef": "Att. 1 Part IV",
-      "responseSection": "Part IV - Approach",
-      "owner": "Prime",
-      "status": "Addressed"
-    },
-    {
-      "requirement": "Define and classify upgrades, enhancements, configuration changes; classify nine sample items",
-      "rfiRef": "Att. 1 Part IV",
-      "responseSection": "Part IV - Approach",
-      "owner": "Prime",
-      "status": "Open"
-    },
-    {
-      "requirement": "Describe IT technical and functional support approach",
-      "rfiRef": "Att. 1 Part IV",
-      "responseSection": "Part IV - Approach",
-      "owner": "Prime",
-      "status": "Addressed"
-    },
-    {
-      "requirement": "State whether solution meets IT/security standards in Attachment 2",
-      "rfiRef": "Att. 1 Part IV; Att. 2",
-      "responseSection": "Part IV - Approach",
-      "owner": "Prime",
-      "status": "Open"
-    },
-    {
-      "requirement": "Provide cost model and budgetary range with sizing assumptions",
-      "rfiRef": "Att. 1 Part V; §1.F",
-      "responseSection": "Part V - Costing Model",
-      "owner": "Prime",
-      "status": "Open"
-    },
-    {
-      "requirement": "Provide recommendations for the future solicitation",
-      "rfiRef": "Att. 1 Part VI",
-      "responseSection": "Part VI - Evaluation",
-      "owner": "Prime",
-      "status": "Addressed"
-    },
-    {
-      "requirement": "Solution demonstration (if invited)",
-      "rfiRef": "§1.G",
-      "responseSection": "Part VI - Evaluation",
+      "requirement": "Answer all Attachment 1 Part I–VI questions",
+      "rfiRef": "Att. 1",
+      "responseSection": "Part I–VI",
       "owner": "Prime",
       "status": "Open"
     }
   ],
   "gaps": [
     {
-      "id": "GAP-002",
-      "location": "Part I - Company Information and Experience",
-      "gapType": "missing_information",
-      "description": "Company founding date, size, and corporate structure not supplied.",
-      "owner": "Prime",
+      "id": "GAP-001",
+      "location": "Reviewer Summary",
+      "gapType": "compliance_risk",
+      "description": "The stated RFI due date (2026-09-24) appears to be in the future relative to typical processing but should be verified against Cal eProcure for amendments, extensions, or a superseding solicitation before submission.",
+      "owner": "DataBillity",
       "priority": "High",
-      "due": "2026-09-17",
+      "due": "2026-09-19",
       "status": "Open",
-      "notes": "Directly requested by Att. 1 Part I (R99)."
+      "notes": "R92 flags this as a known gap in the RFI package itself."
+    },
+    {
+      "id": "GAP-002",
+      "location": "Part I | Company Information and Experience",
+      "gapType": "missing_information",
+      "description": "Company founding date, headcount, and corporate history for background question are not in grounding facts.",
+      "owner": "DataBillity",
+      "priority": "High",
+      "due": "2026-09-19",
+      "status": "Open",
+      "notes": "Directly requested by R99."
     },
     {
       "id": "GAP-003",
-      "location": "Part I - Company Information and Experience",
+      "location": "Part I | Company Information and Experience",
       "gapType": "missing_information",
-      "description": "Platform origin (home-grown vs. built on another organization's base) and current version not confirmed.",
-      "owner": "Prime",
+      "description": "Whether Billity AI is home-grown or built on a third-party/partner platform is not documented.",
+      "owner": "DataBillity",
       "priority": "High",
-      "due": "2026-09-17",
+      "due": "2026-09-19",
       "status": "Open",
-      "notes": "Directly requested by R100; also underpins Part II and IV answers."
+      "notes": "Directly requested by R100."
     },
     {
       "id": "GAP-004",
-      "location": "Part I - Company Information and Experience",
-      "gapType": "unverified_claim",
-      "description": "No confirmed list of prior government implementations, agency names, or applications available to cite.",
-      "owner": "Prime",
+      "location": "Part I | Company Information and Experience",
+      "gapType": "missing_information",
+      "description": "No confirmed government agency references, systems implemented, or dates are available; cannot state past performance without fabrication.",
+      "owner": "DataBillity",
       "priority": "High",
-      "due": "2026-09-17",
+      "due": "2026-09-19",
       "status": "Open",
-      "notes": "Directly requested by R101; do not fabricate client names or metrics."
+      "notes": "Directly requested by R101; capability gap if truly absent — note whether a teaming partner could close this."
     },
     {
       "id": "GAP-005",
-      "location": "Compliance / Format",
-      "gapType": "clarification",
-      "description": "Unclear whether the 10-page limit includes worksheet question text, Part I company info, and signature block, or only respondent answers.",
-      "owner": "Prime",
-      "priority": "High",
-      "due": "2026-09-17",
-      "status": "Open",
-      "notes": "Matches issuer question R93; also affects final page budgeting for this draft."
-    },
-    {
-      "id": "GAP-006",
-      "location": "Compliance / Format",
-      "gapType": "compliance_risk",
-      "description": "Conflict between §1.F implying accompanying written response content and Att. 3 Q49 prohibiting supplemental attachments; unclear if a brief cover note is allowed and whether it counts toward the page limit.",
-      "owner": "Prime",
-      "priority": "High",
-      "due": "2026-09-17",
-      "status": "Open",
-      "notes": "Following the most restrictive reading per instructions: no cover letter included in this draft. Matches issuer question R94."
-    },
-    {
-      "id": "GAP-008",
-      "location": "Part II - Solution",
-      "gapType": "capability_gap",
-      "description": "No confirmed list of specific products/modules or their off-the-shelf/configured/customized classification against CalVCB's ten challenge items.",
-      "owner": "Prime",
-      "priority": "High",
-      "due": "2026-09-17",
-      "status": "Open",
-      "notes": "Directly requested by R103, R105. No partner confirmed to close this gap."
-    },
-    {
-      "id": "GAP-011",
-      "location": "Part IV - Approach (Security)",
-      "gapType": "unverified_claim",
-      "description": "Platform's compliance posture and any certifications/assessments against NIST 800-53, FISMA, and SAM 5300 not confirmed.",
-      "owner": "Prime",
-      "priority": "High",
-      "due": "2026-09-17",
-      "status": "Open",
-      "notes": "Directly requested by R125; do not claim compliance without confirmation."
-    },
-    {
-      "id": "GAP-016",
-      "location": "Part IV - Approach (Configuration classification)",
+      "location": "Part I | Company Information and Experience",
       "gapType": "missing_information",
-      "description": "The nine sample functional change items from Attachment 1 are not included in the facts available for this draft, so they cannot be classified as System Upgrade, Enhancement, or Configuration.",
-      "owner": "Prime",
+      "description": "UEI, CAGE code, business size, and socioeconomic status certifications are not in grounding facts.",
+      "owner": "DataBillity",
       "priority": "High",
-      "due": "2026-09-17",
+      "due": "2026-09-19",
       "status": "Open",
-      "notes": "Directly requested by R122; source document Attachment 1 needed."
-    },
-    {
-      "id": "GAP-018",
-      "location": "Part I - Company Information and Experience",
-      "gapType": "missing_information",
-      "description": "UEI, CAGE code, NAICS code(s), business size, and socioeconomic status not supplied for Prime; required for certification and administrative completeness.",
-      "owner": "Prime",
-      "priority": "High",
-      "due": "2026-09-17",
-      "status": "Open",
-      "notes": "Per A2, must not be invented. Also applies to any confirmed partner, none of which are named in current facts."
-    },
-    {
-      "id": "GAP-019",
-      "location": "Part V - Costing Model",
-      "gapType": "missing_information",
-      "description": "No ROM cost inputs (implementation, product/license, maintenance, support, training) supplied to populate a non-binding cost model.",
-      "owner": "Prime",
-      "priority": "High",
-      "due": "2026-09-17",
-      "status": "Open",
-      "notes": "Directly requested by R126; must be explicitly labeled non-binding per R39/R60."
-    },
-    {
-      "id": "GAP-001",
-      "location": "Reviewer Summary / Submission logistics",
-      "gapType": "compliance_risk",
-      "description": "RFI due date of 2026-09-24 needs verification against Cal eProcure for amendments, extension, or reissuance before submission.",
-      "owner": "Prime",
-      "priority": "High",
-      "due": "2026-09-20",
-      "status": "Open",
-      "notes": "R92 explicitly flags this as a known gap in the RFI package."
-    },
-    {
-      "id": "GAP-022",
-      "location": "Reviewer Summary / Registration",
-      "gapType": "missing_information",
-      "description": "No confirmation that DataBillity has registered or been invited to the October 2026 invite-only demonstrations.",
-      "owner": "Prime",
-      "priority": "High",
-      "due": "2026-09-20",
-      "status": "Open",
-      "notes": "Treat as a registration-equivalent action item; flagged per instructions to log any industry-day/demo registration as a High Prime gap."
-    },
-    {
-      "id": "GAP-007",
-      "location": "Part II - Solution",
-      "gapType": "clarification",
-      "description": "Unclear whether the external online application service is meant to be replaced or integrated with the new system.",
-      "owner": "Prime",
-      "priority": "Medium",
-      "due": "2026-09-17",
-      "status": "Open",
-      "notes": "Matches issuer question R97."
+      "notes": "A2 prohibits inventing these identifiers."
     },
     {
       "id": "GAP-009",
-      "location": "Part II - Solution",
+      "location": "Part II | Solution",
       "gapType": "missing_information",
-      "description": "Specific accessibility conformance standard/version supported by the platform not confirmed.",
-      "owner": "Prime",
-      "priority": "Medium",
-      "due": "2026-09-17",
+      "description": "Product/module names and mapping to each of the 10 CalVCB challenge items are not confirmed.",
+      "owner": "DataBillity",
+      "priority": "High",
+      "due": "2026-09-19",
       "status": "Open",
-      "notes": "Needed to substantiate R104 answer on scalability/accessibility."
-    },
-    {
-      "id": "GAP-010",
-      "location": "Part III - Integration",
-      "gapType": "missing_information",
-      "description": "Specific integration method (API, SFTP, middleware) for Bill Review Service, SCO, FTB, EDD, and TotalAgility not confirmed against platform's connector library.",
-      "owner": "Prime",
-      "priority": "Medium",
-      "due": "2026-09-17",
-      "status": "Open",
-      "notes": "Underlies R65 and R79."
+      "notes": "Directly requested by R102, R103."
     },
     {
       "id": "GAP-012",
-      "location": "Part III - Integration",
+      "location": "Part III | Integration",
       "gapType": "missing_information",
-      "description": "Specific I/O technical specifications (supported API standards, file formats, batch/real-time capability, reporting export formats) not confirmed.",
-      "owner": "Prime",
-      "priority": "Medium",
-      "due": "2026-09-17",
+      "description": "Supported integration methods for Bill Review Service, SCO, FTB, EDD, and TotalAgility are not confirmed.",
+      "owner": "DataBillity",
+      "priority": "High",
+      "due": "2026-09-19",
       "status": "Open",
-      "notes": "Directly requested by R106."
-    },
-    {
-      "id": "GAP-013",
-      "location": "Part IV - Approach (Implementation timeline)",
-      "gapType": "unverified_claim",
-      "description": "No confirmed representative implementation timeline example from a comparable engagement in the last 5 years.",
-      "owner": "Prime",
-      "priority": "Medium",
-      "due": "2026-09-17",
-      "status": "Open",
-      "notes": "Directly requested by R108; must not fabricate a specific past engagement."
+      "notes": "Directly requested by R106; ties to mandatory integrations in R53."
     },
     {
       "id": "GAP-014",
-      "location": "Part IV - Approach (Data migration)",
+      "location": "Part IV | Approach",
       "gapType": "missing_information",
-      "description": "Record counts, claim/bill/payment volumes, and historical data years not available; RFI directs respondents to CalVCB's Annual Report.",
-      "owner": "Prime",
-      "priority": "Medium",
-      "due": "2026-09-17",
+      "description": "Implementation timeline methodology and examples of implementations completed in the last 5 years are not available.",
+      "owner": "DataBillity",
+      "priority": "High",
+      "due": "2026-09-19",
       "status": "Open",
-      "notes": "Matches known RFI gap R88."
+      "notes": "Directly requested by R108; capability gap if no comparable examples exist."
     },
     {
-      "id": "GAP-015",
-      "location": "Part IV - Approach (Upgrades/enhancements)",
+      "id": "GAP-016",
+      "location": "Part IV | Approach",
       "gapType": "missing_information",
-      "description": "Platform upgrade release frequency and enhancement schedule not confirmed.",
-      "owner": "Prime",
-      "priority": "Medium",
-      "due": "2026-09-17",
+      "description": "Definitions of upgrade/enhancement/configuration change, release cadence, and classification of the nine sample functional items are not established.",
+      "owner": "DataBillity",
+      "priority": "High",
+      "due": "2026-09-19",
       "status": "Open",
-      "notes": "Directly requested by R116, R119."
+      "notes": "Directly requested by R114-R122; nine-item table requires product-specific detail."
     },
     {
-      "id": "GAP-017",
-      "location": "Part IV - Approach (Support)",
-      "gapType": "missing_information",
-      "description": "Support tier structure, hours of coverage, and response-time targets not confirmed.",
-      "owner": "Prime",
-      "priority": "Medium",
-      "due": "2026-09-17",
+      "id": "GAP-018",
+      "location": "Part IV | Approach",
+      "gapType": "unverified_claim",
+      "description": "Alignment with NIST 800-53, FISMA, and SAM 5300, and any GenAI feature governance under SIMM 5305-F, is not confirmed.",
+      "owner": "DataBillity",
+      "priority": "High",
+      "due": "2026-09-19",
       "status": "Open",
-      "notes": "Directly requested by R123, R124; state as typical approach, not a commitment."
+      "notes": "Directly requested by R125; mandatory per R56, R57."
     },
     {
       "id": "GAP-020",
-      "location": "Part V - Costing Model",
-      "gapType": "decision_needed",
-      "description": "Whether data migration cost is included in base implementation cost or billed as a separate line item has not been decided.",
-      "owner": "Prime",
-      "priority": "Medium",
-      "due": "2026-09-17",
+      "location": "Part V | Costing Model",
+      "gapType": "missing_information",
+      "description": "No cost figures, rate cards, or pricing model inputs for DataBillity/Billity AI are available to build a non-binding ROM.",
+      "owner": "DataBillity",
+      "priority": "High",
+      "due": "2026-09-19",
       "status": "Open",
-      "notes": "Directly requested by R113; mirrors issuer's own ambiguity in R95."
+      "notes": "Directly requested by R126; must be labeled non-binding per §1.F when supplied."
+    },
+    {
+      "id": "GAP-007",
+      "location": "Part I | Company Information and Experience",
+      "gapType": "missing_information",
+      "description": "Authorized signatory for the Part I certification has not been identified.",
+      "owner": "DataBillity",
+      "priority": "High",
+      "due": "2026-09-22",
+      "status": "Open",
+      "notes": "Required per R36/§1.F."
+    },
+    {
+      "id": "GAP-006",
+      "location": "Part I | Company Information and Experience",
+      "gapType": "missing_information",
+      "description": "Applicable NAICS code(s) for this response are not confirmed.",
+      "owner": "DataBillity",
+      "priority": "Medium",
+      "due": "2026-09-19",
+      "status": "Open",
+      "notes": ""
+    },
+    {
+      "id": "GAP-008",
+      "location": "Part I | Company Information and Experience",
+      "gapType": "decision_needed",
+      "description": "No teaming partner is confirmed; decide whether one is needed to strengthen government past-performance references.",
+      "owner": "DataBillity",
+      "priority": "Medium",
+      "due": "2026-09-19",
+      "status": "Open",
+      "notes": "If added, partner administrative data (identifiers, size, NAICS, POC) must be supplied."
+    },
+    {
+      "id": "GAP-010",
+      "location": "Part II | Solution",
+      "gapType": "missing_information",
+      "description": "Configuration-vs-customization split for claims/eligibility/correspondence functionality is not defined.",
+      "owner": "DataBillity",
+      "priority": "Medium",
+      "due": "2026-09-19",
+      "status": "Open",
+      "notes": "Directly requested by R105."
+    },
+    {
+      "id": "GAP-011",
+      "location": "Part II | Solution",
+      "gapType": "missing_information",
+      "description": "Accessibility conformance standard and mechanism for absorbing future security/compliance requirements not confirmed.",
+      "owner": "DataBillity",
+      "priority": "Medium",
+      "due": "2026-09-19",
+      "status": "Open",
+      "notes": "Directly requested by R104."
+    },
+    {
+      "id": "GAP-013",
+      "location": "Part III | Integration",
+      "gapType": "clarification",
+      "description": "Whether external online application intake should be replaced or integrated is unresolved in the RFI itself; response should state an assumption.",
+      "owner": "DataBillity",
+      "priority": "Medium",
+      "due": "2026-09-19",
+      "status": "Open",
+      "notes": "Tied to issuer question R97."
+    },
+    {
+      "id": "GAP-015",
+      "location": "Part IV | Approach",
+      "gapType": "missing_information",
+      "description": "Data migration tooling and data validation/cleansing methodology for CaRes data not confirmed.",
+      "owner": "DataBillity",
+      "priority": "Medium",
+      "due": "2026-09-19",
+      "status": "Open",
+      "notes": "Directly requested by R111, R112."
+    },
+    {
+      "id": "GAP-017",
+      "location": "Part IV | Approach",
+      "gapType": "missing_information",
+      "description": "Technical and functional support approach, tiers, and response times not defined.",
+      "owner": "DataBillity",
+      "priority": "Medium",
+      "due": "2026-09-19",
+      "status": "Open",
+      "notes": "Directly requested by R123, R124."
+    },
+    {
+      "id": "GAP-019",
+      "location": "Part IV | Approach",
+      "gapType": "missing_information",
+      "description": "Supportable hosting model(s) among state data center, CDT-approved cloud, or vendor California-compliant cloud are not confirmed.",
+      "owner": "DataBillity",
+      "priority": "Medium",
+      "due": "2026-09-19",
+      "status": "Open",
+      "notes": ""
     },
     {
       "id": "GAP-021",
-      "location": "Part VI - Evaluation (Demonstration)",
-      "gapType": "decision_needed",
-      "description": "Demonstration content and readiness cannot be finalized until product/module scope is confirmed and CalVCB issues demonstration success criteria.",
-      "owner": "Prime",
+      "location": "Part V | Costing Model",
+      "gapType": "missing_information",
+      "description": "Record counts, claim/bill/payment volumes, and historical data years needed to size the cost model must be pulled from the CalVCB Annual Report.",
+      "owner": "DataBillity",
       "priority": "Medium",
-      "due": "2026-10-01",
+      "due": "2026-09-19",
       "status": "Open",
-      "notes": "Demonstrations are anticipated October 2026 per R61; success criteria not yet established per R91. Also register interest in the invite-only demonstration if not already done."
+      "notes": "RFI's own Q&A points here rather than supplying figures (R88)."
     }
   ],
   "sections": [
@@ -425,37 +301,37 @@
       "id": "part-1",
       "ref": "Part I",
       "title": "Company Information and Experience",
-      "body": "DataBillity (Billity AI) responds to this RFI as Prime. Our company background, including size, founding date, and corporate structure, is [GAP-002 | Prime | Confirm company founding date, size, and structure for Part I narrative]. We are not able to state a specific founding year, employee count, or revenue figure in this draft because those facts were not provided; the final submission must include this information as requested (Att. 1 Part I) rather than leave it blank, since the worksheet itself is the entire response and no supplemental company profile may be attached (Att. 3 Q49).\n\nOur platform, DataBillity, is built to support configurable claims, compensation, and benefits administration workflows for government programs. Whether the platform is home-grown or built on a third-party base, and the specific version/architecture in use, is [GAP-003 | Prime | Confirm platform origin: home-grown vs. built on another organization's base, and current version]. This detail is required directly by the worksheet (Att. 1 Part I) and also underpins our answers on scalability and upgrade cadence in Part II and Part IV, so it should be resolved before final submission.\n\nOur experience implementing this or a related solution with other government agencies, including specific department names and the applications implemented, is [GAP-004 | Prime | Supply list of prior government implementations: agency names, applications, dates, outcomes]. We will not cite specific client names, contract numbers, or outcome metrics that are not confirmed in our records, consistent with the requirement to avoid unverifiable claims in a response that becomes a public record (§1.I). Once confirmed, this experience should be summarized here with agency name, application/module implemented, approximate size (users or claim volume), and relevance to CalVCB's claims-and-restitution lifecycle (intake, eligibility, bill review, appeals, adjustments, correspondence), since that is the strongest evidence CalVCB can use to gauge fit.\n\nAdministrative identifiers required for a complete Part I certification and any subsequent teaming record — UEI, CAGE code, NAICS code(s), business size, and socioeconomic status — are [GAP-018 | Prime | Supply UEI, CAGE, NAICS code(s), business size, and socioeconomic status for certification]. These must be confirmed and entered before the signed certification required in Part I can be executed (Att. 1 instructions).\n\nIf DataBillity intends to name confirmed subcontractors or partners in this response, each partner's administrative information (legal name, address, identifiers, size/socioeconomic status, NAICS, contract vehicles, and point of contact) must also be supplied; no partners are confirmed in the facts available for this draft, so no partner-specific experience or identifiers are cited here. Given the 10-page ceiling and the prohibition on supplemental attachments (Att. 3 Q49), we recommend limiting Part I to Prime-company information plus, if space allows, a single-line summary of any confirmed partner's role — full partner qualification detail would need to compete for the same page budget as the technical answers in Parts II through VI."
+      "body": "DataBillity (Billity AI) responds to RFI 26-001 as Prime, with company background, size, and founding details to be confirmed prior to submission. [GAP-002 | DataBillity | Confirm company founding date, headcount, and corporate history for Part I background question]. Our proposed solution's technical foundation — whether built natively by DataBillity or based on licensed/partner platform components — is not yet documented in the grounding facts and must be confirmed before we can accurately answer whether the platform is home-grown or built on another organization's base. [GAP-003 | DataBillity | Confirm whether the Billity AI platform is home-grown or built on a third-party/partner platform, and document the technical lineage]. Regarding government experience: the grounding facts contain no confirmed prior implementations with government agencies, department names, or specific applications delivered. Rather than assert unverified past performance, we flag this as an open item: if DataBillity or a partner has relevant state or local government claims, benefits, or compensation-system experience, that reference detail (agency name, system implemented, dates, scale) must be supplied before submission. [GAP-004 | DataBillity | Provide specific government agency references, systems implemented, and dates, or confirm none exist and adjust the response accordingly]. Administrative identifiers required for a compliant Part I submission — UEI, CAGE code, business size determination, and any socioeneconomic certifications (e.g., small business, disadvantaged business enterprise) — are not present in the grounding facts and cannot be fabricated. [GAP-005 | DataBillity | Supply UEI, CAGE code (if applicable for state work), business size, and socioeconomic status certifications]. Applicable NAICS code(s) for this engagement (e.g., custom computer programming services or computer systems design) must also be confirmed by DataBillity rather than assumed. [GAP-006 | DataBillity | Confirm applicable NAICS code(s) for this response]. The signed certification required in Part I per §1.F/Att. 1 must be executed by an authorized DataBillity representative prior to submission. [GAP-007 | DataBillity | Identify authorized signatory and execute Part I certification]. No confirmed subcontractor or teaming partner is named in the grounding facts for this response; if a partner is added to close a capability gap (e.g., prior state-government claims-system implementation), that partner's name, address, identifiers, size/socioeconomic status, NAICS, contract vehicles, and point of contact would need to be added here as its own administrative block. [GAP-008 | DataBillity | Decide whether a teaming partner is needed to strengthen government past-performance references, and if so supply that partner's administrative data]."
     },
     {
       "id": "part-2",
       "ref": "Part II",
       "title": "Solution",
-      "body": "Our proposed solution is a configurable claims, compensation, and restitution platform intended to replace the custom-coded functionality in CaRes with rules-driven, no-code/low-code workflows, directly addressing the ten challenge items CalVCB describes (§1.D items 1-10). Specifically: (1) workflow, correspondence, and reporting changes would be handled through configuration rather than custom code, addressing the agility gap in challenge items 1, 4, and 10 (R42); (2) an adjustments module would track returned payments against lifetime limits without requiring code changes or reliance on external databases, addressing item 2; (3) a configurable appeals workflow would replace the current externally tracked, manually integrated process, addressing item 3; (4) a correspondence engine would generate letters from templates rather than hard-coded logic, with support for languages beyond English and Spanish subject to confirming the full required language list, addressing item 4; (5) an attribute-level audit trail would record who took what action at each phase, addressing item 5; (6) provider information would be integrated with claim records rather than held separately, addressing item 8; and (7) system-enforced separation-of-duties warnings and notifications would replace manual controls, addressing item 9.\n\nWhether the online application intake (item 6) is replaced outright or integrated with the new system of record depends on CalVCB's intent, which the RFI itself leaves open [GAP-007 | Prime | Confirm with issuer whether external online application service is to be replaced or integrated — see Questions for Issuer]; our approach supports either path, since intake can be configured as a native module or as an integration point.\n\nThe specific products and modules that make up our proposed solution — including which are used off-the-shelf, which require configuration, and which would require custom development to meet CalVCB's challenge statement — are [GAP-008 | Prime | Confirm product/module list and classify each as off-the-shelf, configured, or customized for CalVCB's ten challenge items]. We are not able to state definitive module names or off-the-shelf/configured/customized status without this confirmation, and we flag this as a capability-scoping gap rather than assume coverage we cannot verify.\n\nOn scalability and flexibility: our typical approach is to build on a platform architecture that separates configuration (workflows, rules, letters, reports) from code, so that future changes in security, accessibility, or compliance requirements — for example, evolving NIST 800-53 controls, accessibility standards, or new SIMM/SAM policy on GenAI use (R57) — can be accommodated through configuration and platform upgrades rather than custom rework. This design pattern also supports the 350-400 role-based users across CalVCB headquarters and county JP and CRC offices (R30) without architectural change, since role-based configuration is intended to scale by adding roles and permissions rather than new code paths. Confirmation of our platform's specific accessibility conformance level (e.g., WCAG version) is [GAP-009 | Prime | Confirm accessibility conformance standard and version supported by the platform]."
+      "body": "Our proposed solution is intended to directly address the ten challenge items CalVCB names (§1.D), particularly the lack of agility in functionality changes (item 1), the absence of an adjustments module (item 2), no appeals workflow (item 3), no correspondence engine (item 4), and no attribute-level audit trail (item 9), by offering configurable workflows, rules, letters, and reports that can be changed without custom coding, consistent with the target end state CalVCB describes (R31, R53). Specific configuration mechanisms, rules-engine architecture, and out-of-the-box module names for Billity AI are not detailed in the grounding facts, so we cannot yet state precisely which named modules map to which challenge item. [GAP-009 | DataBillity | Provide product/module names and confirm mapping to each of the 10 challenge items, including adjustments, appeals, correspondence, and audit trail modules]. On the off-the-shelf vs. configured vs. customized question (R105, R63), our typical approach is to lead with configuration over custom code wherever the platform supports it, since CalVCB's stated problem is coding-dependent change (R42); the specific balance of COTS, configuration, and any custom work for CalVCB's nine sample changes cannot be stated without confirmed platform capability detail. [GAP-010 | DataBillity | Classify Billity AI's typical configuration-vs-customization split for claims/eligibility/correspondence functionality]. On scalability and flexibility for future security, accessibility, and compliance needs (R104, R17), our typical approach is to design for evolving standards rather than point-in-time compliance, but specific mechanisms (e.g., role-based access control extensibility, accessibility conformance level such as WCAG, and how the platform absorbs new NIST/FISMA/SAM control updates) require confirmation. [GAP-011 | DataBillity | Confirm platform's accessibility conformance standard and mechanism for absorbing new security/compliance requirements over time]. We note the RFI leaves the underlying solution-approach decision open — COTS, MOTS, integrated product set, COTS Configurable, or custom (R41) — and recommend CalVCB weigh total cost of ownership and long-term agility, not just initial fit, given the challenge theme of change being coding-dependent (R42)."
     },
     {
       "id": "part-3",
       "ref": "Part III",
       "title": "Integration (Inputs and Outputs)",
-      "body": "Our platform is intended to support integration with the systems CalVCB has identified as in scope: the existing Bill Review Service, the State Controller's Office, the Franchise Tax Board, EDD, and TotalAgility (R53, R79). Our typical approach to integration uses standard, documented APIs and file-based exchange methods appropriate to each partner system's own interface capabilities; the specific integration method (API, secure file transfer, or middleware) for each of these five systems has not been confirmed against our platform's current connector library, so this is [GAP-010 | Prime | Confirm specific integration method — API, SFTP, or middleware — for Bill Review Service, SCO, FTB, EDD, and TotalAgility].\n\nOn the bill-adjudication interface specifically, the RFI states the solution must at minimum support the existing interface, with integrated adjudication open for consideration (R54). We would propose supporting the existing interface as the baseline and treating a more tightly integrated adjudication workflow as a configuration option to be scoped once CalVCB's adjudication rules and auto-payment logic are documented in detail.\n\nWe note that the RFI's own Q&A leaves open whether exchanges with the Department of Justice, crime-reporting agencies, and courts are in scope as required integrations, since the narrative describes these exchanges as part of eligibility determination but the Q&A integration list omits them (R96). We recommend CalVCB clarify this before a future solicitation is issued, since it materially affects integration scope and cost — see Questions for the Issuer.\n\nInput/output capabilities of our platform, including supported file formats, batch versus real-time exchange, and reporting export formats (e.g., replacing the current SSRS/Power BI reporting stack, R83), are described only generally here because specific technical specifications (API standards supported, data formats, throughput limits) are [GAP-012 | Prime | Confirm specific I/O technical specifications: supported API standards, file formats, batch/real-time capability, and reporting export formats]. Our typical approach is to expose configurable report builders and standard export formats (e.g., CSV, PDF) alongside role-based dashboards, intended to reduce the current dependency on custom SSRS/Power BI development for report changes (item 10)."
+      "body": "CalVCB's target end state requires integration at minimum with the existing Bill Review Service, the State Controller's Office, the Franchise Tax Board, EDD, and TotalAgility (R53), and the solution must at minimum support the existing bill-adjudication interface, with integrated adjudication considered as an option (R54). Our typical approach to input/output capability is to expose standard integration methods (e.g., API-based and file-based exchange) appropriate to each named system, but the specific interface protocols, data formats, and connection methods Billity AI supports for these five named integrations are not yet confirmed. [GAP-012 | DataBillity | Confirm supported integration methods (API, SFTP, batch, etc.) for Bill Review Service, SCO, FTB, EDD, and TotalAgility]. The RFI's own Q&A leaves open whether exchanges with the Department of Justice, crime-reporting agencies, and courts are in scope as required integrations, since the narrative describes them as part of eligibility determination but the Q&A integration list omits them (R96); we recommend CalVCB clarify this before a future solicitation, and we would size our integration approach accordingly once confirmed. Similarly, whether the external online application service is meant to be replaced or integrated going forward is unresolved in the RFI text (R97); our typical approach supports either path — replacing the external intake with a native, integrated online application (closing challenge item 6, R10) or integrating with the existing external service — but the correct target must be confirmed. [GAP-013 | DataBillity | Confirm with CalVCB (or state assumption) whether external online application intake is to be replaced or integrated, and adjust integration scope accordingly]. Migration inputs are scoped to active claims plus full history and supporting documents from CaRes, explicitly excluding external databases (R58, R33); our typical data migration approach and specific ETL tooling for this scale are addressed in Part IV."
     },
     {
       "id": "part-4",
       "ref": "Part IV",
       "title": "Approach",
-      "body": "Implementation methodology and timeline: Our typical approach to a modernization of this scope is a phased implementation beginning with business process discovery and requirements confirmation, followed by iterative configuration, integration build-out, data migration, and user acceptance testing, then phased or full cutover depending on CalVCB's risk tolerance. Because no budget, funding range, or implementation timeline has been established for this effort (R59, R90), we do not commit to a specific duration here; a representative timeline based on comparable implementations is [GAP-013 | Prime | Provide representative implementation timeline example from a comparable engagement within the last 5 years, per R108]. We recommend CalVCB consider a phased rollout — for example, HQ headquarters functions first, followed by county JP and CRC office rollout — to manage the 350-400 role-based user transition (R30), though a single-cutover approach remains viable and the RFI does not state a preference (R41).\n\nBusiness-understanding approach: our typical approach begins with structured discovery sessions mapped to CalVCB's stated challenge themes — agility and change cost, missing functions and workarounds, controls and audit, and usability/accessibility (R42-R45) — to validate root causes before configuration begins, rather than assuming the ten listed challenge items are exhaustive.\n\nUser acceptance testing: our typical approach uses role-based UAT scripts tied to each workflow (intake, eligibility, emergency awards, bill review, appeals, adjustments, restitution/offender tracking, correspondence), executed by CalVCB HQ, JP, and CRC representatives before cutover, with defect triage and resolution cycles prior to sign-off.\n\nData validation and migration: our typical approach validates source data in CaRes against target data models before migration, using reconciliation reports to confirm record counts, claim status, and document completeness match between source and target. Migration scope, per the RFI, is active claims with full history and supporting documents; external databases are explicitly excluded (R58). Specific record counts and historical data volumes are not available to us; the RFI itself directs respondents to CalVCB's Annual Report for these figures (R88), so our cost and effort estimates in Part V are stated as planning-level assumptions pending that data [GAP-014 | Prime | Pull record counts, claim/bill/payment volumes, and historical data years from CalVCB Annual Report before finalizing migration approach and cost]. Whether data migration is included in the base cost or billed separately is addressed in Part V.\n\nUpgrades, enhancements, and configuration changes: our typical approach defines a system/platform upgrade as a vendor-released change to the core platform (e.g., security patch, version release) that CalVCB does not need to fund individually; an enhancement as a new capability added to the platform roadmap, potentially available to all customers; and a configuration change as a CalVCB-specific adjustment to workflows, rules, letters, or reports made within the existing platform without code changes. Our specific upgrade release cadence and enhancement schedule are [GAP-015 | Prime | Confirm platform upgrade release frequency and enhancement release schedule]. Classification of the nine sample functional change items referenced in Attachment 1 against these three categories requires the actual item list, which is not included in the facts available for this draft: [GAP-016 | Prime | Obtain the nine sample functional change items from Attachment 1 and classify each as System Upgrade, Enhancement, or Configuration].\n\nIT technical and functional support: our typical approach provides tiered support — technical support for platform/infrastructure issues and functional support for workflow/configuration questions — with defined service levels. Specific support tiers, hours, and response-time commitments applicable to this engagement are [GAP-017 | Prime | Confirm support tier structure, hours of coverage, and response-time targets to state as our typical approach, not a binding commitment].\n\nSecurity and compliance: CalVCB requires compliance with NIST 800-53, FISMA, and SAM 5300, with no CJIS or IRS 1075 requirement (R56), and any GenAI use must follow SIMM 5305-F and SAM 5300 (R57). Whether our platform currently meets or maps to these specific standards, including any independent assessment or authorization status, is [GAP-011 | Prime | Confirm platform's current compliance posture and any certifications/assessments against NIST 800-53, FISMA, and SAM 5300]. We would not propose GenAI features for this engagement unless and until governance under SIMM 5305-F is scoped with CalVCB."
+      "body": "Implementation methodology: our typical approach to a modernization of this type begins with a business-understanding phase to document current-state workflows across the ten named challenge items (R5-R14) before configuration begins, given CalVCB's stated need to move from coding-dependent change to configurable, agile workflows (R4, R42). A specific phased implementation timeline for CalVCB, and examples of comparable implementations completed within the last 5 years, cannot be provided from the grounding facts as supplied. [GAP-014 | DataBillity | Provide implementation timeline methodology and specific examples of implementations completed in the last 5 years, per Att. 1 Part IV]. User acceptance testing: our typical UAT approach is to test each configured workflow against the business rules it was configured to enforce, with CalVCB business users validating outcomes before go-live; role-specific UAT scenarios for the 350-400 HQ, JP, and CRC users (R30) would need to be scoped jointly with CalVCB once business processes are documented. Data validation and migration: our typical approach is to validate source data completeness and integrity against CaRes records before migrating active claims with full history and documents (R33, R76), excluding external databases per the stated scope (R58); the specific migration tooling and data-quality remediation approach for CalVCB's data are not yet confirmed. [GAP-015 | DataBillity | Confirm data migration tooling and specific data validation/cleansing methodology for CaRes data]. Whether data migration is included in the base cost or billed separately is addressed in Part V, noting the RFI's own Q48 answer does not clarify treatment of data cleansing costs (R95) — we recommend CalVCB clarify this before a future solicitation. Upgrades, enhancements, and configuration changes: our solution's definitions of system/platform upgrade versus enhancement versus configuration change, our release cadence, and our classification of the nine sample changes CalVCB will provide, are not yet established for this response. [GAP-016 | DataBillity | Define upgrade vs. enhancement vs. configuration change for Billity AI, state upgrade/enhancement release cadence, and classify the nine sample functional items requested in Att. 1 Part IV]. IT technical and functional support: our typical approach separates technical support (platform availability, defect resolution) from functional support (business-rule and configuration assistance to CalVCB staff), but specific service-level commitments, support tiers, and staffing model for CalVCB are not yet defined. [GAP-017 | DataBillity | Define technical and functional support approach, including support tiers and typical response times]. Security and compliance: CalVCB requires alignment with NIST 800-53, FISMA, and SAM 5300, with no CJIS or IRS 1075 requirement (R56), and any GenAI use must follow SIMM 5305-F and SAM 5300 (R57). Whether Billity AI currently maps its controls to NIST 800-53/FISMA/SAM 5300, and whether any GenAI features are part of the proposed solution, must be confirmed rather than assumed. [GAP-018 | DataBillity | Confirm current security control framework alignment (NIST 800-53, FISMA, SAM 5300) and whether GenAI features are part of the proposed solution, with SIMM 5305-F governance if so]. Hosting: State data center, CDT-approved cloud, or a vendor's California-compliant cloud are all acceptable to CalVCB (R55); our typical approach supports multiple hosting models, but which model(s) Billity AI can support for a California state government workload is not yet confirmed. [GAP-019 | DataBillity | Confirm which hosting model(s) — state data center, CDT-approved cloud, vendor California-compliant cloud — Billity AI can support]."
     },
     {
       "id": "part-5",
       "ref": "Part V",
       "title": "Costing Model",
-      "body": "No budget, funding range, or implementation timeline has been established by CalVCB for this effort (R59, R90), and the RFI requests a non-binding cost model for planning purposes only, broken down by one-time versus recurring cost, module, and phase (R60). Consistent with that instruction, any figures in our final submission would be labeled explicitly as a rough order of magnitude (ROM), not a quote or offer, and tied to stated sizing assumptions (350-400 internal/county role-based users, per R30; external user volume unconfirmed, per R98).\n\nWe are not able to provide dollar figures in this draft because no pricing inputs were supplied in the grounding facts available to us: [GAP-019 | Prime | Supply ROM cost inputs for implementation, product/license, maintenance, support, and training, broken down by one-time vs. recurring and by phase, explicitly labeled non-binding]. Once supplied, the cost model should be organized by: (1) one-time implementation costs (discovery, configuration, integration build, data migration, testing, training/OCM); (2) recurring costs (licensing/subscription, maintenance, ongoing support); and (3) module-level breakdown aligned to the functional areas in Part II (intake, eligibility, bill review, appeals, adjustments, correspondence, reporting).\n\nOn data migration cost treatment specifically: whether migration effort is included in base implementation cost or billed as a separate line item is [GAP-020 | Prime | Decide and state whether data migration is included in base cost or billed separately, consistent with R113]. We recommend stating this explicitly either way, since the RFI's own Q&A left this ambiguous for CalVCB as well (R95) — see Questions for the Issuer.\n\nAll cost figures in the final submission would carry the sizing-assumption caveat required by §1.F: assumptions about user counts, data volumes, and integration count materially affect the estimate, and actual pricing would depend on requirements confirmed during a future, more detailed procurement."
+      "body": "CalVCB has explicitly stated that no budget, funding range, or implementation timeline has been established (R59, R90), and requests a non-binding cost model broken down by one-time vs. recurring cost, module, and phase, with sizing assumptions stated (R60, R72). No cost figures, rate cards, or pricing models for DataBillity/Billity AI are present in the grounding facts, so we cannot provide a rough order of magnitude at this time; any cost figures included in the final response must come from DataBillity's actual pricing and be explicitly labeled non-binding, for planning purposes only, per §1.F. [GAP-020 | DataBillity | Supply cost model inputs (implementation, product/license, maintenance, support, training) broken out by one-time vs. recurring, module, and phase, sized against the 350-400 role-based user count in R30] Whether data migration and data cleansing/remediation costs are included in the base estimate or shown as a separate line item is itself unresolved in the RFI's own Q&A (R95); we recommend stating both options with the assumption made explicit. We would size any cost model against the population figures CalVCB has published — noting the RFI's own Q&A points respondents to the CalVCB Annual Report for record counts, claim/bill/payment volumes, and historical data years rather than supplying them directly (R88). [GAP-021 | DataBillity | Pull record counts, claim/bill/payment volumes, and historical data years from the CalVCB Annual Report to ground the cost model's sizing assumptions]."
     },
     {
       "id": "part-6",
       "ref": "Part VI",
       "title": "Evaluation",
-      "body": "CalVCB has not yet decided the solution approach (COTS, MOTS, integrated product set, COTS Configurable, or custom), phased versus single cutover, or whether this effort remains a technology replacement versus a broader business transformation (R41). We recommend CalVCB use the upcoming invite-only demonstrations (R61) to evaluate configurability directly — specifically, ask each vendor to demonstrate making a workflow, correspondence template, or report change live, without code, since the ten challenge items are fundamentally about configuration agility (R42-R45) rather than any single missing feature. We also recommend CalVCB establish demonstration success criteria before October 2026, since none currently exist (R91); criteria tied to the nine challenge-item categories (adjustments, appeals, correspondence, audit trail, separation of duties, reporting) would let CalVCB score vendors consistently.\n\nOn scope, we recommend CalVCB resolve, before the future solicitation is issued, whether the external online application service is to be replaced or integrated (R97), whether DOJ/crime-reporting/court exchanges are in-scope integrations (R96), and what external user volume (claimants, providers, advocates, court personnel) should be assumed for licensing and capacity planning beyond the 350-400 internal/county users (R98) — each of these affects both technical architecture and cost estimates materially enough that leaving them open in a future RFP would produce inconsistent vendor responses.\n\nOn cost comparability, we recommend the future solicitation specify whether data cleansing/remediation should be priced in the base estimate or as an optional line item (R95), so that vendor cost models can be compared on equal terms.\n\nRegarding the solution demonstration itself (§1.G), our readiness and specific demonstration content would depend on confirmation of the module/product scope in Part II: [GAP-021 | Prime | Prepare demonstration scenarios once product/module scope is confirmed and CalVCB issues demonstration success criteria].\n\n[GAP-001 | Prime | RFI due date of 2026-09-24 needs verification against Cal eProcure for amendments, extension, or reissuance before submission.]\n\n[GAP-005 | Prime | Unclear whether the 10-page limit includes worksheet question text, Part I company info, and signature block, or only respondent answers.]\n\n[GAP-006 | Prime | Conflict between §1.F implying accompanying written response content and Att. 3 Q49 prohibiting supplemental attachments; unclear if a brief cover note is allowed and whether it counts toward the page limit.]\n\n[GAP-022 | Prime | No confirmation that DataBillity has registered or been invited to the October 2026 invite-only demonstrations.]"
+      "body": "Recommendations for the future solicitation: First, we recommend CalVCB resolve, before releasing a formal solicitation, the open questions its own Q&A leaves unanswered — particularly the solution-approach preference among COTS, MOTS, integrated product set, COTS Configurable, or custom (R41), and phased vs. single cutover vs. broader business transformation scope (R41, R86) — since these materially change vendor cost models and implementation risk. Second, we recommend CalVCB publish, ahead of the solicitation, the external online application's future disposition (replace vs. integrate, R97), the DOJ/court/crime-reporting integration scope (R96), external user volumes for licensing (R98), and demonstration success criteria (R91), since each of these currently requires a vendor assumption that could otherwise be inconsistent across responses. Third, given the challenge theme of manual, coding-dependent change driving the named consequences — higher call/escalation volume, inconsistent information across divisions, and increased time to approval and payment (R46-R52) — we recommend the future solicitation weight configurability and low-code change management heavily in evaluation criteria, not just initial functional fit. Fourth, we recommend CalVCB clarify the Attachment 1 page-limit scope (whether it includes worksheet question text and Part I company information, R93) and reconcile the apparent conflict between §1.F's reference to written responses and Att. 3 Q49's prohibition on supplemental attachments (R94), so vendors are not penalized inconsistently for formatting choices. Additional requirements CalVCB should consider adding to the future solicitation: multilingual correspondence beyond English/Spanish given the stated gap (R8, R45, R89), attribute-level audit trail and automated separation-of-duties as explicit, testable requirements (R9, R13, R34, R44) rather than narrative description, and a defined records-renaming capability so uploaded documents do not require re-upload to correct a filename error (R11).\n\n[GAP-001 | DataBillity | The stated RFI due date (2026-09-24) appears to be in the future relative to typical processing but should be verified against Cal eProcure for amendments, extensions, or a superseding solicitation before submission.]"
     }
   ]
 }

@@ -104,15 +104,17 @@ export function collectResponseFacts(
     push("rfp", `Source excerpt: ${pursuit.sourceExcerpt.trim()}`);
   }
 
-  push("account", "DataBillity responds as Prime. Do not invent UEI, CAGE, NAICS, size, or socioeconomic status.");
+  const primePartner = (briefing.partners ?? []).find(p => p.role === "Prime" || p.role === "prime");
+  const primeName = primePartner?.name ?? "DataBillity";
+  push("account", `${primeName} responds as Prime. Do not invent UEI, CAGE, NAICS, size, or socioeconomic status. When assigning action items or gaps, use "${primeName}" as the owner name instead of the generic "Prime".`);
   for (const partner of briefing.partners ?? []) {
     const covers = partner.covers.filter(Boolean);
     push(
       "account",
       `Teaming partner ${partner.name}${partner.role ? `. Directory type: ${partner.role}` : ""}. ${
         partner.confirmed
-          ? "Confirmed on this response. Gap owner, if needed: Partner: " + partner.name + "."
-          : "Not confirmed on this response. Do not assign gaps to this partner; assign Prime and mention the partner in notes."
+          ? `Confirmed on this response. Gap owner, if needed: Partner: ${partner.name}.`
+          : `Not confirmed on this response. Do not assign gaps to this partner; assign ${primeName} and mention the partner in notes.`
       }${covers.length ? ` Covers: ${covers.join(", ")}.` : ""}${partner.summary ? ` ${partner.summary}` : ""}`,
     );
   }

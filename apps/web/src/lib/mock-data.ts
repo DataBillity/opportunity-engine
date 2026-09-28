@@ -119,6 +119,7 @@ export interface Pursuit {
     retention: string;
   };
   responseActionItems?: ResponseActionItem[];
+  includedPartnerIds?: string[];
   rfiResponse?: RfiResponseMeta;
   complianceMatrix?: { ref: string; title: string; sectionId: string }[];
   draftStatus?: "In Draft" | "Submitted" | "On Hold" | "Canceled";
@@ -200,6 +201,14 @@ export interface Partner {
   note: string;
   summary: string;
   createdAt: string;
+  yearFounded?: string;
+  hqAddress?: string;
+  hqPhone?: string;
+  hqEmail?: string;
+  primaryContact?: string;
+  employeeHeadcount?: string;
+  ein?: string;
+  uei?: string;
   _sharedCapIds?: string[];
   _sharedExpIds?: string[];
 }
@@ -448,7 +457,7 @@ export const pursuits: Record<string, Pursuit> = {
     responseActionItems: [
       { id: "RAI-01", kind: "missing_info", description: "Confirm Priya Nandakumar's availability start date.", expectedResponseType: "text", relatedSection: "pers", assignedPartnerId: "PTR-U", assignedInternal: null, dueAt: "2026-09-20", status: "Open", gates: ["proposal_section:pers"], responseContent: "", responseDocument: null },
       { id: "RAI-02", kind: "missing_info", description: "Provide an updated E&O certificate.", expectedResponseType: "file", relatedSection: "mgmt", assignedPartnerId: "PTR-U", assignedInternal: null, dueAt: "2026-09-18", status: "Open", gates: ["proposal_section:mgmt"], responseContent: "", responseDocument: null },
-      { id: "RAI-03", kind: "other", description: "Subcontracting plan percentage breakdown not yet finalized.", expectedResponseType: "text", relatedSection: "mgmt", assignedPartnerId: null, assignedInternal: "M. Alvarez", dueAt: "2026-09-22", status: "Open", gates: ["proposal_section:mgmt"], responseContent: "", responseDocument: null },
+      { id: "RAI-03", kind: "other", description: "Subcontracting plan percentage breakdown not yet finalized.", expectedResponseType: "text", relatedSection: "mgmt", assignedPartnerId: "PTR-U", assignedInternal: "M. Alvarez", dueAt: "2026-09-22", status: "Open", gates: ["proposal_section:mgmt"], responseContent: "", responseDocument: null },
     ],
     rfund: { lane: "B", tier: "advisory", score: 19, note: "Legacy migration against a well-established pattern — largely replication, not new technical uncertainty." },
     decisionRecord: { id: "DEC-87990", type: "D4 — Go/No-Go triage", subject: "Project OPP-2219", model: "triage-v3 / prompt v1.8 / graph v204", reviewer: "J. Tran (Bid Manager)", action: "Confirmed Go, 08/22", retention: "3 years minimum" },
@@ -456,9 +465,9 @@ export const pursuits: Record<string, Pursuit> = {
 };
 
 export const partnerDirectory: Partner[] = [
-  { id: "PTR-U", name: "Union Systems Group", type: "Prime", website: "https://unionsystemsgroup.com", repo: "https://drive.google.com/drive/folders/union-systems-shared", contact: "Priya Nandakumar", contactEmail: "priya.nandakumar@unionsystemsgroup.com", status: "Active", teamingAgreementSigned: null, accessTier: null, covers: [], note: "", summary: "Consortium prime for public-sector modernization and claims platforms.", createdAt: "2025-11-04" },
-  { id: "PTR-M", name: "Meridian Analytics", type: "Prime", website: "https://meridiananalytics.io", repo: "https://drive.google.com/drive/folders/meridian-shared", contact: "Owen Fitzgerald", contactEmail: "owen.fitzgerald@meridiananalytics.io", status: "Active", teamingAgreementSigned: null, accessTier: null, covers: [], note: "", summary: "Analytics partner focused on fraud detection and financial reconciliation.", createdAt: "2025-12-12" },
-  { id: "PTR-H", name: "Harbor Digital", type: "Prime", website: "https://harbordigital.com", repo: "https://github.com/harbor-digital/shared-capability-docs", contact: "Ann Okafor", contactEmail: "ann.okafor@harbordigital.com", status: "Active", teamingAgreementSigned: null, accessTier: null, covers: [], note: "", summary: "Healthcare data and digital-experience delivery partner.", createdAt: "2026-01-18" },
+  { id: "PTR-U", name: "Union Systems Group", type: "Prime", website: "https://unionsystemsgroup.com", repo: "https://drive.google.com/drive/folders/union-systems-shared", contact: "Priya Nandakumar", contactEmail: "priya.nandakumar@unionsystemsgroup.com", status: "Active", teamingAgreementSigned: null, accessTier: null, covers: [], note: "", summary: "Consortium prime for public-sector modernization and claims platforms.", createdAt: "2025-11-04", yearFounded: "2018", hqAddress: "1200 NW Marshall St, Suite 400, Portland, OR 97209", hqPhone: "(503) 555-0142", hqEmail: "info@unionsystemsgroup.com", primaryContact: "Priya Nandakumar", employeeHeadcount: "85", ein: "83-1234567", uei: "U8K9UNSG001" },
+  { id: "PTR-M", name: "Meridian Analytics", type: "Prime", website: "https://meridiananalytics.io", repo: "https://drive.google.com/drive/folders/meridian-shared", contact: "Owen Fitzgerald", contactEmail: "owen.fitzgerald@meridiananalytics.io", status: "Active", teamingAgreementSigned: null, accessTier: null, covers: [], note: "", summary: "Analytics partner focused on fraud detection and financial reconciliation.", createdAt: "2025-12-12", yearFounded: "2015", hqAddress: "800 5th Ave, Suite 1100, Seattle, WA 98104", hqPhone: "(206) 555-0198", hqEmail: "contact@meridiananalytics.io", primaryContact: "Owen Fitzgerald", employeeHeadcount: "52", ein: "47-9876543", uei: "M3R1MERA012" },
+  { id: "PTR-H", name: "Harbor Digital", type: "Prime", website: "https://harbordigital.com", repo: "https://github.com/harbor-digital/shared-capability-docs", contact: "Ann Okafor", contactEmail: "ann.okafor@harbordigital.com", status: "Active", teamingAgreementSigned: null, accessTier: null, covers: [], note: "", summary: "Healthcare data and digital-experience delivery partner.", createdAt: "2026-01-18", yearFounded: "2020", hqAddress: "450 Lexington Ave, New York, NY 10017", hqPhone: "(212) 555-0234", hqEmail: "hello@harbordigital.com", primaryContact: "Ann Okafor", employeeHeadcount: "38" },
   { id: "PTR-CIRRUS", name: "Cirrus Federal Compliance Partners", type: "Subcontractor", website: "https://cirrusfederal.com", repo: "—", contact: "Lena Ortiz", contactEmail: "lena.ortiz@cirrusfederal.com", status: "Active", teamingAgreementSigned: true, accessTier: "self_service_roster", covers: ["GAP-114"], note: "FedRAMP Moderate ATO, 4 production authorizations", summary: "FedRAMP Moderate ATO, 4 production authorizations.", createdAt: "2026-03-02" },
   { id: "PTR-NORTHPEAK", name: "NorthPeak Transit Systems", type: "Subcontractor", website: "https://northpeaktransit.com", repo: "—", contact: "Chris Vale", contactEmail: "chris.vale@northpeaktransit.com", status: "Active", teamingAgreementSigned: false, accessTier: "task_only", covers: ["GAP-089"], note: "GTFS-realtime / AVL integration, 3 prior transit deployments", summary: "GTFS-realtime / AVL integration, 3 prior transit deployments.", createdAt: "2026-04-21" },
   { id: "PTR-ALLUVIA", name: "Alluvia Data Partners", type: "Subcontractor", website: "—", repo: "—", contact: "Maya Chen", contactEmail: "maya.chen@alluviadata.com", status: "Active", teamingAgreementSigned: false, accessTier: "task_only", covers: ["GAP-089"], note: "AVL integration, 1 prior deployment", summary: "AVL integration specialist with one prior transit deployment.", createdAt: "2026-06-09" },
@@ -502,6 +511,14 @@ export const searchResults: SearchResult[] = [
 
 export function getPartner(id: string, partners: Partner[] = partnerDirectory): Partner | undefined {
   return partners.find(p => p.id === id);
+}
+
+export function getPrimePartner(partners: Partner[] = partnerDirectory): Partner | undefined {
+  return partners.find(p => p.type === "Prime" && p.status !== "Archived");
+}
+
+export function getPrimePartnerName(partners: Partner[] = partnerDirectory): string {
+  return getPrimePartner(partners)?.name ?? "Prime";
 }
 
 export function isArchivedStatus(status: string): boolean {
