@@ -21,7 +21,7 @@ import {
   thresholdsFor,
 } from "./project-type";
 import { buildHeuristicRfiSummary, mergeRfiSummaries } from "./rfi-summary";
-import { normalizeSolicitationText } from "./document-text";
+import { DOCUMENT_LABEL, normalizeSolicitationText } from "./document-text";
 
 export interface OrgTriageContext {
   name: string;
@@ -44,15 +44,33 @@ export function capSourceText(text: string): { text: string; truncated: boolean 
   return { text: normalized, truncated: false };
 }
 
+/**
+ * Overlay model fields on the heuristic extraction. With `trustOverlayScope`, the model's
+ * scope fields stand as returned: an empty field stays empty rather than being filled
+ * with heuristic sentence matches.
+ */
 export function mergeSolicitationExtractions(
   base: SolicitationExtraction,
   overlay: Partial<SolicitationExtraction> | null | undefined,
+  options: { trustOverlayScope?: boolean } = {},
 ): SolicitationExtraction {
   if (!overlay) return base;
   const pickList = (preferred?: string[], fallback?: string[]) => {
     const next = (preferred ?? []).map(s => s.trim()).filter(Boolean);
     return next.length ? next : (fallback ?? []);
   };
+  if (options.trustOverlayScope) {
+    const merged = mergeSolicitationExtractions(base, overlay);
+    const own = (list?: string[]) => (list ?? []).map(s => s.trim()).filter(Boolean);
+    return {
+      ...merged,
+      objective: own(overlay.objective),
+      challenges: own(overlay.challenges),
+      services: own(overlay.services),
+      deliverables: own(overlay.deliverables),
+      rfiSummary: overlay.rfiSummary ?? base.rfiSummary,
+    };
+  }
   const overlayReqs = (overlay.requirements ?? []).filter(r => r.requirementText?.trim());
   return {
     inferredName: overlay.inferredName?.trim() || base.inferredName,
@@ -76,7 +94,7 @@ export function extractSolicitationHeuristic(
   filename: string,
   projectType: ProjectType = "rfp",
 ): SolicitationExtraction {
-  const text = normalizeSolicitationText(rawText);
+  const text = normalizeSolicitationText(rawText.replace(DOCUMENT_LABEL, ""));
   const stem = filename.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
   const due = extractDueDate(text);
   const solicitationRef = extractSolicitationRef(text) || undefined;

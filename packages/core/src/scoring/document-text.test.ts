@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeSolicitationText } from "./document-text";
+import { combineSolicitationDocuments, normalizeSolicitationText, orderSolicitationDocuments } from "./document-text";
 import { extractSolicitationHeuristic } from "./pursuit-triage";
 
 const header = "California Victim Compensation Board (CalVCB)\nRFI 26-001";
@@ -68,6 +68,37 @@ describe("normalizeSolicitationText", () => {
     expect(text).not.toContain("California Victim Compensation Board (CalVCB)");
     expect(text).toContain("D. CURRENT CHALLENGES");
     expect(text).toContain("A: No preference.");
+  });
+});
+
+describe("combining uploaded documents", () => {
+  const upload = [
+    { name: "26-001_CalVCB_2026_RFI_Modernization_Solution_Attachment_3.pdf", text: "Response to Vendor Questions\n1. Is there a budget?\nA: No." },
+    { name: "26-001_CalVCB_2026_RFI_Modernization_Solution_Attachment_1.docx", text: "Part I: Company Information" },
+    { name: "26-001_CalVCB_2026_RFI_Modernization_Solution_final.pdf", text: pdfText },
+    { name: "empty-scan.pdf", text: "" },
+  ];
+
+  it("puts the main RFI first and the attachments in number order, whatever the upload order", () => {
+    expect(orderSolicitationDocuments(upload).map(doc => doc.name.replace(/^26-001_CalVCB_2026_RFI_Modernization_Solution_/, ""))).toEqual([
+      "final.pdf",
+      "empty-scan.pdf",
+      "Attachment_1.docx",
+      "Attachment_3.pdf",
+    ]);
+  });
+
+  it("labels each cleaned document and skips files with no text", () => {
+    const combined = combineSolicitationDocuments(upload);
+    expect(combined.match(/^===== DOCUMENT: .* =====$/gm)).toEqual([
+      "===== DOCUMENT: 26-001_CalVCB_2026_RFI_Modernization_Solution_final.pdf =====",
+      "===== DOCUMENT: 26-001_CalVCB_2026_RFI_Modernization_Solution_Attachment_1.docx =====",
+      "===== DOCUMENT: 26-001_CalVCB_2026_RFI_Modernization_Solution_Attachment_3.pdf =====",
+    ]);
+    expect(combined).not.toMatch(/Page \d of 4/);
+    const extraction = extractSolicitationHeuristic(combined, "26-001_CalVCB_2026_RFI_Modernization_Solution_final.pdf", "rfi");
+    expect(extraction.inferredName).toBe("Compensation and Restitution System Modernization");
+    expect(JSON.stringify(extraction)).not.toContain("===== DOCUMENT");
   });
 });
 

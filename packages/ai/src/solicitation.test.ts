@@ -46,6 +46,46 @@ describe("RFI extraction parsing", () => {
     expect(extraction.rfiSummary).toBeUndefined();
   });
 
+  it("reads the summary prompt's output shape: issuer questions, named service rows, and string sections", () => {
+    const extraction = parseExtraction({
+      objective: ["Replace CaRes (§1.C)."],
+      rfiSummary: {
+        workType: "technical",
+        services: [{ name: "Solution demonstration", type: "explicit", evidence: "§1.G", confidence: "" }],
+        gaps: [],
+      },
+      issuerQuestions: [
+        { question: "May respondents include a cover letter?", basis: "§1.F vs. Q49", evidence: "§1.F; Att. 3 Q49", type: "Conflict", priority: "high", timing: "At demonstration or future solicitation" },
+        { question: "", basis: "empty" },
+      ],
+      responseSections: ["Part I: Company Information and Experience", "Part II: Solution", { ref: "Part III", title: "Integration", sectionId: "part-3" }],
+    });
+
+    expect(extraction.rfiSummary?.services[0]?.service).toBe("Solution demonstration");
+    expect(extraction.rfiSummary?.issuerQuestions).toEqual([{
+      question: "May respondents include a cover letter?",
+      basis: "§1.F vs. Q49",
+      evidence: "§1.F; Att. 3 Q49",
+      type: "conflict",
+      priority: "High",
+      timing: "At demonstration or future solicitation",
+    }]);
+    expect(extraction.responseSections).toEqual([
+      { ref: "Part I", title: "Company Information and Experience", sectionId: "part-i" },
+      { ref: "Part II", title: "Solution", sectionId: "part-ii" },
+      { ref: "Part III", title: "Integration", sectionId: "part-3" },
+    ]);
+  });
+
+  it("lists every uploaded file in the request", () => {
+    const prompt = buildSolicitationExtractPrompt({
+      filename: "rfi.pdf", lane: "B", projectType: "rfi", organizationName: "CalVCB", documentText: "text",
+      documentNames: ["rfi.pdf", "Attachment_1.docx"],
+    });
+    expect(prompt).toContain("Documents in this package: rfi.pdf; Attachment_1.docx");
+    expect(prompt).toContain("issuerQuestions");
+  });
+
   it("asks RFIs for the structured summary and leaves RFPs unchanged", () => {
     const base = { filename: "doc.txt", lane: "B" as const, organizationName: "Agency", documentText: "text" };
     expect(buildSolicitationExtractPrompt({ ...base, projectType: "rfi" })).toContain("rfiSummary");

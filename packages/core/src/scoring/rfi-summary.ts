@@ -359,6 +359,7 @@ export function buildHeuristicRfiSummary(input: {
     nextStep: nextStep ? clip(nextStep, 240) : "",
     services: inferRfiServices(input.text, input.questions, workType),
     gaps,
+    issuerQuestions: [],
   };
 }
 
@@ -384,5 +385,6 @@ export function mergeRfiSummaries(
     nextStep: hasText(preferred.nextStep) ? preferred.nextStep : fallback.nextStep,
     services: preferred.services.length ? preferred.services : fallback.services,
     gaps: preferred.gaps.length ? preferred.gaps : fallback.gaps,
+    issuerQuestions: preferred.issuerQuestions?.length ? preferred.issuerQuestions : fallback.issuerQuestions ?? [],
   };
 }

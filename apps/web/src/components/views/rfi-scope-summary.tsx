@@ -1,6 +1,6 @@
 "use client";
 
-import type { RfiScopeSummary } from "@opportunity-engine/contracts";
+import type { RfiScopeSummary, ScopeSummarySource } from "@opportunity-engine/contracts";
 import type { Pursuit } from "@/lib/mock-data";
 import { cn } from "@/lib/cn";
 
@@ -48,6 +48,7 @@ export function RfiScopeSummaryBody({ docSummary, rfi }: { docSummary: Pursuit["
   const inferred = rfi.services.filter(item => item.type === "inferred");
   const services = [...explicit, ...inferred];
   const challenges = docSummary.challenges ?? [];
+  const issuerQuestions = rfi.issuerQuestions ?? [];
 
   return (
     <div className="divide-y divide-border">
@@ -150,10 +151,57 @@ export function RfiScopeSummaryBody({ docSummary, rfi }: { docSummary: Pursuit["
 
       {rfi.gaps.length > 0 && (
         <div className="p-4 sm:p-5">
-          <Heading>Gaps and questions for the issuer</Heading>
+          <Heading>Gaps for the bid team</Heading>
           <Bullets items={rfi.gaps} />
         </div>
       )}
+
+      {issuerQuestions.length > 0 && (
+        <div>
+          <div className="px-4 sm:px-5 pt-4 sm:pt-5">
+            <Heading aside={<span className="text-[10px] text-muted-foreground">{issuerQuestions.length}</span>}>
+              Questions for the issuer
+            </Heading>
+          </div>
+          <div className="overflow-x-auto oe-touch-scroll pb-2">
+            <table className="w-full text-xs min-w-[720px]">
+              <thead>
+                <tr className="oe-table-header">
+                  {["Priority", "Question", "Basis", "Evidence", "Type", "Timing"].map(label => (
+                    <th key={label} className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {issuerQuestions.map((item, i) => (
+                  <tr key={i} className="oe-table-row border-b border-border last:border-b-0 align-top">
+                    <td className="px-4 py-2.5"><Badge value={item.priority} /></td>
+                    <td className="px-4 py-2.5 text-foreground">{item.question}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground">{item.basis || "—"}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground">{item.evidence || "—"}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground capitalize">{item.type}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground">{item.timing || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <SourceNote source={docSummary.source} />
     </div>
+  );
+}
+
+function SourceNote({ source }: { source?: ScopeSummarySource }) {
+  if (!source) return null;
+  if (source.engine === "model") {
+    return <p className="px-4 sm:px-5 py-3 text-[11px] text-muted-foreground">Summary written by {source.model ?? "the model"} from the uploaded documents.</p>;
+  }
+  return (
+    <p className="px-4 sm:px-5 py-3 text-[11px] oe-status-cond">
+      This summary came from the text parser, not the model{source.note ? `: ${source.note}` : "."} Upload the documents again to retry.
+    </p>
   );
 }

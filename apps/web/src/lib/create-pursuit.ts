@@ -129,6 +129,7 @@ export function applyIngestToPursuit(
       deliverables: extraction.deliverables,
       responseConstraints: extraction.responseConstraints,
       rfi: projectType === "rfi" ? extraction.rfiSummary : undefined,
+      source: result.summarySource,
     },
     informationRequests: extraction.requirements.map(item => item.requirementText),
     score: triage.score,

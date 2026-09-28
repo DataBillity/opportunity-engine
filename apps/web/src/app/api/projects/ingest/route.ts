@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { PursuitIngestResult } from "@opportunity-engine/contracts";
+import { PursuitIngestResult, type ScopeSummarySource } from "@opportunity-engine/contracts";
 import {
   capSourceText,
+  combineSolicitationDocuments,
+  orderSolicitationDocuments,
   extractSolicitationHeuristic,
   mergeSolicitationExtractions,
   resolveProjectType,
@@ -101,11 +103,13 @@ export async function POST(request: Request) {
     extracted.push(doc);
   }
 
-  const combined = [priorText, ...extracted.map(doc => doc.text).filter(Boolean)]
+  const ordered = orderSolicitationDocuments(extracted);
+  const combined = [priorText, combineSolicitationDocuments(extracted)]
+    .filter(Boolean)
     .join("\n\n")
     .trim();
   const capped = capSourceText(combined);
-  const primaryName = extracted[0]?.name || "solicitation.txt";
+  const primaryName = ordered[0]?.name || "solicitation.txt";
   const resolvedType = resolveProjectType({
     selected: selectedType,
     lane,
@@ -119,6 +123,7 @@ export async function POST(request: Request) {
   let modelVersion = "heuristic-triage-v1";
   let usedModel = false;
   let warning: string | undefined;
+  let summarySource: ScopeSummarySource = { engine: "heuristic" };
 
   if (!capped.text) {
     warning = extracted.length
@@ -135,16 +140,28 @@ export async function POST(request: Request) {
           organizationName,
           organizationIndustry,
           documentText: capped.text,
+          documentNames: ordered.map(doc => doc.name),
         });
-        extraction = mergeSolicitationExtractions(heuristic, model.extraction);
+        extraction = mergeSolicitationExtractions(heuristic, model.extraction, {
+          trustOverlayScope: projectType === "rfi" && model.summaryFromModel,
+        });
         provider = model.provider;
         modelVersion = model.modelVersion;
         usedModel = true;
+        if (model.summaryFromModel) {
+          summarySource = { engine: "model", model: `${model.provider} / ${model.modelVersion}` };
+        } else {
+          warning = `The model summary failed (${model.summaryError ?? "unknown error"}). The Scope Summary came from the text parser.`;
+          summarySource = { engine: "heuristic", note: warning };
+        }
       } catch (err) {
         warning = err instanceof ModelGatewayError
           ? `Model extraction unavailable (${err.message}). Used the heuristic parser.`
           : "Model extraction failed. Used the heuristic parser.";
+        summarySource = { engine: "heuristic", note: warning };
       }
+    } else {
+      summarySource = { engine: "heuristic", note: "No model API keys are configured." };
     }
   }
 
@@ -196,6 +213,7 @@ export async function POST(request: Request) {
     sourceTextTruncated: capped.truncated,
     usedModel,
     warning,
+    summarySource,
   });
 
   return NextResponse.json(payload);

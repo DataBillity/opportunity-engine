@@ -1,5 +1,5 @@
 /**
- * Clean text extracted from PDFs and Word files before heuristic parsing:
+ * Clean text extracted from PDFs and Word files before it is parsed or sent to a model:
  * drop table-of-contents entries, page markers, and running headers and footers,
  * and set headings apart so they never merge into the sentence that follows.
  * PURE — no I/O.
@@ -41,4 +41,31 @@ export function normalizeSolicitationText(text: string): string {
   }
 
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+export const DOCUMENT_LABEL = /^===== DOCUMENT: .* =====$/gm;
+
+const SUPPORTING_DOCUMENT = /attach|\batt\s*\d|appendix|exhibit|addend|amend|\bq\s*&\s*a\b|\bqa\b|question|answers|worksheet|template|pricing|schedule/i;
+
+export function isSupportingDocument(name: string): boolean {
+  return SUPPORTING_DOCUMENT.test(name.replace(/[_.-]+/g, " "));
+}
+
+/** Main solicitation first (longest non-attachment), then attachments in natural name order. */
+export function orderSolicitationDocuments<T extends { name: string; text: string }>(docs: T[]): T[] {
+  return [...docs].sort((a, b) => {
+    const supportA = isSupportingDocument(a.name) ? 1 : 0;
+    const supportB = isSupportingDocument(b.name) ? 1 : 0;
+    if (supportA !== supportB) return supportA - supportB;
+    if (!supportA) return b.text.length - a.text.length;
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+  });
+}
+
+/** One labeled, cleaned block per file so the model can tell the main RFI from its attachments. */
+export function combineSolicitationDocuments(docs: { name: string; text: string }[]): string {
+  return orderSolicitationDocuments(docs)
+    .filter(doc => doc.text.trim())
+    .map(doc => `===== DOCUMENT: ${doc.name} =====\n\n${normalizeSolicitationText(doc.text)}`)
+    .join("\n\n");
 }

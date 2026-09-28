@@ -153,6 +153,24 @@ export const RfiChallengeTheme = z.object({
   evidence: z.string().default(""),
 });
 
+export const RfiIssuerQuestion = z.object({
+  question: z.string().min(1),
+  basis: z.string().default(""),
+  evidence: z.string().default(""),
+  type: z.preprocess(
+    value => {
+      const raw = typeof value === "string" ? value.toLowerCase() : "";
+      if (raw.includes("conflict")) return "conflict";
+      if (raw.includes("missing")) return "missing information";
+      if (raw.includes("scope")) return "scope";
+      return "ambiguity";
+    },
+    z.enum(["conflict", "ambiguity", "missing information", "scope"]),
+  ),
+  priority: z.preprocess(value => toConfidence(value) ?? "Medium", Confidence),
+  timing: z.string().default(""),
+});
+
 export const RfiScopeSummary = z.object({
   workType: z.preprocess(
     value => {
@@ -173,6 +191,7 @@ export const RfiScopeSummary = z.object({
   nextStep: z.string().default(""),
   services: z.array(RfiServiceItem).default([]),
   gaps: z.array(z.string()).default([]),
+  issuerQuestions: z.array(RfiIssuerQuestion).default([]),
 });
 
 export const ResponseDraftPerson = z.object({
@@ -329,6 +348,12 @@ export const SolicitationExtraction = z.object({
   rfiSummary: RfiScopeSummary.optional(),
 });
 
+export const ScopeSummarySource = z.object({
+  engine: z.enum(["model", "heuristic"]),
+  model: z.string().optional(),
+  note: z.string().optional(),
+});
+
 export const PursuitDocumentMeta = z.object({
   name: z.string().min(1),
   kind: z.enum(["solicitation", "sow", "addendum", "other"]),
@@ -404,6 +429,7 @@ export const PursuitIngestResult = z.object({
   sourceTextTruncated: z.boolean(),
   usedModel: z.boolean(),
   warning: z.string().optional(),
+  summarySource: ScopeSummarySource.optional(),
 });
 
 export type OpportunityAlignmentWeights = z.infer<typeof OpportunityAlignmentWeights>;
@@ -431,6 +457,8 @@ export type SolicitationExtraction = z.infer<typeof SolicitationExtraction>;
 export type RfiScopeSummary = z.infer<typeof RfiScopeSummary>;
 export type RfiServiceItem = z.infer<typeof RfiServiceItem>;
 export type RfiChallengeTheme = z.infer<typeof RfiChallengeTheme>;
+export type RfiIssuerQuestion = z.infer<typeof RfiIssuerQuestion>;
+export type ScopeSummarySource = z.infer<typeof ScopeSummarySource>;
 export type PursuitDocumentMeta = z.infer<typeof PursuitDocumentMeta>;
 export type PursuitTriageView = z.infer<typeof PursuitTriageView>;
 export type PursuitIngestResult = z.infer<typeof PursuitIngestResult>;

@@ -100,6 +100,9 @@ export function collectResponseFacts(briefing: ResponseDraftBriefingType): Respo
         : `Inferred service — our reading, not an issuer requirement (${item.confidence ?? "Low"} confidence): ${item.service}. Evidence: ${item.evidence}`);
     }
     for (const item of rfi.gaps) push("rfp", `Known gap in the RFI package: ${item}`);
+    for (const item of rfi.issuerQuestions ?? []) {
+      push("rfp", `Question for the issuer (${item.priority}, ${item.type}, ${item.timing || "timing not set"}): ${item.question} Basis: ${item.basis} (${item.evidence})`);
+    }
   }
   for (const item of pursuit.informationRequests ?? []) push("rfp", `Question to answer: ${item}`);
   for (const item of pursuit.capabilities ?? []) push("experience", `Capability we can cite: ${item}`);
