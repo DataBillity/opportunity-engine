@@ -348,6 +348,11 @@ function outlineSections(briefing: ResponseDraftBriefingType): { id: string; ref
   }));
 }
 
+function resolvePrimeLabel(partners: ResponseDraftBriefingType["partners"]): string {
+  const prime = partners.find(p => p.role === "Prime" || p.role === "prime");
+  return prime?.name ?? "Prime";
+}
+
 export function fallbackRfiPackage(briefing: ResponseDraftBriefingType): RfiResponsePackage {
   const projectType = briefing.projectType ?? "rfi";
   if (projectType !== "rfi") return fallbackBidPackage(briefing, projectType);
@@ -357,6 +362,7 @@ export function fallbackRfiPackage(briefing: ResponseDraftBriefingType): RfiResp
   const constraints = briefing.pursuit.docSummary?.responseConstraints ?? [];
   const confirmed = briefing.partners.filter(partner => partner.confirmed);
   const outline = outlineSections(briefing);
+  const primeLabel = resolvePrimeLabel(briefing.partners);
   let n = 1;
   const gaps: RfiGapLogEntry[] = [];
 
@@ -366,7 +372,7 @@ export function fallbackRfiPackage(briefing: ResponseDraftBriefingType): RfiResp
     description: string,
     priority: RfiGapLogEntry["priority"],
     notes: string,
-    owner = "Prime",
+    owner = primeLabel,
   ): string => {
     const id = nextGapId(n++);
     gaps.push({ id, location, gapType, description, owner, priority, due, status: "Open", notes });
@@ -483,14 +489,14 @@ export function fallbackRfiPackage(briefing: ResponseDraftBriefingType): RfiResp
       requirement: question,
       rfiRef: `Q${index + 1}`,
       responseSection: "Responses to specific questions",
-      owner: "Prime",
+      owner: primeLabel,
       status: "Open",
     })),
     ...constraints.map(rule => ({
       requirement: rule,
       rfiRef: "Format",
       responseSection: "Cover letter",
-      owner: "Prime",
+      owner: primeLabel,
       status: "Open",
     })),
   ];
@@ -502,7 +508,7 @@ export function fallbackRfiPackage(briefing: ResponseDraftBriefingType): RfiResp
       `Model draft unavailable. This package is an honest shell for ${issuer} / ${ref}.`,
       briefing.pursuit.dueDate ? `Response due ${briefing.pursuit.dueDate}. Time zone and submission method are not confirmed.` : "Due date is not on file.",
       `Fit is not scored here. ${mapped} mapped area${mapped === 1 ? "" : "s"}, ${unmapped.length} unmapped.`,
-      `${gaps.length} open gaps, ${openHigh} high, all owned by Prime until a reviewer assigns them.`,
+      `${gaps.length} open gaps, ${openHigh} high, all owned by ${primeLabel} until a reviewer assigns them.`,
       "Do not submit this shell. Resolve the Gap Log first.",
     ].join(" "),
     sections,
@@ -527,6 +533,7 @@ function fallbackBidPackage(briefing: ResponseDraftBriefingType, projectType: "r
   const issuer = briefing.organization.name;
   const ref = briefing.pursuit.solicitationRef || briefing.pursuit.name;
   const kind = projectType === "sow" ? "SOW response" : "proposal";
+  const primeLabel = resolvePrimeLabel(briefing.partners);
   let n = 1;
   const gaps: RfiGapLogEntry[] = [];
   const push = (
@@ -537,8 +544,8 @@ function fallbackBidPackage(briefing: ResponseDraftBriefingType, projectType: "r
     notes: string,
   ): string => {
     const id = nextGapId(n++);
-    gaps.push({ id, location, gapType, description, owner: "Prime", priority, due, status: "Open", notes });
-    return `[${id} | Prime | ${description}]`;
+    gaps.push({ id, location, gapType, description, owner: primeLabel, priority, due, status: "Open", notes });
+    return `[${id} | ${primeLabel} | ${description}]`;
   };
 
   if (!briefing.pursuit.dueDate) {
@@ -582,10 +589,10 @@ function fallbackBidPackage(briefing: ResponseDraftBriefingType, projectType: "r
       requirement,
       rfiRef: `R${index + 1}`,
       responseSection: outline[0]?.title ?? "Response",
-      owner: "Prime",
+      owner: primeLabel,
       status: "Open",
     })),
-    ...constraints.map(rule => ({ requirement: rule, rfiRef: "Format", responseSection: "All sections", owner: "Prime", status: "Open" })),
+    ...constraints.map(rule => ({ requirement: rule, rfiRef: "Format", responseSection: "All sections", owner: primeLabel, status: "Open" })),
   ];
 
   const openHigh = gaps.filter(gap => gap.priority === "High").length;
@@ -594,7 +601,7 @@ function fallbackBidPackage(briefing: ResponseDraftBriefingType, projectType: "r
       `Model draft unavailable. This ${kind} is an honest shell for ${issuer} / ${ref}.`,
       briefing.pursuit.dueDate ? `Response due ${briefing.pursuit.dueDate}. Time zone and submission method are not confirmed.` : "Due date is not on file.",
       `${requirements.length} requirement${requirements.length === 1 ? "" : "s"} on file, ${unmapped.length} unmapped.`,
-      `${gaps.length} open gaps, ${openHigh} high, all owned by Prime until a reviewer assigns them.`,
+      `${gaps.length} open gaps, ${openHigh} high, all owned by ${primeLabel} until a reviewer assigns them.`,
       "Do not submit this shell. Resolve the Gap Log first.",
     ].join(" "),
     sections,

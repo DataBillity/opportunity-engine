@@ -508,6 +508,7 @@ export default function CommandCenter() {
                 pursuit={selectedPursuit}
                 org={currentOrg}
                 partners={partners}
+                graph={graph}
                 onBack={() => setActiveView("org")}
                 onDraft={() => setActiveView("draft")}
                 onConfirmDecision={handleConfirmDecision}

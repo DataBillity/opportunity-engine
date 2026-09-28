@@ -1,5 +1,5 @@
 {
-  "seconds": 48.328,
+  "seconds": 49.299,
   "provider": "claude",
   "modelVersion": "claude-sonnet-5",
   "summaryFromModel": true,
@@ -11,48 +11,49 @@
     "26-001CalVCB_2026_RFI_Modernization_Solution_Attachment_3.pdf"
   ],
   "extraction": {
-    "inferredName": "Compensation and Restitution System Modernization",
+    "inferredName": "Compensation and Restitution System (CaRes) Modernization",
     "solicitationRef": "RFI 26-001",
     "dueDate": "2026-09-24",
     "issuer": "California Victim Compensation Board (CalVCB)",
     "objective": [
-      "Replace CalVCB's custom-coded CaRes claims system with a highly configurable claims, compensation, and restitution platform, so victims are served through agile, end-to-end workflows that adapt to policy and statutory change (§1.C, §1.D)."
+      "Replace CalVCB's custom-coded claims system (CaRes) with a single, highly configurable claims, compensation, and restitution platform, so victims are served consistently and CalVCB can adapt to policy and statutory changes without months of custom coding (§1.C, §1.D)."
     ],
     "challenges": [
-      "1. Lack of agility in making updates or additions to functionality; changes depend heavily on coding",
-      "2. No adjustments module; returned payments require code updates and depend on external databases",
-      "3. No appeals workflow; appeals are tracked through external, manually integrated processes",
-      "4. No correspondence engine; letters are hard coded, manual, and only available in English and Spanish",
+      "1. Lack of agility making updates or additions to functionality, since changes depend heavily on coding",
+      "2. No adjustments module; returned payments require code updates and depend on external databases to credit benefit limits",
+      "3. No appeals workflow; appeals are managed through manual processes outside the system of record",
+      "4. No correspondence/communication engine; letters are hard coded, offline, and only available in English and Spanish",
       "5. No attribute-level audit trail of who took what action at each phase",
       "6. Online application process is external and not integrated with the system of record",
-      "7. Uploaded data and documents cannot be renamed; must be re-uploaded to correct a name",
+      "7. Uploaded documents and bills cannot be renamed; must be re-uploaded with correct names",
       "8. No integration between claim and provider information",
-      "9. Separation of duties is managed manually with no system warnings or notifications",
-      "10. Lack of agility in producing customized reports in a timely manner"
+      "9. Separation of duties is managed manually with no system warnings or notifications of violations",
+      "10. Lack of agility in customizing reports in a timely manner"
     ],
     "services": [
       "Solution description, including where it automates or streamlines current workflows",
-      "Product and module description, including off-the-shelf vs. configured vs. customized",
-      "Scalability and flexibility for future security, accessibility, and compliance needs",
+      "Products and modules included in the proposed solution",
+      "Scalability and flexibility for future security, accessibility, maintenance, and compliance needs",
+      "Off-the-shelf vs. configuration/customization needed to address challenges",
       "Input/output and integration capabilities",
-      "Implementation methodology, timeline, and business-understanding approach",
+      "Project methodology, overall approach, and implementation timeline with examples",
+      "Business-discovery approach to meet current and future needs",
       "User acceptance testing approach",
       "Data validation and migration approach, tools, and cost treatment",
-      "Upgrade, enhancement, and configuration-change processes, including classifying nine sample changes",
+      "Definitions and processes for system upgrades, enhancements, and configuration changes, including classification of nine sample changes",
       "IT technical and functional support approach",
-      "Compliance with IT and security standards",
-      "Cost model and budgetary range covering implementation, product, maintenance, support, and training",
-      "Solution demonstration",
+      "Compliance with IT and security standards in Attachment 2",
+      "Costing model and budgetary range covering implementation, product, maintenance, support, and training",
       "Recommendations and additional requirements for the future solicitation"
     ],
     "deliverables": [
-      "One configurable claims, compensation, and restitution system; COTS, MOTS, integrated products, or custom all considered equally",
-      "End-to-end coverage: intake, eligibility, emergency awards, bill review with auto-payment rules, appeals, adjustments, restitution and offender tracking, correspondence",
+      "One configurable claims, compensation, and restitution system; COTS, MOTS, integrated product set, or custom all considered equally",
+      "End-to-end coverage: intake, eligibility, emergency awards, bill review/auto-payment, appeals, adjustments, restitution and offender tracking, correspondence",
       "350-400 role-based users across CalVCB headquarters and county JP and CRC offices",
-      "Configurable workflows, rules, letters, and reports changed without custom coding",
-      "Integrated online application intake, replacing the current external process",
-      "Active claims migrated with full history and supporting documents",
-      "Attribute-level audit trail and automated separation-of-duties controls"
+      "Multilingual, configurable correspondence engine replacing hard-coded letters",
+      "Attribute-level audit trail and automated separation-of-duties controls",
+      "Workflows, letters, and reports changed through configuration rather than code",
+      "Active claims migrated with full history and supporting documents from CaRes"
     ],
     "requirements": [
       {
@@ -68,13 +69,13 @@
         "weight": 0
       },
       {
-        "requirementText": "Share experience implementing your solution with other government agencies, including department names and applications implemented.",
+        "requirementText": "Share experience implementing solution with other government agencies, including names of state departments and applications implemented.",
         "sectionRef": "PART I",
         "passFail": false,
         "weight": 0
       },
       {
-        "requirementText": "Describe your proposed solution, highlighting areas where it can automate existing work or streamline current workflows based on CalVCB challenges.",
+        "requirementText": "Describe proposed solution, highlighting areas where your approach can automate existing work or streamline current workflows.",
         "sectionRef": "PART II",
         "passFail": false,
         "weight": 0
@@ -86,13 +87,13 @@
         "weight": 0
       },
       {
-        "requirementText": "Describe the scalability and flexibility of the proposed solution for meeting future security, accessibility, maintenance, and platform changes and compliance requirements.",
+        "requirementText": "Describe scalability and flexibility for meeting future information security, accessibility, maintenance, platform changes, and compliance requirements.",
         "sectionRef": "PART II",
         "passFail": false,
         "weight": 0
       },
       {
-        "requirementText": "Describe if the solution is off-the-shelf or requires configuration or customization to address the challenge statement.",
+        "requirementText": "Describe if solution is off-the-shelf or requires configuration or customization to address the challenge statement.",
         "sectionRef": "PART II",
         "passFail": false,
         "weight": 0
@@ -104,19 +105,19 @@
         "weight": 0
       },
       {
-        "requirementText": "Describe your overall approach to providing a solution.",
+        "requirementText": "Describe project methodology and high-level timeline, including your overall approach to providing a solution.",
         "sectionRef": "PART IV",
         "passFail": false,
         "weight": 0
       },
       {
-        "requirementText": "Provide typical solution implementation timeline, including examples of implementations within the last 5 years.",
+        "requirementText": "Provide typical solution implementation timeline and examples of implementations within the last 5 years.",
         "sectionRef": "PART IV",
         "passFail": false,
         "weight": 0
       },
       {
-        "requirementText": "Describe approach to understanding CalVCB's business and creating a solution that meets current and future needs.",
+        "requirementText": "Describe approach to understanding business needs, creating a solution meeting current needs, and adapting to future needs.",
         "sectionRef": "PART IV",
         "passFail": false,
         "weight": 0
@@ -134,67 +135,37 @@
         "weight": 0
       },
       {
-        "requirementText": "Describe your approach to data migration and tools used.",
+        "requirementText": "Describe approach to data migration and tools used.",
         "sectionRef": "PART IV",
         "passFail": false,
         "weight": 0
       },
       {
-        "requirementText": "State whether data migration is included in the cost or is extra.",
+        "requirementText": "Clarify whether data migration is part of the cost or is extra.",
         "sectionRef": "PART IV",
         "passFail": false,
         "weight": 0
       },
       {
-        "requirementText": "Explain how your solution defines system/platform upgrades.",
+        "requirementText": "Define system/platform upgrades, the upgrade process, and how often upgrades are made available.",
         "sectionRef": "PART IV",
         "passFail": false,
         "weight": 0
       },
       {
-        "requirementText": "Describe the process for system/platform upgrades.",
+        "requirementText": "Define enhancements, describe the process, and state whether you have an enhancement schedule.",
         "sectionRef": "PART IV",
         "passFail": false,
         "weight": 0
       },
       {
-        "requirementText": "State how often system/platform upgrades are made available.",
+        "requirementText": "Define configuration changes and describe the process for configuration changes.",
         "sectionRef": "PART IV",
         "passFail": false,
         "weight": 0
       },
       {
-        "requirementText": "Explain how your solution defines enhancements.",
-        "sectionRef": "PART IV",
-        "passFail": false,
-        "weight": 0
-      },
-      {
-        "requirementText": "Describe the process for enhancements.",
-        "sectionRef": "PART IV",
-        "passFail": false,
-        "weight": 0
-      },
-      {
-        "requirementText": "State whether you have an enhancement schedule and describe it.",
-        "sectionRef": "PART IV",
-        "passFail": false,
-        "weight": 0
-      },
-      {
-        "requirementText": "Explain how your solution defines configuration changes.",
-        "sectionRef": "PART IV",
-        "passFail": false,
-        "weight": 0
-      },
-      {
-        "requirementText": "Describe the process for configuration changes.",
-        "sectionRef": "PART IV",
-        "passFail": false,
-        "weight": 0
-      },
-      {
-        "requirementText": "Categorize listed functional items as System Upgrade, Enhancement, or Configuration using an X or check mark.",
+        "requirementText": "Categorize listed items as System Upgrade, Enhancement, or Configuration.",
         "sectionRef": "PART IV",
         "passFail": false,
         "weight": 0
@@ -212,19 +183,19 @@
         "weight": 0
       },
       {
-        "requirementText": "State whether the solution meets IT and security standards indicated in Attachment 2.",
+        "requirementText": "Indicate whether the solution meets information technology and security standards listed in Attachment 2.",
         "sectionRef": "PART IV",
         "passFail": false,
         "weight": 0
       },
       {
-        "requirementText": "Describe estimated costing model and budgetary range, including implementation, product, maintenance, support, and training, referencing sizing assumptions/constraints.",
+        "requirementText": "Describe estimated costing model and budgetary range, including implementation, product, maintenance, support, training, and sizing assumptions/constraints.",
         "sectionRef": "PART V",
         "passFail": false,
         "weight": 0
       },
       {
-        "requirementText": "Provide recommendations concerning this effort not addressed in questions, or additional requirements CalVCB should list.",
+        "requirementText": "Provide recommendations concerning this effort not addressed by questions, or additional requirements CalVCB should list.",
         "sectionRef": "PART VI",
         "passFail": false,
         "weight": 0
@@ -263,36 +234,31 @@
       }
     ],
     "responseConstraints": [
-      "Due September 24, 2026, 2:00 PM Pacific, submitted electronically to ITAcquisitions@victims.ca.gov (§1.F, §1.H)",
-      "Submit the completed Attachment 1 worksheet as the response, with a signed certification in Part I",
-      "10 pages maximum total, single spaced, 12-point font, one-inch margins (Att. 1 instructions)",
-      "No appendices, supplemental attachments, or separate reference materials permitted; all content must fit within the worksheet and page limit (Att. 3 Q49)",
-      "Cost estimates are non-binding and for planning purposes only; sizing assumptions must be stated (§1.F)",
+      "Due September 24, 2026, 2:00 PM Pacific, submitted by email to ITAcquisitions@victims.ca.gov (§1.F, §1.H)",
+      "Submit the completed Attachment 1 RFI Response Worksheet, with a signed certification in Part I",
+      "10 pages maximum for the total submission, single spaced, 12-point font, one-inch margins (Att. 1)",
+      "No appendices or supplemental attachments such as pricing information, product literature, or reference materials (Att. 3 Q49)",
+      "Cost model figures are non-binding and for informational and planning purposes only (§1.F)",
       "Responses become public records under the California Public Records Act; do not rely on proprietary markings (§1.I)"
     ],
     "constraints": [
-      "Compliance with State IT Policy, Standards, Instructions and Guidelines (CDT)",
-      "Compliance with Statewide Information Management Manual (SIMM) Sections 10 through 80, Sections 5300 et seq., and SIMM 5305-F (GenAI)",
-      "Compliance with California State Administrative Manual (SAM) Sections 4800 through 5900 and Chapter 5300",
-      "Compliance with Federal Information Security Modernization Act (FISMA)",
-      "Compliance with National Institute of Standards and Technology (NIST) Special Publications and NIST SP 800-53/800-53A",
-      "Agreement to incorporate DGS PD 402-ITGP (Cloud) or DGS PD 403-ITGP (Non-Cloud) General Provisions in any future solicitation",
-      "All submitted documents become State property and public records under the California Public Records Act (Gov Code 7921.000 et seq.)"
+      "Respondent certification that information submitted is true and accurate to the best of knowledge.",
+      "Must comply with State IT Policy, SIMM (including SIMM 5305-F if GenAI is used), SAM Ch. 5300, and NIST 800-53 standards."
     ],
     "rfiSummary": {
       "workType": "technical",
       "objectiveConfidence": "High",
-      "procurementObjective": "Decide the solution approach (COTS, MOTS, integrated product set, COTS Configurable, or custom), with no stated preference; phased vs. single cutover and technology replacement vs. broader business transformation also remain open (§1.A; Att. 3 Q8, Q25, Q27, Q50, Q51).",
+      "procurementObjective": "Decide the solution approach (COTS, MOTS, integrated product set, COTS Configurable, or custom) with no stated preference; phased vs. single cutover and technology replacement vs. broader business transformation are also open (§1.A; Att. 3 Q8, Q25, Q27, Q50, Q51).",
       "challengeThemes": [
         {
           "theme": "Agility and change cost",
-          "detail": "Functionality, correspondence, and reporting changes all depend on coding and take months, with no major enhancements in three years (items 1, 4, 10).",
+          "detail": "Functionality, correspondence, and report changes all depend on coding and take months, with no major enhancements in three years (items 1, 4, 10).",
           "rootCause": true,
           "evidence": "§1.D; Att. 3 Q42"
         },
         {
-          "theme": "Missing functions and workarounds",
-          "detail": "No adjustments, appeals, or correspondence modules, and the online application and provider data sit outside the system of record (items 2, 3, 4, 6, 8).",
+          "theme": "Missing functions and manual workarounds",
+          "detail": "No adjustments, appeals, or correspondence modules, and the online application is not integrated (items 2, 3, 4, 6).",
           "rootCause": false,
           "evidence": "§1.D"
         },
@@ -303,32 +269,33 @@
           "evidence": "§1.D"
         },
         {
-          "theme": "Usability and accessibility",
-          "detail": "Documents cannot be renamed after upload and correspondence is limited to English and Spanish (items 4, 7).",
+          "theme": "Integration and usability",
+          "detail": "Claim and provider data aren't linked, and uploaded documents can't be renamed without re-upload (items 7, 8).",
           "rootCause": false,
           "evidence": "§1.D"
         }
       ],
       "consequences": [
-        "Higher number of phone calls and emails",
+        "More phone calls and emails",
         "Increased escalations",
         "Lack of visibility into status or progress",
-        "Inconsistent information across divisions, claimants, providers and advocates",
+        "Inconsistent information across divisions, claimants, providers, and advocates",
         "Increased time to approval and payment",
         "Manual document and recordkeeping development",
         "Inefficient workarounds"
       ],
-      "endState": "A single configurable system covering the full claims, compensation, and restitution lifecycle: intake (online, mail, email), eligibility determination, emergency awards, bill review with an auto-payment rules engine, appeals, returned-benefit adjustments against lifetime limits, restitution and offender tracking, and multilingual correspondence. It serves 350-400 role-based users at CalVCB headquarters and county JP and CRC offices, with JP staff processing applications and bills directly in the system and CRC staff managing criminal dispositions. It integrates at minimum with the existing Bill Review Service, the State Controller's Office, the Franchise Tax Board, EDD, and TotalAgility, and migrates active claims with full history and supporting documents from CaRes; external databases are excluded from migration.",
+      "endState": "A single configurable system covering intake (online, mail, email), eligibility determination, emergency awards, bill review and auto-payment rules, appeals, returned-benefit adjustments against lifetime limits, restitution and offender tracking, and multilingual correspondence. It serves 350-400 role-based users, including CalVCB headquarters staff, county JP staff who process applications and bills, and CRC staff who manage criminal dispositions. It integrates at minimum with the existing Bill Review Service interface (with integrated adjudication also possible), State Controller's Office, Franchise Tax Board, EDD, and TotalAgility, and migrates active claims with full history and supporting documents from CaRes.",
       "endStateConstraints": [
-        "Must at minimum support the existing bill-adjudication interface; integrated adjudication may be considered (Att. 3 Q11)",
+        "Must at minimum support the existing bill-adjudication interface; integrated adjudication may be considered (Att. 3 Q11, Q16, Q37)",
         "State data center, CDT-approved cloud, or vendor California-compliant cloud all acceptable (Att. 3 Q6, Q26)",
-        "NIST 800-53, FISMA, and SAM 5300 apply; no CJIS or IRS 1075 requirement (Att. 2; Att. 3 Q29, Q30)",
+        "NIST 800-53, FISMA, SAM 5300 apply; no CJIS or IRS 1075 requirement (Att. 2; Att. 3 Q29, Q30, Q46)",
         "Any GenAI use must follow SIMM 5305-F and SAM 5300 (Att. 3 Q33)",
-        "External databases are out of migration scope; active claims plus full history and documents are in scope (Att. 3 Q17)",
-        "No budget, funding range, or implementation timeline established (Att. 3 Q2, Q10, Q12, Q20, Q21, Q31, Q35)",
-        "Non-binding cost model requested, broken down by one-time vs. recurring, module, and phase (§1.F; Att. 1 Part V; Att. 3 Q9)"
+        "External databases referenced in Challenge 2 are out of migration scope (Att. 3 Q17)",
+        "No budget, funding range, NTE, or timeline established (Att. 3 Q2, Q3, Q10, Q12, Q20, Q21, Q31, Q32, Q35)",
+        "Non-binding cost model requested, broken down by one-time vs. recurring, module, and phase (§1.F; Att. 1 Part V; Att. 3 Q9)",
+        "10-page total submission limit, single spaced, 12-point font, one-inch margins (Att. 1); no appendices or supplemental attachments permitted (Att. 3 Q49)"
       ],
-      "nextStep": "Invite-only demonstrations in October 2026, with success criteria not yet established; a future solicitation is anticipated on Cal eProcure (§1.G, §1.H; Att. 3 Q34).",
+      "nextStep": "Invite-only demonstrations expected in October 2026, with success criteria not yet set; a future solicitation is expected on Cal eProcure (§1.G, §1.H; Att. 3 Q34).",
       "services": [
         {
           "service": "Solution description, including where it automates or streamlines current workflows",
@@ -336,9 +303,9 @@
           "evidence": "Att. 1 Part II.1"
         },
         {
-          "service": "Product and module description, including off-the-shelf vs. configured vs. customized",
+          "service": "Products and modules, and whether off-the-shelf, configured, or customized",
           "type": "explicit",
-          "evidence": "Att. 1 Part II.2, II.4; §1.A"
+          "evidence": "Att. 1 Part II.2, II.4"
         },
         {
           "service": "Scalability and flexibility for future security, accessibility, and compliance needs",
@@ -346,49 +313,44 @@
           "evidence": "Att. 1 Part II.3"
         },
         {
-          "service": "Input/output and integration capabilities",
+          "service": "Integration and input/output capabilities",
           "type": "explicit",
           "evidence": "Att. 1 Part III"
         },
         {
-          "service": "Implementation methodology, timeline, and business-understanding approach",
+          "service": "Implementation methodology, timeline, and business-discovery approach",
           "type": "explicit",
-          "evidence": "Att. 1 Part IV"
+          "evidence": "Att. 1 Part IV.1"
         },
         {
           "service": "User acceptance testing approach",
           "type": "explicit",
-          "evidence": "Att. 1 Part IV (UAT)"
+          "evidence": "Att. 1 Part IV"
         },
         {
           "service": "Data validation and migration approach, tools, and cost treatment",
           "type": "explicit",
-          "evidence": "Att. 1 Part IV (Data migration)"
+          "evidence": "Att. 1 Part IV Data migration"
         },
         {
           "service": "Upgrade, enhancement, and configuration-change processes, including classifying nine sample changes",
           "type": "explicit",
-          "evidence": "Att. 1 Part IV (Updates and enhancements)"
+          "evidence": "Att. 1 Part IV Updates and enhancements"
         },
         {
-          "service": "IT technical and functional support approach",
+          "service": "IT technical and functional support",
           "type": "explicit",
-          "evidence": "Att. 1 Part IV (Technical Support)"
+          "evidence": "Att. 1 Part IV Technical Support"
         },
         {
-          "service": "Compliance with IT and security standards",
+          "service": "Compliance with state IT and security standards",
           "type": "explicit",
-          "evidence": "Att. 1 Part IV (Security); Att. 2"
+          "evidence": "Att. 1 Part IV Security; Att. 2"
         },
         {
           "service": "Cost model and budgetary range covering implementation, product, maintenance, support, and training",
           "type": "explicit",
-          "evidence": "Att. 1 Part V; §1.F"
-        },
-        {
-          "service": "Solution demonstration",
-          "type": "explicit",
-          "evidence": "§1.G"
+          "evidence": "Att. 1 Part V"
         },
         {
           "service": "Recommendations and additional requirements for the future solicitation",
@@ -396,141 +358,144 @@
           "evidence": "Att. 1 Part VI"
         },
         {
-          "service": "Configuration of workflows, rules engine, correspondence, and adjustments/appeals modules",
+          "service": "Configuration of workflows, rules engine, correspondence, and portals",
           "type": "inferred",
-          "evidence": "Vision stresses configurability; items 1-4 (§1.C-D)",
+          "evidence": "Vision stresses configurability; items 1, 3, 4, 6 (§1.C-D)",
           "confidence": "High"
         },
         {
-          "service": "Data migration from CaRes, including active claims, full history, and supporting documents",
+          "service": "Data cleansing and remediation before migration",
           "type": "inferred",
-          "evidence": "Migration scope confirmed for active claims (Att. 3 Q17)",
+          "evidence": "Custom system since 2017; cleansing raised in Att. 3 Q48",
           "confidence": "High"
         },
         {
-          "service": "Business process analysis and redesign",
+          "service": "Business process redesign to eliminate external workarounds",
           "type": "inferred",
-          "evidence": "External workarounds throughout current process (§1.D)",
+          "evidence": "External workarounds throughout (§1.D)",
           "confidence": "High"
         },
         {
           "service": "Organizational change management and end-user training for HQ and county offices",
           "type": "inferred",
-          "evidence": "350-400 users across HQ, JP, and CRC offices (Att. 3 Q7, Q41)",
+          "evidence": "350-400 users across HQ, JP, CRC offices (Att. 3 Q7, Q41)",
+          "confidence": "High"
+        },
+        {
+          "service": "Data migration from CaRes, including active claims, history, and supporting documents",
+          "type": "inferred",
+          "evidence": "Migration scope confirmed by issuer (Att. 3 Q17)",
           "confidence": "High"
         },
         {
           "service": "Integration with Bill Review Service, SCO, FTB, EDD, and TotalAgility",
           "type": "inferred",
-          "evidence": "Named integrations require interface work (Att. 3 Q5)",
-          "confidence": "High"
-        },
-        {
-          "service": "Security, privacy, and compliance engineering to NIST/FISMA/SAM standards",
-          "type": "inferred",
-          "evidence": "Standards cited as mandatory (Att. 2; Att. 3 Q29)",
+          "evidence": "Named integration parties (Att. 3 Q5)",
           "confidence": "High"
         },
         {
           "service": "System, integration, and payment-accuracy testing beyond UAT",
           "type": "inferred",
-          "evidence": "Automatic bill payment and multiple interfaces (§1.B; Att. 3 Q5)",
+          "evidence": "Automatic payments and multiple external interfaces (§1.B; Att. 3 Q5)",
           "confidence": "Medium"
         },
         {
           "service": "Multilingual correspondence and portal content",
           "type": "inferred",
-          "evidence": "Item 4; languages referenced via forms page (Att. 3 Q19)",
+          "evidence": "Item 4; languages pointed to forms page (Att. 3 Q19)",
           "confidence": "Medium"
         },
         {
-          "service": "Reporting and analytics replacing current SSRS/Power BI reports",
+          "service": "Reporting and analytics replacing SSRS and Power BI reports",
           "type": "inferred",
-          "evidence": "Item 10; current stack includes SSRS and Power BI (Att. 3 Q43)",
+          "evidence": "Item 10; current stack (Att. 3 Q43)",
           "confidence": "Medium"
         },
         {
-          "service": "Hosting and infrastructure setup",
+          "service": "Hosting and infrastructure",
           "type": "inferred",
-          "evidence": "Three hosting models remain acceptable/undecided (Att. 3 Q6, Q26)",
+          "evidence": "Three hosting models acceptable, undecided (Att. 3 Q6, Q26)",
           "confidence": "Medium"
         },
         {
-          "service": "Project management and quality assurance aligned to state IT approval processes",
+          "service": "Project management and IV&V aligned to state IT approval process",
           "type": "inferred",
-          "evidence": "Large public-sector IT modernization effort",
+          "evidence": "Large public IT modernization for a state board",
           "confidence": "Medium"
         },
         {
-          "service": "Operating model redesign and process optimization, if scope expands to business transformation",
+          "service": "Operating model and process optimization, if scope expands to business transformation",
           "type": "inferred",
-          "evidence": "Issuer has no preference on transformation scope (Att. 3 Q50, Q51)",
+          "evidence": "Issuer has no preference on transformation scope (Att. 3 Q50)",
           "confidence": "Low"
         },
         {
           "service": "GenAI use-case design and governance under SIMM 5305-F, if AI is proposed",
           "type": "inferred",
-          "evidence": "Issuer open to GenAI with policy constraints (Att. 3 Q33, Q54)",
+          "evidence": "Issuer open to GenAI use cases, policy cited (Att. 3 Q33, Q54)",
           "confidence": "Low"
         }
       ],
       "gaps": [
-        "Pull record counts, claim/bill/payment volumes, and historical data years from the CalVCB Annual Report; the Q&A points there instead of giving figures (Att. 3 Q4, Q15, Q23, Q36, Q38, Q39, Q44, Q56)",
-        "Pull the full list of supported correspondence/portal languages from the CalVCB forms page (Att. 3 Q19)",
-        "No budget, funding range, or implementation timeline is established; state cost and schedule assumptions explicitly in the response (Att. 3 Q2, Q10, Q12, Q20, Q21, Q31, Q35, Q48)",
-        "Demonstration success criteria have not been established; confirm expectations if invited (Att. 3 Q34)",
-        "Response deadline of September 24, 2026 has passed; check Cal eProcure for amendments or a future solicitation"
+        "Pull claim, bill, payment, and document record counts and historical volumes from the CalVCB Annual Report; the Q&A points there instead of giving figures (Att. 3 Q4, Q15, Q23, Q36, Q38, Q39, Q44, Q56)",
+        "Pull the full list of supported/required correspondence languages from the CalVCB forms page (Att. 3 Q19)",
+        "No budget, funding range, NTE, or timeline established; state cost and schedule assumptions explicitly in the response (Att. 3 Q2, Q10, Q12, Q20, Q21, Q31, Q32, Q35)",
+        "No demonstration success criteria established; confirm expectations before or during demonstration (Att. 3 Q34)",
+        "Confirm exact external user counts (claimants, providers, advocates, court personnel) beyond the 350-400 role-based figure, since Att. 3 Q47 was not directly answered",
+        "Response deadline of September 24, 2026 has passed; check Cal eProcure for amendments, posted Q&A, or next steps"
       ],
       "issuerQuestions": [
         {
-          "question": "Does the 10-page limit in Attachment 1 include the worksheet's own question text, Part I company information, and the signature block, or only the respondent's answers?",
-          "basis": "The limit applies to the total submission, but the worksheet itself spans several pages of questions and forms.",
-          "evidence": "Att. 1 instructions",
+          "question": "Does the 10-page limit in Attachment 1 apply to the entire submission including Part I company information and the certification signature block, or only to the substantive answers?",
+          "basis": "The worksheet sets a 10-page total limit but also requires company information and a signature block within it.",
+          "evidence": "Att. 1 instructions and Part I",
           "type": "ambiguity",
           "priority": "High",
           "timing": "At demonstration or future solicitation"
         },
         {
-          "question": "Section 1.F references written responses including the Attachment 1 worksheet, while Att. 3 Q49 prohibits supplemental appendices or attachments; may respondents include a brief cover letter, and does it count toward the 10-page limit?",
-          "basis": "The RFI implies content may accompany the worksheet, but the Q&A forbids supplemental materials outright.",
+          "question": "Given that Attachment 3 Q49 prohibits supplemental attachments, may respondents include a brief cover letter or narrative that is not part of the Attachment 1 worksheet, and would it count toward the 10-page limit?",
+          "basis": "The RFI's instructions describe a 'response package' while the Q&A forbids appendices or separate attachments beyond the worksheet.",
           "evidence": "§1.F; Att. 1 instructions; Att. 3 Q49",
           "type": "conflict",
           "priority": "High",
           "timing": "At demonstration or future solicitation"
         },
         {
-          "question": "For Q48, should data cleansing and remediation be included in the base cost estimate or presented as an optional/separate line item?",
-          "basis": "The answer 'These have not been established. Yes.' does not clarify which treatment applies.",
+          "question": "For Attachment 3 Q48, should data cleansing and remediation be included in the base cost estimate, or presented as an optional line item?",
+          "basis": "The answer 'These have not been established. Yes.' does not indicate which treatment applies.",
           "evidence": "Att. 3 Q48",
           "type": "ambiguity",
           "priority": "Medium",
           "timing": "At demonstration or future solicitation"
         },
         {
-          "question": "Are exchanges with the Department of Justice, crime-reporting agencies, and courts in scope as required system integrations?",
-          "basis": "The RFI narrative describes these exchanges as part of eligibility determination, but the Q&A integration list omits them.",
+          "question": "Are exchanges with the Department of Justice, crime-reporting agencies, and courts (for offender/restitution tracking) in scope as system integrations?",
+          "basis": "The main RFI describes these external exchanges, but the Q&A's list of required integrations does not name them.",
           "evidence": "§1.B; Att. 3 Q5, Q28, Q45",
           "type": "conflict",
           "priority": "Medium",
           "timing": "At demonstration or future solicitation"
         },
         {
-          "question": "Is the external online application service intended to be replaced by the new solution, or integrated with it going forward?",
-          "basis": "Challenge item 6 flags the external online process as a gap, but it is absent from the Q&A's list of integrations.",
-          "evidence": "§1.D item 6; Att. 3 Q5",
+          "question": "Is the current external online application service to be replaced by the new solution, integrated with it, or retained as-is?",
+          "basis": "Challenge 6 identifies the external online application process as a gap, but it is not listed among the confirmed integrations.",
+          "evidence": "§1.D item 6; Att. 3 Q5, Q45",
           "type": "scope",
           "priority": "Medium",
           "timing": "At demonstration or future solicitation"
         },
         {
-          "question": "Beyond the 350-400 internal, JP, and CRC users, how many external users (claimants, providers, advocates, court personnel) should respondents assume for capacity and licensing?",
-          "basis": "The RFI cites about 300 users, the Q&A confirms 350-400 internal/county users, but external-user figures in Q47 were not answered.",
-          "evidence": "§1.B; Att. 3 Q7, Q47",
+          "question": "Beyond the 350-400 role-based internal, JP, and CRC users, how many external users (claimants, providers, advocates, court personnel) should respondents assume for capacity and licensing purposes?",
+          "basis": "Attachment 3 Q47 asked for these external user figures directly and the answer only pointed back to the 350-400 internal figure.",
+          "evidence": "Att. 3 Q7, Q47",
           "type": "missing information",
           "priority": "Medium",
           "timing": "At demonstration or future solicitation"
         }
-      ]
+      ],
+      "evaluationCriteria": [],
+      "commercialTerms": []
     }
   }
 }

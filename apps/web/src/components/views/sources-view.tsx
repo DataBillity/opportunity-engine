@@ -434,6 +434,14 @@ export function SourcesView({
   const [partnerSummary, setPartnerSummary] = useState("");
   const [partnerSourceLink, setPartnerSourceLink] = useState("");
   const [partnerTeaming, setPartnerTeaming] = useState<boolean | null>(null);
+  const [partnerYearFounded, setPartnerYearFounded] = useState("");
+  const [partnerHqAddress, setPartnerHqAddress] = useState("");
+  const [partnerHqPhone, setPartnerHqPhone] = useState("");
+  const [partnerHqEmail, setPartnerHqEmail] = useState("");
+  const [partnerPrimaryContact, setPartnerPrimaryContact] = useState("");
+  const [partnerHeadcount, setPartnerHeadcount] = useState("");
+  const [partnerEin, setPartnerEin] = useState("");
+  const [partnerUei, setPartnerUei] = useState("");
   const [capFiles, setCapFiles] = useState<File[]>([]);
   const [expFiles, setExpFiles] = useState<File[]>([]);
   const [credFiles, setCredFiles] = useState<File[]>([]);
@@ -449,6 +457,14 @@ export function SourcesView({
   const [editPartnerEmail, setEditPartnerEmail] = useState("");
   const [editPartnerSummary, setEditPartnerSummary] = useState("");
   const [editPartnerTeaming, setEditPartnerTeaming] = useState<boolean | null>(null);
+  const [editPartnerYearFounded, setEditPartnerYearFounded] = useState("");
+  const [editPartnerHqAddress, setEditPartnerHqAddress] = useState("");
+  const [editPartnerHqPhone, setEditPartnerHqPhone] = useState("");
+  const [editPartnerHqEmail, setEditPartnerHqEmail] = useState("");
+  const [editPartnerPrimaryContact, setEditPartnerPrimaryContact] = useState("");
+  const [editPartnerHeadcount, setEditPartnerHeadcount] = useState("");
+  const [editPartnerEin, setEditPartnerEin] = useState("");
+  const [editPartnerUei, setEditPartnerUei] = useState("");
   const [editCapFiles, setEditCapFiles] = useState<File[]>([]);
   const [editExpFiles, setEditExpFiles] = useState<File[]>([]);
   const [editCredFiles, setEditCredFiles] = useState<File[]>([]);
@@ -654,6 +670,14 @@ export function SourcesView({
       note: partnerSummary.trim(),
       summary: partnerSummary.trim(),
       createdAt: new Date().toISOString().slice(0, 10),
+      yearFounded: partnerYearFounded.trim() || undefined,
+      hqAddress: partnerHqAddress.trim() || undefined,
+      hqPhone: partnerHqPhone.trim() || undefined,
+      hqEmail: partnerHqEmail.trim() || undefined,
+      primaryContact: partnerPrimaryContact.trim() || undefined,
+      employeeHeadcount: partnerHeadcount.trim() || undefined,
+      ein: partnerEin.trim() || undefined,
+      uei: partnerUei.trim() || undefined,
     };
     onUpdatePartners(prev => [...prev, created]);
     setIngestBusy(true);
@@ -673,6 +697,8 @@ export function SourcesView({
     setAddPartnerOpen(false);
     setPartnerName(""); setPartnerWebsite(""); setPartnerSourceLink(""); setPartnerContact(""); setPartnerEmail(""); setPartnerSummary("");
     setPartnerTeaming(null);
+    setPartnerYearFounded(""); setPartnerHqAddress(""); setPartnerHqPhone(""); setPartnerHqEmail("");
+    setPartnerPrimaryContact(""); setPartnerHeadcount(""); setPartnerEin(""); setPartnerUei("");
     setCapFiles([]); setExpFiles([]); setCredFiles([]); setPeopleFiles([]);
   }
 
@@ -699,6 +725,14 @@ export function SourcesView({
     setEditPartnerEmail(p.contactEmail ?? "");
     setEditPartnerSummary(p.summary || p.note);
     setEditPartnerTeaming(p.teamingAgreementSigned);
+    setEditPartnerYearFounded(p.yearFounded ?? "");
+    setEditPartnerHqAddress(p.hqAddress ?? "");
+    setEditPartnerHqPhone(p.hqPhone ?? "");
+    setEditPartnerHqEmail(p.hqEmail ?? "");
+    setEditPartnerPrimaryContact(p.primaryContact ?? "");
+    setEditPartnerHeadcount(p.employeeHeadcount ?? "");
+    setEditPartnerEin(p.ein ?? "");
+    setEditPartnerUei(p.uei ?? "");
     setEditCapFiles([]); setEditExpFiles([]); setEditCredFiles([]); setEditPeopleFiles([]);
   }
 
@@ -716,6 +750,14 @@ export function SourcesView({
             summary: editPartnerSummary.trim(),
             note: editPartnerSummary.trim(),
             teamingAgreementSigned: editPartnerTeaming,
+            yearFounded: editPartnerYearFounded.trim() || undefined,
+            hqAddress: editPartnerHqAddress.trim() || undefined,
+            hqPhone: editPartnerHqPhone.trim() || undefined,
+            hqEmail: editPartnerHqEmail.trim() || undefined,
+            primaryContact: editPartnerPrimaryContact.trim() || undefined,
+            employeeHeadcount: editPartnerHeadcount.trim() || undefined,
+            ein: editPartnerEin.trim() || undefined,
+            uei: editPartnerUei.trim() || undefined,
           }
         : p
     ));
@@ -910,10 +952,6 @@ export function SourcesView({
   const visibleCapabilities = capabilities.filter(c =>
     isActive(c.status)
     && matchesBasic(c.name, c.id)
-    && textMatch(c.id, capFilters.id ?? "")
-    && textMatch(c.name, capFilters.name ?? "")
-    && partnersMatch(c.partners, capFilters.partners ?? "")
-    && textMatch(c.updated, capFilters.updated ?? "")
   ).sort((a, b) => {
     const { field, dir } = capSort;
     if (field === "id") return cmp(a.id, b.id, dir);
@@ -930,10 +968,6 @@ export function SourcesView({
   const visibleExperience = experience.filter(e =>
     isActive(e.status)
     && matchesBasic(e.name, e.id)
-    && textMatch(e.id, expFilters.id ?? "")
-    && textMatch(e.name, expFilters.name ?? "")
-    && textMatch(e.industry || "", expFilters.industry ?? "")
-    && partnersMatch(e.partners, expFilters.partners ?? "")
   ).sort((a, b) => {
     const { field, dir } = expSort;
     if (field === "id") return cmp(a.id, b.id, dir);
@@ -944,11 +978,6 @@ export function SourcesView({
   const visibleCredentials = credentials.filter(c =>
     isActive(c.status)
     && matchesBasic(c.name, c.id)
-    && textMatch(c.id, credFilters.id ?? "")
-    && textMatch(c.name, credFilters.name ?? "")
-    && exactMatch(c.credType, credFilters.credType ?? "")
-    && exactMatch(c.partner, credFilters.partner ?? "")
-    && textMatch(c.expiration, credFilters.expiration ?? "")
   ).sort((a, b) => {
     const { field, dir } = credSort;
     if (field === "id") return cmp(a.id, b.id, dir);
@@ -960,11 +989,6 @@ export function SourcesView({
   const visiblePeople = people.filter(p =>
     isActive(p.status)
     && matchesBasic(p.name, p.id)
-    && textMatch(p.id, peopleFilters.id ?? "")
-    && textMatch(p.name, peopleFilters.name ?? "")
-    && exactMatch(p.partner, peopleFilters.partner ?? "")
-    && textMatch((p.roles ?? [p.role]).filter(Boolean).join(", ") || p.role, peopleFilters.role ?? "")
-    && textMatch(p.expertise, peopleFilters.expertise ?? "")
   ).sort((a, b) => {
     const { field, dir } = peopleSort;
     if (field === "id") return cmp(a.id, b.id, dir);
@@ -976,12 +1000,6 @@ export function SourcesView({
   const visiblePartners = partners.filter(p =>
     (showArchived || isActive(p.status))
     && matchesQuery(p.name, p.id)
-    && textMatch(p.name, partnerFilters.name ?? "")
-    && exactMatch(p.type, partnerFilters.type ?? "")
-    && textMatch(p.contact || "", partnerFilters.contact ?? "")
-    && textMatch(p.contactEmail || "", partnerFilters.email ?? "")
-    && exactMatch(teamingValue(p.teamingAgreementSigned), partnerFilters.teaming ?? "")
-    && exactMatch(p.status, partnerFilters.status ?? "")
   ).sort((a, b) => {
     const { field, dir } = partnerSort;
     if (field === "type") return cmp(a.type, b.type, dir);
@@ -1007,68 +1025,53 @@ export function SourcesView({
         </p>
       </div>
 
-      <div className="flex flex-col gap-4">
-        <div className="bg-muted/60 inline-flex w-fit max-w-full p-1 rounded-xl gap-1 overflow-x-auto oe-touch-scroll">
-          {tabs.map(t => (
-            <button
-              key={t.id}
-              onClick={() => { setTab(t.id); setSearchQ(""); }}
-              className={cn(
-                "px-4 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer whitespace-nowrap",
-                tab === t.id
-                  ? "bg-card text-foreground shadow-sm font-semibold"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {t.label}
-              <span className="ml-2 text-[10px] font-mono opacity-60">{t.count}</span>
-            </button>
-          ))}
-        </div>
+      <div className="flex flex-col gap-0">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="bg-muted/60 inline-flex w-fit max-w-full p-1 rounded-xl gap-1 overflow-x-auto oe-touch-scroll">
+            {tabs.map(t => (
+              <button
+                key={t.id}
+                onClick={() => { setTab(t.id); setSearchQ(""); }}
+                className={cn(
+                  "px-4 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer whitespace-nowrap",
+                  tab === t.id
+                    ? "bg-card text-foreground shadow-sm font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {t.label}
+                <span className="ml-2 text-[10px] font-mono opacity-60">{t.count}</span>
+              </button>
+            ))}
+          </div>
 
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="flex items-center gap-3">
             <input
               type="text"
               value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
               placeholder={tab === "partners" ? "Search partners…" : "Search…"}
-              className="oe-field text-xs w-full sm:w-72"
+              className="oe-field text-xs w-full sm:w-56"
             />
             {tab === "partners" && (
-              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer whitespace-nowrap sm:px-1">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
                 <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="rounded" />
                 Show archived
               </label>
             )}
-            {filtersActive(columnFilters) && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (tab === "capabilities") setCapFilters({});
-                  else if (tab === "experience") setExpFilters({});
-                  else if (tab === "credentials") setCredFilters({});
-                  else if (tab === "people") setPeopleFilters({});
-                  else setPartnerFilters({});
-                }}
-                className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer whitespace-nowrap"
-              >
-                Clear column filters
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (tab === "capabilities") setAddCapOpen(true);
+                else if (tab === "experience") setAddExpOpen(true);
+                else if (tab === "credentials") setAddCredOpen(true);
+                else if (tab === "people") setAddPersonOpen(true);
+                else if (tab === "partners") setAddPartnerOpen(true);
+              }}
+              className="shrink-0 text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm whitespace-nowrap"
+            >
+              + Add {tab === "capabilities" ? "Capability" : tab === "experience" ? "Experience" : tab === "credentials" ? "Credential" : tab === "people" ? "Person" : "Partner"}
+            </button>
           </div>
-          <button
-            onClick={() => {
-              if (tab === "capabilities") setAddCapOpen(true);
-              else if (tab === "experience") setAddExpOpen(true);
-              else if (tab === "credentials") setAddCredOpen(true);
-              else if (tab === "people") setAddPersonOpen(true);
-              else if (tab === "partners") setAddPartnerOpen(true);
-            }}
-            className="shrink-0 self-start xl:self-auto text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm whitespace-nowrap"
-          >
-            + Add {tab === "capabilities" ? "Capability" : tab === "experience" ? "Experience" : tab === "credentials" ? "Credential" : tab === "people" ? "Person" : "Partner"}
-          </button>
         </div>
       </div>
 
@@ -1083,12 +1086,6 @@ export function SourcesView({
                   <SortableHeader label="Partners" field="partners" current={capSort} onClick={() => setCapSort(s => toggleSort(s, "partners"))} />
                   <SortableHeader label="Updated" field="updated" current={capSort} onClick={() => setCapSort(s => toggleSort(s, "updated"))} />
                 </tr>
-                <tr className="border-b border-border bg-card">
-                  <ColumnFilter label="ID" value={capFilters.id ?? ""} onChange={value => setCapFilters(prev => ({ ...prev, id: value }))} />
-                  <ColumnFilter label="Capability" value={capFilters.name ?? ""} onChange={value => setCapFilters(prev => ({ ...prev, name: value }))} />
-                  <ColumnFilter label="Partners" value={capFilters.partners ?? ""} onChange={value => setCapFilters(prev => ({ ...prev, partners: value }))} options={partnerOptions} />
-                  <ColumnFilter label="Updated" value={capFilters.updated ?? ""} onChange={value => setCapFilters(prev => ({ ...prev, updated: value }))} />
-                </tr>
               </thead>
               <tbody>
                 {pagedCapabilities.map(c => (
@@ -1100,7 +1097,7 @@ export function SourcesView({
                   </tr>
                 ))}
                 {visibleCapabilities.length === 0 && (
-                  <EmptyFilterRow colSpan={4} noun="capabilities" filtered={Boolean(searchQ) || filtersActive(capFilters)} />
+                  <EmptyFilterRow colSpan={4} noun="capabilities" filtered={Boolean(searchQ)} />
                 )}
               </tbody>
             </table>
@@ -1126,12 +1123,6 @@ export function SourcesView({
                   <SortableHeader label="Industry" field="industry" current={expSort} onClick={() => setExpSort(s => toggleSort(s, "industry"))} />
                   <SortableHeader label="Partners" field="partners" current={expSort} onClick={() => setExpSort(s => toggleSort(s, "partners"))} />
                 </tr>
-                <tr className="border-b border-border bg-card">
-                  <ColumnFilter label="ID" value={expFilters.id ?? ""} onChange={value => setExpFilters(prev => ({ ...prev, id: value }))} />
-                  <ColumnFilter label="Experience" value={expFilters.name ?? ""} onChange={value => setExpFilters(prev => ({ ...prev, name: value }))} />
-                  <ColumnFilter label="Industry" value={expFilters.industry ?? ""} onChange={value => setExpFilters(prev => ({ ...prev, industry: value }))} />
-                  <ColumnFilter label="Partners" value={expFilters.partners ?? ""} onChange={value => setExpFilters(prev => ({ ...prev, partners: value }))} options={partnerOptions} />
-                </tr>
               </thead>
               <tbody>
                 {visibleExperience.map(e => (
@@ -1143,7 +1134,7 @@ export function SourcesView({
                   </tr>
                 ))}
                 {visibleExperience.length === 0 && (
-                  <EmptyFilterRow colSpan={4} noun="experience" filtered={Boolean(searchQ) || filtersActive(expFilters)} />
+                  <EmptyFilterRow colSpan={4} noun="experience" filtered={Boolean(searchQ)} />
                 )}
               </tbody>
             </table>
@@ -1163,13 +1154,6 @@ export function SourcesView({
                   <SortableHeader label="Partner" field="partner" current={credSort} onClick={() => setCredSort(s => toggleSort(s, "partner"))} />
                   <SortableHeader label="Expiration" field="expiration" current={credSort} onClick={() => setCredSort(s => toggleSort(s, "expiration"))} />
                 </tr>
-                <tr className="border-b border-border bg-card">
-                  <ColumnFilter label="ID" value={credFilters.id ?? ""} onChange={value => setCredFilters(prev => ({ ...prev, id: value }))} />
-                  <ColumnFilter label="Credential" value={credFilters.name ?? ""} onChange={value => setCredFilters(prev => ({ ...prev, name: value }))} />
-                  <ColumnFilter label="Type" value={credFilters.credType ?? ""} onChange={value => setCredFilters(prev => ({ ...prev, credType: value }))} options={credTypeFilterOptions} />
-                  <ColumnFilter label="Partner" value={credFilters.partner ?? ""} onChange={value => setCredFilters(prev => ({ ...prev, partner: value }))} options={partnerOptions} />
-                  <ColumnFilter label="Expiration" value={credFilters.expiration ?? ""} onChange={value => setCredFilters(prev => ({ ...prev, expiration: value }))} />
-                </tr>
               </thead>
               <tbody>
                 {visibleCredentials.map(c => (
@@ -1182,7 +1166,7 @@ export function SourcesView({
                   </tr>
                 ))}
                 {visibleCredentials.length === 0 && (
-                  <EmptyFilterRow colSpan={5} noun="credentials" filtered={Boolean(searchQ) || filtersActive(credFilters)} />
+                  <EmptyFilterRow colSpan={5} noun="credentials" filtered={Boolean(searchQ)} />
                 )}
               </tbody>
             </table>
@@ -1202,13 +1186,6 @@ export function SourcesView({
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Role</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5 hidden xl:table-cell">Expertise</th>
                 </tr>
-                <tr className="border-b border-border bg-card">
-                  <ColumnFilter label="ID" value={peopleFilters.id ?? ""} onChange={value => setPeopleFilters(prev => ({ ...prev, id: value }))} />
-                  <ColumnFilter label="Name" value={peopleFilters.name ?? ""} onChange={value => setPeopleFilters(prev => ({ ...prev, name: value }))} />
-                  <ColumnFilter label="Partner" value={peopleFilters.partner ?? ""} onChange={value => setPeopleFilters(prev => ({ ...prev, partner: value }))} options={partnerOptions} />
-                  <ColumnFilter label="Role" value={peopleFilters.role ?? ""} onChange={value => setPeopleFilters(prev => ({ ...prev, role: value }))} />
-                  <ColumnFilter label="Expertise" value={peopleFilters.expertise ?? ""} onChange={value => setPeopleFilters(prev => ({ ...prev, expertise: value }))} className="hidden xl:table-cell" />
-                </tr>
               </thead>
               <tbody>
                 {visiblePeople.map(p => (
@@ -1221,7 +1198,7 @@ export function SourcesView({
                   </tr>
                 ))}
                 {visiblePeople.length === 0 && (
-                  <EmptyFilterRow colSpan={5} noun="people" filtered={Boolean(searchQ) || filtersActive(peopleFilters)} />
+                  <EmptyFilterRow colSpan={5} noun="people" filtered={Boolean(searchQ)} />
                 )}
               </tbody>
             </table>
@@ -1242,15 +1219,6 @@ export function SourcesView({
                   <SortableHeader label="Teaming Agreement" field="teaming" current={partnerSort} onClick={() => setPartnerSort(s => toggleSort(s, "teaming"))} />
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
                   <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Actions</th>
-                </tr>
-                <tr className="border-b border-border bg-card">
-                  <ColumnFilter label="Partner" value={partnerFilters.name ?? ""} onChange={value => setPartnerFilters(prev => ({ ...prev, name: value }))} />
-                  <ColumnFilter label="Type" value={partnerFilters.type ?? ""} onChange={value => setPartnerFilters(prev => ({ ...prev, type: value }))} options={partnerTypeFilterOptions} />
-                  <ColumnFilter label="Contact" value={partnerFilters.contact ?? ""} onChange={value => setPartnerFilters(prev => ({ ...prev, contact: value }))} />
-                  <ColumnFilter label="Email" value={partnerFilters.email ?? ""} onChange={value => setPartnerFilters(prev => ({ ...prev, email: value }))} />
-                  <ColumnFilter label="Teaming Agreement" value={partnerFilters.teaming ?? ""} onChange={value => setPartnerFilters(prev => ({ ...prev, teaming: value }))} options={TEAMING_FILTER_OPTIONS} />
-                  <ColumnFilter label="Status" value={partnerFilters.status ?? ""} onChange={value => setPartnerFilters(prev => ({ ...prev, status: value }))} options={PARTNER_STATUS_OPTIONS} />
-                  <th className="px-3 py-2" />
                 </tr>
               </thead>
               <tbody>
@@ -1285,7 +1253,7 @@ export function SourcesView({
                   </tr>
                 ))}
                 {visiblePartners.length === 0 && (
-                  <EmptyFilterRow colSpan={7} noun="partners" filtered={Boolean(searchQ) || filtersActive(partnerFilters)} />
+                  <EmptyFilterRow colSpan={7} noun="partners" filtered={Boolean(searchQ)} />
                 )}
               </tbody>
             </table>
@@ -1302,8 +1270,15 @@ export function SourcesView({
               <div><span className="text-muted-foreground">Teaming agreement:</span> <strong>{detailPartner.teamingAgreementSigned === true ? "Signed" : detailPartner.teamingAgreementSigned === false ? "Pending" : "N/A"}</strong></div>
               <div><span className="text-muted-foreground">Website:</span> {detailPartner.website !== "—" ? <a href={detailPartner.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{detailPartner.website}</a> : "—"}</div>
               <div><span className="text-muted-foreground">Date added:</span> {detailPartner.createdAt || "—"}</div>
-              <div><span className="text-muted-foreground">Contact:</span> {detailPartner.contact}</div>
-              <div><span className="text-muted-foreground">Email:</span> {detailPartner.contactEmail || "—"}</div>
+              <div><span className="text-muted-foreground">Primary contact:</span> {detailPartner.primaryContact || detailPartner.contact}</div>
+              <div><span className="text-muted-foreground">Contact email:</span> {detailPartner.contactEmail || "—"}</div>
+              {detailPartner.yearFounded && <div><span className="text-muted-foreground">Year founded:</span> {detailPartner.yearFounded}</div>}
+              {detailPartner.hqAddress && <div className="col-span-2"><span className="text-muted-foreground">HQ address:</span> {detailPartner.hqAddress}</div>}
+              {detailPartner.hqPhone && <div><span className="text-muted-foreground">HQ phone:</span> {detailPartner.hqPhone}</div>}
+              {detailPartner.hqEmail && <div><span className="text-muted-foreground">HQ email:</span> {detailPartner.hqEmail}</div>}
+              {detailPartner.employeeHeadcount && <div><span className="text-muted-foreground">Employees:</span> {detailPartner.employeeHeadcount}</div>}
+              {detailPartner.ein && <div><span className="text-muted-foreground">EIN:</span> <span className="font-mono">{detailPartner.ein}</span></div>}
+              {detailPartner.uei && <div><span className="text-muted-foreground">UEI:</span> <span className="font-mono">{detailPartner.uei}</span></div>}
             </div>
             {(detailPartner.summary || detailPartner.note) && (
               <div>
@@ -1582,6 +1557,37 @@ export function SourcesView({
           <FormField label="Summary">
             <TextArea value={editPartnerSummary} onChange={setEditPartnerSummary} rows={3} />
           </FormField>
+          <div className="border-t border-border pt-4 mt-2">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Corporate Information</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField label="Year founded">
+                <TextInput value={editPartnerYearFounded} onChange={setEditPartnerYearFounded} placeholder="e.g. 2018" />
+              </FormField>
+              <FormField label="Employee headcount">
+                <TextInput value={editPartnerHeadcount} onChange={setEditPartnerHeadcount} placeholder="e.g. 85" />
+              </FormField>
+              <FormField label="Primary contact">
+                <TextInput value={editPartnerPrimaryContact} onChange={setEditPartnerPrimaryContact} placeholder="e.g. Jordan Hale" />
+              </FormField>
+              <FormField label="HQ phone">
+                <TextInput value={editPartnerHqPhone} onChange={setEditPartnerHqPhone} placeholder="e.g. (503) 555-0142" />
+              </FormField>
+              <FormField label="HQ email">
+                <TextInput value={editPartnerHqEmail} onChange={setEditPartnerHqEmail} type="email" placeholder="e.g. info@company.com" />
+              </FormField>
+              <FormField label="EIN">
+                <TextInput value={editPartnerEin} onChange={setEditPartnerEin} placeholder="e.g. 83-1234567" />
+              </FormField>
+              <FormField label="UEI">
+                <TextInput value={editPartnerUei} onChange={setEditPartnerUei} placeholder="e.g. U8K9UNSG001" />
+              </FormField>
+            </div>
+            <div className="mt-4">
+              <FormField label="HQ address">
+                <TextInput value={editPartnerHqAddress} onChange={setEditPartnerHqAddress} placeholder="e.g. 1200 NW Marshall St, Suite 400, Portland, OR 97209" />
+              </FormField>
+            </div>
+          </div>
           <FormField label="Teaming agreement">
             <TeamingToggle value={editPartnerTeaming} onChange={setEditPartnerTeaming} />
           </FormField>
@@ -1714,6 +1720,37 @@ export function SourcesView({
           <FormField label="Source link (optional)">
             <TextInput value={partnerSourceLink} onChange={setPartnerSourceLink} />
           </FormField>
+          <div className="border-t border-border pt-4 mt-2">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Corporate Information</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField label="Year founded (optional)">
+                <TextInput value={partnerYearFounded} onChange={setPartnerYearFounded} placeholder="e.g. 2018" />
+              </FormField>
+              <FormField label="Employee headcount (optional)">
+                <TextInput value={partnerHeadcount} onChange={setPartnerHeadcount} placeholder="e.g. 85" />
+              </FormField>
+              <FormField label="Primary contact (optional)">
+                <TextInput value={partnerPrimaryContact} onChange={setPartnerPrimaryContact} placeholder="e.g. Jordan Hale" />
+              </FormField>
+              <FormField label="HQ phone (optional)">
+                <TextInput value={partnerHqPhone} onChange={setPartnerHqPhone} placeholder="e.g. (503) 555-0142" />
+              </FormField>
+              <FormField label="HQ email (optional)">
+                <TextInput value={partnerHqEmail} onChange={setPartnerHqEmail} type="email" placeholder="e.g. info@company.com" />
+              </FormField>
+              <FormField label="EIN (optional)">
+                <TextInput value={partnerEin} onChange={setPartnerEin} placeholder="e.g. 83-1234567" />
+              </FormField>
+              <FormField label="UEI (optional)">
+                <TextInput value={partnerUei} onChange={setPartnerUei} placeholder="e.g. U8K9UNSG001" />
+              </FormField>
+            </div>
+            <div className="mt-4">
+              <FormField label="HQ address (optional)">
+                <TextInput value={partnerHqAddress} onChange={setPartnerHqAddress} placeholder="e.g. 1200 NW Marshall St, Suite 400, Portland, OR 97209" />
+              </FormField>
+            </div>
+          </div>
           <FormField label="Teaming agreement">
             <TeamingToggle value={partnerTeaming} onChange={setPartnerTeaming} />
           </FormField>
