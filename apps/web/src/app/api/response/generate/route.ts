@@ -68,9 +68,6 @@ export async function POST(request: Request) {
   try {
     const briefing = parsed.data.briefing;
     if (briefing.mode === "package") {
-      if (briefing.projectType !== "rfi") {
-        return NextResponse.json({ error: "Package drafts are for RFI responses." }, { status: 400 });
-      }
       const draft = await generateRfiResponsePackage(briefing);
       return NextResponse.json({ kind: "package", ...draft });
     }

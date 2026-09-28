@@ -25,9 +25,11 @@ function sortGaps(gaps: RfiResponseMeta["gaps"]) {
 export function RfiResponsePackagePanel({
   packet,
   onOpenGap,
+  projectType = "rfi",
 }: {
   packet: RfiResponseMeta;
   onOpenGap?: (gapId: string) => void;
+  projectType?: "rfi" | "rfp" | "sow";
 }) {
   const gaps = sortGaps(packet.gaps);
   const high = gaps.filter(gap => gap.priority === "High" && gap.status !== "Resolved").length;
@@ -50,7 +52,7 @@ export function RfiResponsePackagePanel({
         <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{packet.reviewerSummary}</p>
         {packet.questions.length > 0 && (
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-1.5">Suggested questions for the issuer</div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-1.5">Suggested questions for the {projectType === "sow" ? "client" : "issuer"}</div>
             <ul className="list-disc pl-4 text-sm text-foreground space-y-1">
               {packet.questions.map(question => <li key={question}>{question}</li>)}
             </ul>
@@ -73,7 +75,7 @@ export function RfiResponsePackagePanel({
             <table className="w-full text-xs min-w-[720px]">
               <thead>
                 <tr className="oe-table-header">
-                  {["Requirement", "RFI ref", "Response section", "Owner", "Status"].map(label => (
+                  {["Requirement", projectType === "rfi" ? "RFI ref" : projectType === "sow" ? "SOW ref" : "Solicitation ref", "Response section", "Owner", "Status"].map(label => (
                     <th key={label} className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">{label}</th>
                   ))}
                 </tr>

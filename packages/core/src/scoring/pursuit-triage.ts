@@ -17,7 +17,7 @@ import {
 import {
   recDecisionLabel,
   resolveProjectType,
-  RFI_OUTLINE_SECTIONS,
+  outlineSectionsFor,
   thresholdsFor,
 } from "./project-type";
 import { buildHeuristicRfiSummary, mergeRfiSummaries } from "./rfi-summary";
@@ -609,14 +609,7 @@ function extractResponseSections(text: string, projectType: ProjectType): Solici
     });
   }
   if (found.length) return found;
-  if (projectType === "rfi") {
-    return RFI_OUTLINE_SECTIONS.map(section => ({ ...section }));
-  }
-  return [
-    { ref: "Approach", title: "Technical Approach", sectionId: "tech" },
-    { ref: "Scope", title: "Scope Response", sectionId: "scope" },
-    { ref: "Delivery", title: "Management & Delivery", sectionId: "mgmt" },
-  ];
+  return outlineSectionsFor(projectType).map(section => ({ ...section }));
 }
 
 function sectionBullets(text: string, heading: RegExp): string[] {

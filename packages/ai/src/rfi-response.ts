@@ -10,7 +10,7 @@ import { callModel, ModelGatewayError } from "./gateway";
 import { parseModelJson } from "./json";
 import { buildResponseDraftPrompt, collectResponseFacts, type ResponseGroundingFact } from "./response-draft";
 
-export const RFI_RESPONSE_PROMPT_VERSION = "rfi-response-v1.1";
+export const RFI_RESPONSE_PROMPT_VERSION = "rfi-response-v1.2";
 
 const GAP_TYPE_ALIASES: Record<string, RfiGapLogEntry["gapType"]> = {
   missing_information: "missing_information",
@@ -107,6 +107,107 @@ Return ONLY JSON with this shape:
   "strategicNotes": "requirements to influence, competitor signals, teaming ideas for capability gaps",
   "usedInsightIds": ["R1"]
 }`;
+
+const BID_GAP_RULES = `Placeholder format, in the draft body: [GAP-### | Owner | Short action]
+Examples: [GAP-004 | Prime | Confirm the program manager's PMP certification date]
+Number gaps in the order they appear, after the highest EXISTING GAP id if one is listed. Owner is "Prime", or "Partner: Name" only when that partner is confirmed on the team. Unconfirmed partners are named in notes, and the owner stays Prime.
+Capability gaps are owned by Prime, with a note on whether a partner could close them.
+Gap types: missing_information, unverified_claim, capability_gap, partner_input, decision_needed, clarification, compliance_risk.
+Priority: High (blocks submission, compliance, or a pass/fail gate), Medium (weakens the score or the price), Low (nice to have).
+Set due a few days before the response deadline when it is known. Status is Open.`;
+
+const BID_GUARDRAILS = `Writing guardrails:
+- Cite only GROUNDING FACTS. Never invent past performance, clients, contract numbers, certifications, people, rates, prices, metrics, or identifiers.
+- Commit only to what the facts show the team can deliver. Where delivery depends on something unverified (staffing, a partner, a certification, a price), write the commitment with a placeholder instead of asserting it.
+- Past performance and key personnel name only engagements and people in the facts. Attribute partner experience to that partner.
+- Never invent a price, rate, or hours. Describe the pricing approach and put figures behind placeholders.
+- Inferred services are our reading, not the issuer's requirement. Propose them as recommendations or state them as assumptions, never as requirements the issuer wrote.
+- If the team cannot meet a requirement, log a capability gap. Do not obscure it.
+- Use the issuer's terminology. Plain language, active voice, short paragraphs. No "world-class", "best-in-breed", "cutting-edge", "synergies".
+- If the facts are thin, say so in the reviewer summary and use placeholders instead of invented coverage.`;
+
+const BID_PACKAGE_OUTPUT = `Return ONLY JSON with this shape:
+{
+  "reviewerSummary": "half a page at most: due date, time, time zone, submission method, fit against the evaluation criteria, open gaps by owner and priority, decisions needed. Flag missing inputs at the top.",
+  "compliance": [{ "requirement": "requirement or instruction, shortened", "rfiRef": "solicitation section or paragraph", "responseSection": "section title", "owner": "Prime", "status": "Addressed or Open" }],
+  "sections": [{ "id": "tech", "ref": "Vol I", "title": "Technical approach", "body": "prose with [GAP-### | Owner | Description] inline" }],
+  "gaps": [{ "id": "GAP-001", "location": "section title and solicitation reference", "gapType": "missing_information", "description": "string", "owner": "Prime", "priority": "High", "due": "YYYY-MM-DD", "status": "Open", "notes": "string" }],
+  "questions": ["question for the issuer: start from the 'Question for the issuer' facts, keep their wording and timing, and add others only when the facts raise them"],
+  "strategicNotes": "win themes, competitor signals, teaming ideas for capability gaps, and contract terms to negotiate",
+  "usedInsightIds": ["R1"]
+}`;
+
+export const RFP_PACKAGE_PROMPT = `You draft a complete proposal in response to a Request for Proposal for DataBillity (Billity AI) as Prime. A human reviewer approves and submits it. Return a complete, compliant first draft that scores well against the stated evaluation criteria and shows what you assumed, what you could not verify, and who must supply what is missing.
+
+A proposal is an offer the issuer can accept. It must be compliant first (every instruction and requirement addressed where the evaluators expect it), responsive second (answers what each evaluation factor asks), and persuasive third (clear win themes backed by proof).
+
+Work in this order, then return the package below:
+1. Compliance: issuer, solicitation number, title, due date and time zone, questions deadline, submission method, volume and page limits, required forms, and every requirement and instruction in the facts. Build the compliance array so each requirement maps to the section that answers it.
+2. Need: the problem, why now, and what success looks like to the issuer. Build this from the objective, challenge themes, consequences, target end state, and constraint facts.
+3. Win themes: two to four themes that tie the issuer's challenges and evaluation criteria to what the team can prove from the facts. Each theme needs proof (a cited engagement, person, or capability) or a gap.
+4. Fit: for each requirement area, Strong (direct past performance), Partial (related or partner-only), or Gap. Do not make the go/no-go call. Note which confirmed partner covers which area.
+5. Draft sections that mirror the prescribed volumes and sections in order, with their numbering. If SECTIONS TO DRAFT lists a structure, use those ids, refs, and titles exactly and return a body for every one. Format facts are binding: stay inside page limits, add nothing the instructions exclude, and where rules conflict follow the most restrictive reading and log a compliance_risk gap.
+6. For every section: the first sentence answers what the section's evaluation factor asks. Address each mapped requirement explicitly in the issuer's words, then show how (method, tools, standards, staffing) and the benefit to the issuer, with proof from the facts. Weight the words toward the most important evaluation factors.
+7. Key personnel, past performance, and price: only from the facts. Missing résumés, references, certifications, or figures become gaps owned by the company that must supply them.
+8. Gaps: anything missing, unverified, or undecided becomes a placeholder in the draft and one Gap Log row. Pass/fail gates that are not proven in the facts are High.
+9. Self-check: every requirement appears in compliance with a response section; every evaluation factor is addressed; every placeholder has one Gap Log row and vice versa; limits are respected; no fabricated claims.
+
+${BID_GAP_RULES}
+
+${BID_GUARDRAILS}
+- If the questions deadline has passed, turn open questions into stated assumptions in the draft and list them in questions with that note.
+- Commercial terms that carry risk (liquidated damages, uncapped liability, IP ownership) go in strategicNotes and, when they need a decision before submission, a decision_needed gap.
+
+${BID_PACKAGE_OUTPUT}`;
+
+export const SOW_PACKAGE_PROMPT = `You draft a complete response to a client's Statement of Work for DataBillity (Billity AI) as Prime. A human reviewer approves and sends it. Return a complete first draft that the client could accept as the basis for the engagement, and that protects DataBillity's scope and price by stating what you assumed, what you could not verify, and who must supply what is missing.
+
+A SOW response confirms that we understand the need, explains how we will deliver each task and deliverable, defines acceptance, names the team, sets the schedule, prices the work, and draws a clear scope boundary with assumptions and exclusions.
+
+Work in this order, then return the package below:
+1. Compliance: client, SOW title and reference, response due date, format or submission rules, and every task, deliverable, and acceptance criterion in the facts. Build the compliance array so each maps to the section that answers it.
+2. Need: the client's problem, why now, and the outcome they want. Build this from the objective, challenge themes, consequences, and end state facts.
+3. Fit: for each task area, Strong, Partial, or Gap, and which confirmed partner covers what. Do not make the go/no-go call.
+4. Draft sections that follow any structure the client prescribes. If SECTIONS TO DRAFT lists a structure, use those ids, refs, and titles exactly and return a body for every one.
+5. For every task and deliverable: say what we will do, how, what the client receives, and how acceptance works, in the client's words, with proof from the facts.
+6. Scope boundary: inferred services the SOW omits are either offered as optional recommendations or listed as exclusions; state every assumption the price depends on (volumes, client responsibilities, access, environments, turnaround times). Put these in the assumptions section when one exists.
+7. Team, schedule, and price: only from the facts. Missing names, rates, or figures become gaps.
+8. Commercial terms: for each risky term in the facts (payment, acceptance, IP, liability, indemnity, warranty, termination, change control), note a proposed position in strategicNotes and log a decision_needed gap when it must be settled before sending.
+9. Self-check: every task and deliverable appears in compliance with a response section; every placeholder has one Gap Log row and vice versa; no fabricated claims.
+
+${BID_GAP_RULES}
+
+${BID_GUARDRAILS}
+
+${BID_PACKAGE_OUTPUT}`;
+
+export function bidSectionPrompt(projectType: "rfp" | "sow"): string {
+  const kind = projectType === "sow" ? "a client's Statement of Work" : "a Request for Proposal";
+  return `You write one section of a DataBillity (Billity AI) response to ${kind}. DataBillity is the Prime. A human reviewer approves and submits every response.
+
+Hard rules:
+- Cite only facts listed under GROUNDING FACTS. If a fact is not listed, do not use it.
+- The first sentence answers what the section is for (the evaluation factor or task it addresses). The rest addresses each relevant requirement in the issuer's words, with method, benefit, and proof from the facts.
+- Write prose for the named section only. No cover letter, no other sections, no HTML, no markdown headings.
+- Stay inside any page, font, or file limit in the facts. 220-420 words unless a limit or thin facts require less.
+- If something is missing, unverified, or a decision only a human can make, insert a placeholder: [GAP-### | Owner | Short action].
+
+${BID_GAP_RULES}
+
+${BID_GUARDRAILS}
+
+Return ONLY JSON:
+{
+  "body": "section prose with [GAP-### | Owner | Description] placeholders inline",
+  "usedInsightIds": ["R1"],
+  "gaps": [{ "id": "GAP-001", "location": "section name and reference", "gapType": "missing_information", "description": "what is needed", "owner": "Prime", "priority": "High", "due": "YYYY-MM-DD", "status": "Open", "notes": "source or fallback" }]
+}
+Every placeholder in body has exactly one gaps entry with the same id, and every gaps entry appears in body.`;
+}
+
+export function packagePromptFor(projectType: "rfi" | "rfp" | "sow"): string {
+  return { rfi: RFI_PACKAGE_PROMPT, rfp: RFP_PACKAGE_PROMPT, sow: SOW_PACKAGE_PROMPT }[projectType];
+}
 
 const PRIORITY_RANK: Record<RfiGapLogEntry["priority"], number> = { High: 0, Medium: 1, Low: 2 };
 
@@ -248,6 +349,8 @@ function outlineSections(briefing: ResponseDraftBriefingType): { id: string; ref
 }
 
 export function fallbackRfiPackage(briefing: ResponseDraftBriefingType): RfiResponsePackage {
+  const projectType = briefing.projectType ?? "rfi";
+  if (projectType !== "rfi") return fallbackBidPackage(briefing, projectType);
   const due = daysBefore(briefing.pursuit.dueDate, 3);
   const questions = briefing.pursuit.informationRequests ?? [];
   const unmapped = briefing.pursuit.unmappedRequirements ?? [];
@@ -413,6 +516,99 @@ export function fallbackRfiPackage(briefing: ResponseDraftBriefingType): RfiResp
   }, due);
 }
 
+function fallbackBidPackage(briefing: ResponseDraftBriefingType, projectType: "rfp" | "sow"): RfiResponsePackage {
+  const due = daysBefore(briefing.pursuit.dueDate, 3);
+  const requirements = briefing.pursuit.informationRequests ?? [];
+  const unmapped = briefing.pursuit.unmappedRequirements ?? [];
+  const constraints = briefing.pursuit.docSummary?.responseConstraints ?? [];
+  const summary = briefing.pursuit.docSummary?.rfiSummary;
+  const confirmed = briefing.partners.filter(partner => partner.confirmed);
+  const outline = outlineSections(briefing);
+  const issuer = briefing.organization.name;
+  const ref = briefing.pursuit.solicitationRef || briefing.pursuit.name;
+  const kind = projectType === "sow" ? "SOW response" : "proposal";
+  let n = 1;
+  const gaps: RfiGapLogEntry[] = [];
+  const push = (
+    location: string,
+    gapType: RfiGapLogEntry["gapType"],
+    description: string,
+    priority: RfiGapLogEntry["priority"],
+    notes: string,
+  ): string => {
+    const id = nextGapId(n++);
+    gaps.push({ id, location, gapType, description, owner: "Prime", priority, due, status: "Open", notes });
+    return `[${id} | Prime | ${description}]`;
+  };
+
+  if (!briefing.pursuit.dueDate) {
+    push("Reviewer summary", "compliance_risk", "Confirm the response due date, time, and time zone", "High", "The packet has no due date.");
+  }
+  if (!constraints.length) {
+    push("Reviewer summary", "compliance_risk", "Confirm page limits, file type, and submission method", "High", "No response-format rules were extracted.");
+  }
+  for (const item of unmapped) {
+    push("Compliance", "capability_gap", `Decide how to address: ${item}`, "Medium", "No current team capability is mapped to this requirement.");
+  }
+
+  const need = [
+    briefing.pursuit.docSummary?.objective?.[0] ?? `${issuer} has not stated an objective the packet could extract.`,
+    summary?.endState ?? "",
+  ].filter(Boolean).join("\n\n");
+  const sections = outline.map(section => {
+    const lines = [need];
+    const text = `${section.id} ${section.title}`.toLowerCase();
+    if (/past|experience/.test(text)) {
+      lines.push(briefing.experience.length
+        ? `Records on file: ${briefing.experience.slice(0, 4).map(item => item.name).join("; ")}. Expand only from these.`
+        : push(section.title, "missing_information", "Provide past performance the team can cite, with customer, dates, and references", "High", "No experience records were in the grounding facts."));
+    } else if (/pers|team|staff/.test(text)) {
+      lines.push(push(section.title, "missing_information", "Name key personnel and attach résumés", "High", "No assigned personnel were in the grounding facts."));
+      if (confirmed.length) lines.push(`Confirmed partners: ${confirmed.map(partner => partner.name).join(", ")}.`);
+    } else if (/price|pricing|cost/.test(text)) {
+      lines.push(push(section.title, "decision_needed", "Build the price from approved rates and the scope assumptions", "High", "No pricing figures are in the grounding facts."));
+    } else if (/assum|exclu/.test(text)) {
+      const inferred = (summary?.services ?? []).filter(item => item.type === "inferred").map(item => item.service);
+      lines.push(inferred.length
+        ? `Work the SOW does not name, to include as options or exclusions: ${inferred.join("; ")}.`
+        : push(section.title, "decision_needed", "List the assumptions and exclusions the price depends on", "High", "No inferred scope was extracted."));
+    }
+    lines.push(`${section.title} is not drafted. The model was unavailable, so this section is a placeholder for the reviewer.`);
+    return { ...section, body: lines.join("\n\n") };
+  });
+
+  const compliance: RfiComplianceRow[] = [
+    ...requirements.map((requirement, index) => ({
+      requirement,
+      rfiRef: `R${index + 1}`,
+      responseSection: outline[0]?.title ?? "Response",
+      owner: "Prime",
+      status: "Open",
+    })),
+    ...constraints.map(rule => ({ requirement: rule, rfiRef: "Format", responseSection: "All sections", owner: "Prime", status: "Open" })),
+  ];
+
+  const openHigh = gaps.filter(gap => gap.priority === "High").length;
+  return reconcileRfiPackage({
+    reviewerSummary: [
+      `Model draft unavailable. This ${kind} is an honest shell for ${issuer} / ${ref}.`,
+      briefing.pursuit.dueDate ? `Response due ${briefing.pursuit.dueDate}. Time zone and submission method are not confirmed.` : "Due date is not on file.",
+      `${requirements.length} requirement${requirements.length === 1 ? "" : "s"} on file, ${unmapped.length} unmapped.`,
+      `${gaps.length} open gaps, ${openHigh} high, all owned by Prime until a reviewer assigns them.`,
+      "Do not submit this shell. Resolve the Gap Log first.",
+    ].join(" "),
+    sections,
+    compliance,
+    gaps,
+    questions: (summary?.issuerQuestions ?? []).map(item => item.question),
+    strategicNotes: [
+      ...(summary?.commercialTerms ?? []).map(item => `Term to negotiate: ${item}`),
+      unmapped.length ? `Unmapped requirements to consider for teaming: ${unmapped.slice(0, 5).join("; ")}.` : "",
+    ].filter(Boolean).join("\n"),
+    usedInsightIds: [],
+  }, due);
+}
+
 function normalizePackage(value: unknown, fallbackDue: string): unknown {
   const row = asRecord(value);
   if (!row) return value;
@@ -477,7 +673,8 @@ export interface RfiResponseDraft extends RfiResponsePackage {
 
 export async function generateRfiResponsePackage(rawBriefing: unknown): Promise<RfiResponseDraft> {
   const briefing = ResponseDraftBriefing.parse(rawBriefing);
-  const facts = collectResponseFacts(briefing);
+  const projectType = briefing.projectType ?? "rfi";
+  const facts = collectResponseFacts(briefing, { includeSourceExcerpt: !briefing.pursuit.docSummary?.rfiSummary });
   const fallbackDue = daysBefore(briefing.pursuit.dueDate, 3);
   const prompt = [
     buildResponseDraftPrompt(briefing, facts),
@@ -498,7 +695,7 @@ export async function generateRfiResponsePackage(rawBriefing: unknown): Promise<
       tier: "judgment",
       preferProvider,
       promptVersion: RFI_RESPONSE_PROMPT_VERSION,
-      systemPrompt: RFI_PACKAGE_PROMPT,
+      systemPrompt: packagePromptFor(projectType),
       prompt,
       classification: "internal",
       redactionProfile: "response-draft-v1",

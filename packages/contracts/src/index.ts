@@ -171,6 +171,7 @@ export const RfiIssuerQuestion = z.object({
   timing: z.string().default(""),
 });
 
+/** Structured Scope Summary for every project type; the `rfi` names are kept because stored pursuits use them. */
 export const RfiScopeSummary = z.object({
   workType: z.preprocess(
     value => {
@@ -192,6 +193,8 @@ export const RfiScopeSummary = z.object({
   services: z.array(RfiServiceItem).default([]),
   gaps: z.array(z.string()).default([]),
   issuerQuestions: z.array(RfiIssuerQuestion).default([]),
+  evaluationCriteria: z.array(z.string()).default([]),
+  commercialTerms: z.array(z.string()).default([]),
 });
 
 export const ResponseDraftPerson = z.object({

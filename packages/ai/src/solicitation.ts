@@ -6,17 +6,9 @@
 import { callModel, ModelGatewayError } from "./gateway";
 import { parseModelJson } from "./json";
 import { RFI_SUMMARY_PROMPT } from "./rfi-summary-prompt";
+import { bidStructurePrompt, RFP_SUMMARY_PROMPT, SOW_SUMMARY_PROMPT } from "./scope-summary-prompts";
 
-export const SOLICITATION_EXTRACT_PROMPT_VERSION = "solicitation-extract-v2.0";
-
-const RFP_SOW_PROMPT = `You extract facts from an RFP or Statement of Work for DataBillity bid triage.
-
-Hard rules:
-- Use only the document text. Do not invent agencies, dates, certifications, or requirements.
-- Prefer numbered/lettered shall/must statements as requirements.
-- Mark passFail true only when the text is mandatory, pass/fail, or a certification/ATO/bond gate.
-- If a field is not present, use an empty string, empty array, or null.
-- Return ONLY JSON matching the schema.`;
+export const SOLICITATION_EXTRACT_PROMPT_VERSION = "solicitation-extract-v2.1";
 
 const RFI_STRUCTURE_PROMPT = `You extract the response structure of a Request for Information (RFI) for a DataBillity bid team.
 
@@ -34,8 +26,9 @@ Hard rules:
 type RfiPass = "summary" | "structure";
 
 function systemPromptFor(projectType: ProjectType, pass: RfiPass = "summary"): string {
-  if (projectType !== "rfi") return RFP_SOW_PROMPT;
-  return pass === "structure" ? RFI_STRUCTURE_PROMPT : RFI_SUMMARY_PROMPT;
+  if (projectType === "rfi") return pass === "structure" ? RFI_STRUCTURE_PROMPT : RFI_SUMMARY_PROMPT;
+  if (pass === "structure") return bidStructurePrompt(projectType);
+  return projectType === "sow" ? SOW_SUMMARY_PROMPT : RFP_SUMMARY_PROMPT;
 }
 
 function laneLabel(projectType: ProjectType, lane: "B" | "C"): string {
@@ -75,50 +68,44 @@ export function buildSolicitationExtractPrompt(input: {
     issuer: "issuing org or empty",
   };
 
-  if (projectType !== "rfi") {
-    return [...header, JSON.stringify({
-      ...metadata,
-      objective: ["..."],
-      challenges: ["..."],
-      services: ["..."],
-      deliverables: ["..."],
-      requirements: [{ requirementText: "...", sectionRef: "optional", passFail: false, weight: 0 }],
-      responseSections: [{ ref: "Vol I § 3.2", title: "Technical Approach", sectionId: "tech" }],
-      responseConstraints: [],
-      constraints: ["eligibility or security gates only — not page limits"],
-    })].join("\n");
-  }
-
+  const isRfi = projectType === "rfi";
   if (input.pass === "structure") {
     return [...header, JSON.stringify({
       ...metadata,
       requirements: [{
-        requirementText: "question or information request vendors must answer, at most 25 words",
+        requirementText: isRfi
+          ? "question or information request vendors must answer, at most 25 words"
+          : "shall or must statement, task, or deliverable, at most 25 words",
         sectionRef: "part, section, or question number",
         passFail: false,
         weight: 0,
       }],
-      responseSections: [
-        { ref: "Cover", title: "Cover letter", sectionId: "cover" },
-        { ref: "Questions", title: "Responses to specific questions", sectionId: "questions" },
-      ],
+      responseSections: isRfi
+        ? [
+          { ref: "Cover", title: "Cover letter", sectionId: "cover" },
+          { ref: "Questions", title: "Responses to specific questions", sectionId: "questions" },
+        ]
+        : [{ ref: "Vol I § 3.2", title: "Technical Approach", sectionId: "tech" }],
       responseConstraints: ["page limit, font, margins, or submission format — not scored"],
       constraints: ["eligibility or security gates only — not page limits"],
     })].join("\n");
   }
 
+  const source = isRfi ? "the RFI" : projectType === "sow" ? "the SOW" : "the solicitation";
   return [
     ...header,
     JSON.stringify({
       ...metadata,
       objective: ["[Action] the [system/process/program] in order to [business outcome] for [who benefits] (§ cites)"],
-      challenges: ["every stated problem, numbered as the RFI numbers them, in your words"],
+      challenges: [`every stated problem, numbered as ${source} numbers them, in your words`],
       services: ["explicit services only"],
-      deliverables: ["target end state lines"],
+      deliverables: [isRfi ? "target end state lines" : "named deliverables and outcomes"],
       rfiSummary: {
         workType: "technical | consulting | both | other",
         objectiveConfidence: "High | Medium | Low",
-        procurementObjective: "acquisition decision with cite, or empty",
+        procurementObjective: isRfi
+          ? "acquisition decision with cite, or empty"
+          : projectType === "sow" ? "engagement model and term with cite, or empty" : "contract type and award basis with cite, or empty",
         challengeThemes: [{ theme: "theme", detail: "sentence ending with item numbers", evidence: "cite", rootCause: false }],
         consequences: ["effect the issuer names"],
         endState: "paragraph",
@@ -126,9 +113,22 @@ export function buildSolicitationExtractPrompt(input: {
         nextStep: "next procurement step or empty",
         services: [{ service: "name", type: "explicit | inferred", evidence: "reason + cite", confidence: "High | Medium | Low, empty for explicit" }],
         gaps: ["action for the bid team"],
+        ...(isRfi ? {} : {
+          evaluationCriteria: ["factor, weight or relative importance, with cite"],
+          commercialTerms: ["risky term in your words, the risk, and a cite"],
+        }),
       },
-      issuerQuestions: [{ question: "...", basis: "...", evidence: "cites", type: "conflict | ambiguity | missing information | scope", priority: "High | Medium | Low", timing: "Before response | At demonstration or future solicitation" }],
-      responseSections: [{ ref: "Part I", title: "section title", sectionId: "part-1" }],
+      issuerQuestions: [{
+        question: "...",
+        basis: "...",
+        evidence: "cites",
+        type: "conflict | ambiguity | missing information | scope",
+        priority: "High | Medium | Low",
+        timing: isRfi ? "Before response | At demonstration or future solicitation" : "Before response | State as an assumption in the response",
+      }],
+      responseSections: [isRfi
+        ? { ref: "Part I", title: "section title", sectionId: "part-1" }
+        : { ref: "Vol I", title: "section title", sectionId: "tech" }],
       responseConstraints: ["submission rule"],
     }),
   ].join("\n");
@@ -181,6 +181,8 @@ function cleanRfiSummary(raw: unknown): unknown {
     endStateConstraints: strings("endStateConstraints"),
     gaps: strings("gaps"),
     issuerQuestions: rows("issuerQuestions", "question"),
+    evaluationCriteria: strings("evaluationCriteria"),
+    commercialTerms: strings("commercialTerms"),
   };
 }
 
@@ -247,34 +249,18 @@ export async function extractSolicitationWithModel(input: {
 }): Promise<ModelExtractionResult> {
   const projectType = input.projectType ?? (input.lane === "C" ? "sow" : "rfp");
 
-  if (projectType !== "rfi") {
-    const pass = await runPass({
-      preferProvider: "gemini",
-      systemPrompt: systemPromptFor(projectType),
-      prompt: buildSolicitationExtractPrompt({ ...input, projectType }),
-      maxTokens: 2500,
-      timeoutMs: 60_000,
-    });
-    return {
-      extraction: parseExtraction(pass.parsed),
-      modelVersion: pass.modelVersion,
-      provider: pass.provider,
-      summaryFromModel: true,
-    };
-  }
-
-  // Two passes in parallel so a long questionnaire can't crowd the scope summary out of the token budget.
+  // Two passes in parallel so a long questionnaire or requirement list can't crowd the scope summary out of the token budget.
   const [summary, structure] = await Promise.allSettled([
     runPass({
       preferProvider: "claude",
-      systemPrompt: systemPromptFor("rfi", "summary"),
+      systemPrompt: systemPromptFor(projectType, "summary"),
       prompt: buildSolicitationExtractPrompt({ ...input, projectType, pass: "summary" }),
       maxTokens: 12000,
       timeoutMs: 130_000,
     }),
     runPass({
       preferProvider: "gemini",
-      systemPrompt: systemPromptFor("rfi", "structure"),
+      systemPrompt: systemPromptFor(projectType, "structure"),
       prompt: buildSolicitationExtractPrompt({ ...input, projectType, pass: "structure" }),
       maxTokens: 8000,
       timeoutMs: 90_000,
@@ -314,7 +300,7 @@ export interface ModelExtractionResult {
   extraction: SolicitationExtractionType;
   modelVersion: string;
   provider: "claude" | "gemini";
-  /** False when the RFI summary pass failed and only the structure pass returned. */
+  /** False when the summary pass failed and only the structure pass returned. */
   summaryFromModel: boolean;
   summaryError?: string;
 }
