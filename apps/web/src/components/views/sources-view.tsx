@@ -21,6 +21,8 @@ import {
   applyPartnerIngest,
   applyResumeReplacement,
   ingestPartnerDocuments,
+  ingestPartnerDetailsFile,
+  type ParsedCorporateInfo,
   type PartnerIngestKind,
   type PartnerIngestResult,
 } from "@/lib/partner-ingest";
@@ -371,6 +373,20 @@ function PartnerMultiSelect({
   );
 }
 
+function FileUploadInfo({ fileName, uploadedAt }: { fileName?: string; uploadedAt?: string }) {
+  if (!fileName) return null;
+  return (
+    <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-1.5 px-0.5">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary shrink-0">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+      </svg>
+      <span className="truncate font-medium">{fileName}</span>
+      {uploadedAt && <span className="shrink-0 text-muted-foreground/70">· uploaded {uploadedAt}</span>}
+    </div>
+  );
+}
+
 export function SourcesView({
   partners,
   graph,
@@ -442,6 +458,8 @@ export function SourcesView({
   const [partnerHeadcount, setPartnerHeadcount] = useState("");
   const [partnerEin, setPartnerEin] = useState("");
   const [partnerUei, setPartnerUei] = useState("");
+  const [partnerDetailsFiles, setPartnerDetailsFiles] = useState<File[]>([]);
+  const [detailsProcessing, setDetailsProcessing] = useState(false);
   const [capFiles, setCapFiles] = useState<File[]>([]);
   const [expFiles, setExpFiles] = useState<File[]>([]);
   const [credFiles, setCredFiles] = useState<File[]>([]);
@@ -465,6 +483,8 @@ export function SourcesView({
   const [editPartnerHeadcount, setEditPartnerHeadcount] = useState("");
   const [editPartnerEin, setEditPartnerEin] = useState("");
   const [editPartnerUei, setEditPartnerUei] = useState("");
+  const [editPartnerDetailsFiles, setEditPartnerDetailsFiles] = useState<File[]>([]);
+  const [editDetailsProcessing, setEditDetailsProcessing] = useState(false);
   const [editCapFiles, setEditCapFiles] = useState<File[]>([]);
   const [editExpFiles, setEditExpFiles] = useState<File[]>([]);
   const [editCredFiles, setEditCredFiles] = useState<File[]>([]);
@@ -572,6 +592,84 @@ export function SourcesView({
     return notes;
   }
 
+  function applyCorporateInfo(
+    corp: ParsedCorporateInfo,
+    getters: Record<string, string>,
+    setters: Record<string, (v: string) => void>,
+  ) {
+    const map: [string, keyof ParsedCorporateInfo][] = [
+      ["name", "name"], ["yearFounded", "yearFounded"], ["hqAddress", "hqAddress"],
+      ["hqPhone", "hqPhone"], ["hqEmail", "hqEmail"], ["primaryContact", "primaryContact"],
+      ["headcount", "employeeHeadcount"], ["ein", "ein"], ["uei", "uei"],
+      ["summary", "summary"], ["website", "website"], ["contact", "primaryContact"],
+    ];
+    let filled = 0;
+    for (const [key, corpKey] of map) {
+      const value = corp[corpKey];
+      if (value && !(getters[key] ?? "").trim()) {
+        setters[key]?.(value);
+        filled++;
+      }
+    }
+    return filled;
+  }
+
+  async function handlePartnerDetailsUpload(files: File[]) {
+    setPartnerDetailsFiles(files);
+    if (!files.length) return;
+    setDetailsProcessing(true);
+    try {
+      const result = await ingestPartnerDocuments("corporate", files);
+      const corp = result.corporate;
+      if (corp) {
+        applyCorporateInfo(corp, {
+          name: partnerName, yearFounded: partnerYearFounded, hqAddress: partnerHqAddress,
+          hqPhone: partnerHqPhone, hqEmail: partnerHqEmail, primaryContact: partnerPrimaryContact,
+          headcount: partnerHeadcount, ein: partnerEin, uei: partnerUei,
+          summary: partnerSummary, website: partnerWebsite, contact: partnerContact,
+        }, {
+          name: setPartnerName, yearFounded: setPartnerYearFounded, hqAddress: setPartnerHqAddress,
+          hqPhone: setPartnerHqPhone, hqEmail: setPartnerHqEmail, primaryContact: setPartnerPrimaryContact,
+          headcount: setPartnerHeadcount, ein: setPartnerEin, uei: setPartnerUei,
+          summary: setPartnerSummary, website: setPartnerWebsite, contact: setPartnerContact,
+        });
+        toast("Corporate info extracted — review and adjust fields as needed", "success");
+      }
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not extract corporate info from file", "warning");
+    } finally {
+      setDetailsProcessing(false);
+    }
+  }
+
+  async function handleEditPartnerDetailsUpload(files: File[]) {
+    setEditPartnerDetailsFiles(files);
+    if (!files.length) return;
+    setEditDetailsProcessing(true);
+    try {
+      const result = await ingestPartnerDocuments("corporate", files);
+      const corp = result.corporate;
+      if (corp) {
+        applyCorporateInfo(corp, {
+          name: editPartnerName, yearFounded: editPartnerYearFounded, hqAddress: editPartnerHqAddress,
+          hqPhone: editPartnerHqPhone, hqEmail: editPartnerHqEmail, primaryContact: editPartnerPrimaryContact,
+          headcount: editPartnerHeadcount, ein: editPartnerEin, uei: editPartnerUei,
+          summary: editPartnerSummary, website: editPartnerWebsite, contact: editPartnerContact,
+        }, {
+          name: setEditPartnerName, yearFounded: setEditPartnerYearFounded, hqAddress: setEditPartnerHqAddress,
+          hqPhone: setEditPartnerHqPhone, hqEmail: setEditPartnerHqEmail, primaryContact: setEditPartnerPrimaryContact,
+          headcount: setEditPartnerHeadcount, ein: setEditPartnerEin, uei: setEditPartnerUei,
+          summary: setEditPartnerSummary, website: setEditPartnerWebsite, contact: setEditPartnerContact,
+        });
+        toast("Corporate info extracted — review and adjust fields as needed", "success");
+      }
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Could not extract corporate info from file", "warning");
+    } finally {
+      setEditDetailsProcessing(false);
+    }
+  }
+
   function handleAddCapability() {
     if (!capName.trim()) return;
     const id = `CAP-${String(capabilities.length + 300).padStart(4, "0")}`;
@@ -654,7 +752,9 @@ export function SourcesView({
 
   async function handleAddPartner() {
     if (!partnerName.trim()) return;
+    const stamp = new Date().toISOString().slice(0, 10);
     const id = `PTR-${partnerName.trim().split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 4)}${Date.now().toString().slice(-2)}`;
+    const detailsFileName = partnerDetailsFiles[0]?.name;
     const created: Partner = {
       id,
       name: partnerName.trim(),
@@ -669,7 +769,7 @@ export function SourcesView({
       covers: [],
       note: partnerSummary.trim(),
       summary: partnerSummary.trim(),
-      createdAt: new Date().toISOString().slice(0, 10),
+      createdAt: stamp,
       yearFounded: partnerYearFounded.trim() || undefined,
       hqAddress: partnerHqAddress.trim() || undefined,
       hqPhone: partnerHqPhone.trim() || undefined,
@@ -678,17 +778,43 @@ export function SourcesView({
       employeeHeadcount: partnerHeadcount.trim() || undefined,
       ein: partnerEin.trim() || undefined,
       uei: partnerUei.trim() || undefined,
+      partnerDetailsFileName: detailsFileName,
+      partnerDetailsUploadedAt: detailsFileName ? stamp : undefined,
+      capabilityUploadFileName: capFiles[0]?.name ?? (detailsFileName ? `(from ${detailsFileName})` : undefined),
+      capabilityUploadedAt: (capFiles.length || detailsFileName) ? stamp : undefined,
+      experienceUploadFileName: expFiles[0]?.name ?? (detailsFileName ? `(from ${detailsFileName})` : undefined),
+      experienceUploadedAt: (expFiles.length || detailsFileName) ? stamp : undefined,
+      credentialUploadFileName: credFiles[0]?.name ?? (detailsFileName ? `(from ${detailsFileName})` : undefined),
+      credentialUploadedAt: (credFiles.length || detailsFileName) ? stamp : undefined,
+      peopleUploadFileName: peopleFiles[0]?.name ?? (detailsFileName ? `(from ${detailsFileName})` : undefined),
+      peopleUploadedAt: (peopleFiles.length || detailsFileName) ? stamp : undefined,
     };
     onUpdatePartners(prev => [...prev, created]);
     setIngestBusy(true);
     try {
-      const notes = await ingestKinds(id, [
+      const allNotes: string[] = [];
+      if (partnerDetailsFiles.length) {
+        const detailsResult = await ingestPartnerDetailsFile(partnerDetailsFiles);
+        if (detailsResult.warning) toast(detailsResult.warning, "warning");
+        onUpdateGraph(prev => {
+          let next = prev;
+          for (const result of detailsResult.results) {
+            const applied = applyPartnerIngest(next, id, result);
+            next = applied.graph;
+            if (applied.added.length) allNotes.push(`added ${applied.added.length} ${result.kind}`);
+            if (applied.merged.length) allNotes.push(`merged ${applied.merged.length} existing ${result.kind}`);
+          }
+          return next;
+        });
+      }
+      const supplemental = await ingestKinds(id, [
         { kind: "capabilities", files: capFiles },
         { kind: "experience", files: expFiles },
         { kind: "credentials", files: credFiles },
         { kind: "people", files: peopleFiles },
       ]);
-      toast(notes.length ? `Partner "${created.name}" added — ${notes.join("; ")}` : `Partner "${created.name}" added`, "success");
+      allNotes.push(...supplemental);
+      toast(allNotes.length ? `Partner "${created.name}" added — ${allNotes.join("; ")}` : `Partner "${created.name}" added`, "success");
     } catch (error) {
       toast(error instanceof Error ? error.message : "Partner added, but document ingest failed", "warning");
     } finally {
@@ -699,7 +825,7 @@ export function SourcesView({
     setPartnerTeaming(null);
     setPartnerYearFounded(""); setPartnerHqAddress(""); setPartnerHqPhone(""); setPartnerHqEmail("");
     setPartnerPrimaryContact(""); setPartnerHeadcount(""); setPartnerEin(""); setPartnerUei("");
-    setCapFiles([]); setExpFiles([]); setCredFiles([]); setPeopleFiles([]);
+    setPartnerDetailsFiles([]); setCapFiles([]); setExpFiles([]); setCredFiles([]); setPeopleFiles([]);
   }
 
   function handleArchivePartner(partnerId: string) {
@@ -733,11 +859,13 @@ export function SourcesView({
     setEditPartnerHeadcount(p.employeeHeadcount ?? "");
     setEditPartnerEin(p.ein ?? "");
     setEditPartnerUei(p.uei ?? "");
-    setEditCapFiles([]); setEditExpFiles([]); setEditCredFiles([]); setEditPeopleFiles([]);
+    setEditPartnerDetailsFiles([]); setEditCapFiles([]); setEditExpFiles([]); setEditCredFiles([]); setEditPeopleFiles([]);
   }
 
   async function handleSavePartner() {
     if (!editPartner || !editPartnerName.trim()) return;
+    const stamp = new Date().toISOString().slice(0, 10);
+    const detailsFileName = editPartnerDetailsFiles[0]?.name;
     onUpdatePartners(prev => prev.map(p =>
       p.id === editPartner.id
         ? {
@@ -758,18 +886,44 @@ export function SourcesView({
             employeeHeadcount: editPartnerHeadcount.trim() || undefined,
             ein: editPartnerEin.trim() || undefined,
             uei: editPartnerUei.trim() || undefined,
+            partnerDetailsFileName: detailsFileName ?? p.partnerDetailsFileName,
+            partnerDetailsUploadedAt: detailsFileName ? stamp : p.partnerDetailsUploadedAt,
+            capabilityUploadFileName: editCapFiles[0]?.name ?? (detailsFileName ? `(from ${detailsFileName})` : p.capabilityUploadFileName),
+            capabilityUploadedAt: (editCapFiles.length || detailsFileName) ? stamp : p.capabilityUploadedAt,
+            experienceUploadFileName: editExpFiles[0]?.name ?? (detailsFileName ? `(from ${detailsFileName})` : p.experienceUploadFileName),
+            experienceUploadedAt: (editExpFiles.length || detailsFileName) ? stamp : p.experienceUploadedAt,
+            credentialUploadFileName: editCredFiles[0]?.name ?? (detailsFileName ? `(from ${detailsFileName})` : p.credentialUploadFileName),
+            credentialUploadedAt: (editCredFiles.length || detailsFileName) ? stamp : p.credentialUploadedAt,
+            peopleUploadFileName: editPeopleFiles[0]?.name ?? (detailsFileName ? `(from ${detailsFileName})` : p.peopleUploadFileName),
+            peopleUploadedAt: (editPeopleFiles.length || detailsFileName) ? stamp : p.peopleUploadedAt,
           }
         : p
     ));
     setIngestBusy(true);
     try {
-      const notes = await ingestKinds(editPartner.id, [
+      const allNotes: string[] = [];
+      if (editPartnerDetailsFiles.length) {
+        const detailsResult = await ingestPartnerDetailsFile(editPartnerDetailsFiles);
+        if (detailsResult.warning) toast(detailsResult.warning, "warning");
+        onUpdateGraph(prev => {
+          let next = prev;
+          for (const result of detailsResult.results) {
+            const applied = applyPartnerIngest(next, editPartner.id, result);
+            next = applied.graph;
+            if (applied.added.length) allNotes.push(`added ${applied.added.length} ${result.kind}`);
+            if (applied.merged.length) allNotes.push(`merged ${applied.merged.length} existing ${result.kind}`);
+          }
+          return next;
+        });
+      }
+      const supplemental = await ingestKinds(editPartner.id, [
         { kind: "capabilities", files: editCapFiles },
         { kind: "experience", files: editExpFiles },
         { kind: "credentials", files: editCredFiles },
         { kind: "people", files: editPeopleFiles },
       ]);
-      toast(notes.length ? `Partner updated — ${notes.join("; ")}` : "Partner updated", "success");
+      allNotes.push(...supplemental);
+      toast(allNotes.length ? `Partner updated — ${allNotes.join("; ")}` : "Partner updated", "success");
     } catch (error) {
       toast(error instanceof Error ? error.message : "Partner saved, but document ingest failed", "warning");
     } finally {
@@ -1286,6 +1440,49 @@ export function SourcesView({
                 <p className="text-xs text-muted-foreground">{detailPartner.summary || detailPartner.note}</p>
               </div>
             )}
+            {(detailPartner.partnerDetailsFileName || detailPartner.capabilityUploadFileName || detailPartner.experienceUploadFileName || detailPartner.credentialUploadFileName || detailPartner.peopleUploadFileName) && (
+              <div className="border-t border-border pt-3">
+                <h4 className="text-xs font-semibold mb-2">Documents on File</h4>
+                <div className="space-y-1 text-xs">
+                  {detailPartner.partnerDetailsFileName && (
+                    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-muted/30">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+                      <span className="font-medium">Partner Details:</span>
+                      <span className="text-muted-foreground truncate">{detailPartner.partnerDetailsFileName}</span>
+                      {detailPartner.partnerDetailsUploadedAt && <span className="text-muted-foreground/70 shrink-0">· {detailPartner.partnerDetailsUploadedAt}</span>}
+                    </div>
+                  )}
+                  {detailPartner.capabilityUploadFileName && (
+                    <div className="flex items-center gap-2 px-2 py-1.5 text-muted-foreground">
+                      <span className="font-medium text-foreground">Capabilities:</span>
+                      <span className="truncate">{detailPartner.capabilityUploadFileName}</span>
+                      {detailPartner.capabilityUploadedAt && <span className="text-muted-foreground/70 shrink-0">· {detailPartner.capabilityUploadedAt}</span>}
+                    </div>
+                  )}
+                  {detailPartner.experienceUploadFileName && (
+                    <div className="flex items-center gap-2 px-2 py-1.5 text-muted-foreground">
+                      <span className="font-medium text-foreground">Experience:</span>
+                      <span className="truncate">{detailPartner.experienceUploadFileName}</span>
+                      {detailPartner.experienceUploadedAt && <span className="text-muted-foreground/70 shrink-0">· {detailPartner.experienceUploadedAt}</span>}
+                    </div>
+                  )}
+                  {detailPartner.credentialUploadFileName && (
+                    <div className="flex items-center gap-2 px-2 py-1.5 text-muted-foreground">
+                      <span className="font-medium text-foreground">Credentials:</span>
+                      <span className="truncate">{detailPartner.credentialUploadFileName}</span>
+                      {detailPartner.credentialUploadedAt && <span className="text-muted-foreground/70 shrink-0">· {detailPartner.credentialUploadedAt}</span>}
+                    </div>
+                  )}
+                  {detailPartner.peopleUploadFileName && (
+                    <div className="flex items-center gap-2 px-2 py-1.5 text-muted-foreground">
+                      <span className="font-medium text-foreground">People:</span>
+                      <span className="truncate">{detailPartner.peopleUploadFileName}</span>
+                      {detailPartner.peopleUploadedAt && <span className="text-muted-foreground/70 shrink-0">· {detailPartner.peopleUploadedAt}</span>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="border-t border-border pt-3">
               <h4 className="text-xs font-semibold mb-2">Open Action Items</h4>
               {partnerOpenActions.length === 0 && <div className="text-xs text-muted-foreground italic">None</div>}
@@ -1557,6 +1754,29 @@ export function SourcesView({
           <FormField label="Summary">
             <TextArea value={editPartnerSummary} onChange={setEditPartnerSummary} rows={3} />
           </FormField>
+
+          <div className="border-t border-border pt-4 mt-2">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Partner Details File</h4>
+            <p className="text-[11px] text-muted-foreground mb-3">
+              Upload a new Partner Details document to refresh corporate information and re-process capabilities, experience, credentials, and people. Existing manual overrides will be preserved.
+            </p>
+            <FileUploadInfo fileName={editPartner?.partnerDetailsFileName} uploadedAt={editPartner?.partnerDetailsUploadedAt} />
+            <div className={editPartner?.partnerDetailsFileName ? "mt-2" : ""}>
+              <DocumentDropzone
+                files={editPartnerDetailsFiles}
+                onChange={handleEditPartnerDetailsUpload}
+                disabled={ingestBusy || editDetailsProcessing}
+                dropLabel="Drop your Partner Details document here"
+              />
+            </div>
+            {editDetailsProcessing && (
+              <div className="flex items-center gap-2 mt-2 text-xs text-primary">
+                <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                Extracting corporate information…
+              </div>
+            )}
+          </div>
+
           <div className="border-t border-border pt-4 mt-2">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Corporate Information</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1591,21 +1811,35 @@ export function SourcesView({
           <FormField label="Teaming agreement">
             <TeamingToggle value={editPartnerTeaming} onChange={setEditPartnerTeaming} />
           </FormField>
+
+          <div className="border-t border-border pt-4 mt-2">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Additional Document Uploads</h4>
+            <p className="text-[11px] text-muted-foreground mb-3">
+              {editPartnerDetailsFiles.length
+                ? "The Partner Details file above will be re-processed for all sections. Upload additional files here only for supplemental documents."
+                : "Upload documents per section, or use the Partner Details file above to process all sections at once."
+              }
+            </p>
+          </div>
           <FormField label="Capability documents">
+            <FileUploadInfo fileName={editPartner?.capabilityUploadFileName} uploadedAt={editPartner?.capabilityUploadedAt} />
             <DocumentDropzone files={editCapFiles} onChange={setEditCapFiles} disabled={ingestBusy} dropLabel="Drop the Capability Statements here" />
           </FormField>
           <FormField label="Experience documents">
+            <FileUploadInfo fileName={editPartner?.experienceUploadFileName} uploadedAt={editPartner?.experienceUploadedAt} />
             <DocumentDropzone files={editExpFiles} onChange={setEditExpFiles} disabled={ingestBusy} dropLabel="Drop the Experience/Project Summaries here" />
           </FormField>
           <FormField label="Credential documents">
+            <FileUploadInfo fileName={editPartner?.credentialUploadFileName} uploadedAt={editPartner?.credentialUploadedAt} />
             <DocumentDropzone files={editCredFiles} onChange={setEditCredFiles} disabled={ingestBusy} dropLabel="Drop your Certification, Insurance, Bonding, and Other Credential documents here" />
           </FormField>
           <FormField label="People / resume documents">
+            <FileUploadInfo fileName={editPartner?.peopleUploadFileName} uploadedAt={editPartner?.peopleUploadedAt} />
             <DocumentDropzone files={editPeopleFiles} onChange={setEditPeopleFiles} disabled={ingestBusy} dropLabel="Drop your Resumes here" />
           </FormField>
           <div className="flex justify-end gap-2 pt-2">
             <SecondaryButton onClick={() => setEditPartner(null)}>Cancel</SecondaryButton>
-            <PrimaryButton onClick={handleSavePartner} disabled={!editPartnerName.trim() || ingestBusy}>{ingestBusy ? "Saving…" : "Save"}</PrimaryButton>
+            <PrimaryButton onClick={handleSavePartner} disabled={!editPartnerName.trim() || ingestBusy || editDetailsProcessing}>{ingestBusy ? "Saving…" : "Save"}</PrimaryButton>
           </div>
         </div>
       </Modal>
@@ -1720,6 +1954,26 @@ export function SourcesView({
           <FormField label="Source link (optional)">
             <TextInput value={partnerSourceLink} onChange={setPartnerSourceLink} />
           </FormField>
+
+          <div className="border-t border-border pt-4 mt-2">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Partner Details File</h4>
+            <p className="text-[11px] text-muted-foreground mb-3">
+              Upload a single Partner Details document to auto-populate corporate information below and extract capabilities, experience, credentials, and people all at once. You can still override any field and upload additional files per section.
+            </p>
+            <DocumentDropzone
+              files={partnerDetailsFiles}
+              onChange={handlePartnerDetailsUpload}
+              disabled={ingestBusy || detailsProcessing}
+              dropLabel="Drop your Partner Details document here"
+            />
+            {detailsProcessing && (
+              <div className="flex items-center gap-2 mt-2 text-xs text-primary">
+                <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                Extracting corporate information…
+              </div>
+            )}
+          </div>
+
           <div className="border-t border-border pt-4 mt-2">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Corporate Information</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1754,6 +2008,16 @@ export function SourcesView({
           <FormField label="Teaming agreement">
             <TeamingToggle value={partnerTeaming} onChange={setPartnerTeaming} />
           </FormField>
+
+          <div className="border-t border-border pt-4 mt-2">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Additional Document Uploads</h4>
+            <p className="text-[11px] text-muted-foreground mb-3">
+              {partnerDetailsFiles.length
+                ? "The Partner Details file above will be processed for all sections below. Upload additional files here only if you have supplemental documents (e.g. new resumes, updated credentials)."
+                : "Upload documents per section, or use the Partner Details file above to process all sections at once."
+              }
+            </p>
+          </div>
           <FormField label="Capability documents">
             <DocumentDropzone files={capFiles} onChange={setCapFiles} disabled={ingestBusy} dropLabel="Drop the Capability Statements here" />
           </FormField>
@@ -1768,7 +2032,7 @@ export function SourcesView({
           </FormField>
           <div className="flex justify-end gap-2 pt-2">
             <SecondaryButton onClick={() => setAddPartnerOpen(false)}>Cancel</SecondaryButton>
-            <PrimaryButton onClick={handleAddPartner} disabled={!partnerName.trim() || ingestBusy}>{ingestBusy ? "Ingesting…" : "Add Partner"}</PrimaryButton>
+            <PrimaryButton onClick={handleAddPartner} disabled={!partnerName.trim() || ingestBusy || detailsProcessing}>{ingestBusy ? "Ingesting…" : "Add Partner"}</PrimaryButton>
           </div>
         </div>
       </Modal>

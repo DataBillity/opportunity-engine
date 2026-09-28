@@ -10,19 +10,22 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const KINDS: PartnerIngestKind[] = ["capabilities", "experience", "credentials", "people"];
+const KINDS: PartnerIngestKind[] = ["capabilities", "experience", "credentials", "people", "corporate"];
 
 function asKind(value: string): PartnerIngestKind {
   return KINDS.includes(value as PartnerIngestKind) ? value as PartnerIngestKind : "capabilities";
 }
 
 function mergeResults(kind: PartnerIngestKind, parts: PartnerIngestResult[]): PartnerIngestResult {
+  const corporateParts = parts.map(part => part.corporate).filter(Boolean);
+  const mergedCorporate = corporateParts.length ? corporateParts[0] : null;
   return {
     kind,
     capabilities: parts.flatMap(part => part.capabilities),
     experience: parts.flatMap(part => part.experience),
     credentials: parts.flatMap(part => part.credentials),
     people: parts.flatMap(part => part.people),
+    corporate: mergedCorporate,
     warning: parts.map(part => part.warning).filter(Boolean).join(" "),
   };
 }
@@ -45,6 +48,7 @@ function buildPartnerIngestPrompt(kind: PartnerIngestKind, text: string, filenam
     experience: '{"experience":[{"name":"<project or engagement name>","industry":"","technologies":[],"services":[],"summary":"<1-2 sentence summary>"}]}',
     credentials: '{"credentials":[{"name":"","credType":"Certification|Insurance|Bonding|License","expiration":"YYYY-MM-DD or TBD","documentText":"","documentFileName":""}]}',
     people: '{"people":[{"name":"<full name>","roles":["<delivery role, not job title>"],"expertise":"<1-2 sentence summary>","technologies":["<comprehensive list>"],"industries":["<inferred from employers/projects>"]}]}',
+    corporate: '{"corporate":{"name":"","yearFounded":"","hqAddress":"","hqPhone":"","hqEmail":"","primaryContact":"","employeeHeadcount":"","ein":"","uei":"","summary":"<1-2 sentence company summary>","website":""}}',
   };
 
   const kindInstructions: Record<PartnerIngestKind, string> = {
@@ -53,13 +57,16 @@ function buildPartnerIngestPrompt(kind: PartnerIngestKind, text: string, filenam
     credentials: "Extract each certification, insurance policy, bond, or license. Find expiration dates.",
     people: `Extract EVERY person in the document. A file may contain 1 or many people.
 For each person: identify their full name, delivery roles (not job titles), a concise expertise summary, ALL technologies mentioned in their section, and industries inferred from their employers and project descriptions.`,
+    corporate: `Extract corporate/organizational information from this partner details document.
+Find the company name, year founded, headquarters address, phone, email, primary contact person, employee headcount, EIN (Employer Identification Number, format XX-XXXXXXX), UEI (Unique Entity Identifier, 12-character alphanumeric), a concise 1-2 sentence company summary, and website URL.
+Leave fields as empty string "" if not found. Do NOT guess or fabricate information not present in the document.`,
   };
 
   return `Kind: ${kind}
 Filename: ${filename}
 Task: ${kindInstructions[kind]}
 Return JSON shaped as: ${schema[kind]}
-Fill only the "${kind}" array.
+${kind === "corporate" ? 'Fill the "corporate" object.' : `Fill only the "${kind}" array.`}
 
 Document text:
 ${text}`;
@@ -97,6 +104,7 @@ async function enhanceWithModel(kind: PartnerIngestKind, text: string, filename:
         resumeText: text,
         resumeFileName: item.resumeFileName || filename,
       })),
+      corporate: parsed.corporate ?? fallback.corporate ?? null,
     };
   } catch (error) {
     const heuristicWarning = `AI model failed for ${filename} — used heuristic parser. Profiles may be incomplete.`;
