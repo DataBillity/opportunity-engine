@@ -6,7 +6,7 @@ import {
 import { callModel, ModelGatewayError } from "./gateway";
 import { parseModelJson } from "./json";
 
-export const RESPONSE_DRAFT_PROMPT_VERSION = "response-draft-v1.2";
+export const RESPONSE_DRAFT_PROMPT_VERSION = "response-draft-v1.3";
 
 export interface ResponseGroundingFact {
   id: string;

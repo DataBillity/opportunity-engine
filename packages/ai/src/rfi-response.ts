@@ -10,7 +10,7 @@ import { callModel, ModelGatewayError } from "./gateway";
 import { parseModelJson } from "./json";
 import { buildResponseDraftPrompt, collectResponseFacts, type ResponseGroundingFact } from "./response-draft";
 
-export const RFI_RESPONSE_PROMPT_VERSION = "rfi-response-v1.2";
+export const RFI_RESPONSE_PROMPT_VERSION = "rfi-response-v1.3";
 
 const GAP_TYPE_ALIASES: Record<string, RfiGapLogEntry["gapType"]> = {
   missing_information: "missing_information",
@@ -34,6 +34,7 @@ An RFI is market research, not a solicitation and not a binding offer. Inform th
 
 Hard rules:
 - Cite only facts listed under GROUNDING FACTS. If a fact is not listed, do not use it.
+- Answer only what the issuer's response worksheet or questionnaire asks for this section. Vendor questions and the issuer's answers (a Q&A or "Response to Vendor Questions" document) are clarifications: use the answers as facts, never answer those questions.
 - Never fabricate past performance, clients, contract numbers, certifications, personnel, metrics, identifiers (UEI, CAGE, NAICS, size, socioeconomic status), or partner capabilities.
 - The first sentence of the section directly answers what that section is for. The rest supports it with methods, tools, standards, timelines, and outcomes that are actually in the facts.
 - Use the issuer's terminology. Plain language, active voice, short paragraphs. No "world-class", "best-in-breed", "cutting-edge", "synergies".
@@ -69,7 +70,7 @@ export const RFI_PACKAGE_PROMPT = `You draft a complete Request for Information 
 An RFI is market research, not a binding offer. The response must do three things: answer the issuer's questions, help shape a future procurement in ways that serve the customer, and position DataBillity and its confirmed team. Do not write a proposal full of commitments, and do not write a brochure.
 
 Work in this order, then return the package below:
-1. Compliance: issuer, notice number, title, due date and time zone, question deadline, submission method, format rules, every numbered question, required administrative data, and acquisition signals (NAICS, set-aside, vehicle, period, budget, incumbent) when the facts include them.
+1. Compliance: issuer, notice number, title, due date and time zone, question deadline, submission method, format rules, every numbered question the issuer asks vendors to answer (the response worksheet or questionnaire), required administrative data, and acquisition signals (NAICS, set-aside, vehicle, period, budget, incumbent) when the facts include them.
 2. Need: the problem, why now, what the issuer seems unsure about, and constraints. Build this from the objective, challenge themes, consequences, and target end state facts, so the draft shows what the issuer is trying to achieve, not only what it asked.
 3. Fit: for each area, Strong (direct past performance), Partial (related or partner-only), or Gap. Do not make the respond/pass call. Note which confirmed partner covers which area, and flag requirements that look written for a competitor.
 4. Draft sections that mirror the RFI's headings and numbering. If SECTIONS TO DRAFT lists a structure, use those ids, refs, and titles exactly. Response format facts are binding: when they say the issuer's worksheet is the response, or that appendices, attachments, or supplemental materials are not allowed, add no cover letter or material outside those sections and keep the whole response within the page limit. Where format rules conflict, follow the most restrictive reading and log a compliance_risk gap.
@@ -88,6 +89,7 @@ Priority: High (blocks submission or compliance), Medium (weakens the response),
 Set due a few days before the RFI deadline when a deadline is known. Status is Open.
 
 Writing guardrails:
+- The questions to answer are the facts labeled "Question to answer" and the issuer's response worksheet or questionnaire. Vendor questions and the issuer's answers (a document titled "Response to Vendor Questions", or a Q&A) are clarifications: use the answers as facts, never answer those questions, and never add a section, compliance row, or gap for that document.
 - Cite only GROUNDING FACTS. Never invent past performance, clients, contract numbers, certifications, people, metrics, or identifiers.
 - No commitments to terms, staffing, schedules, or teaming. Use "we would propose" or "our typical approach is".
 - Pricing only if requested and only from supplied figures, labeled as a non-binding rough order of magnitude.
@@ -117,6 +119,7 @@ Priority: High (blocks submission, compliance, or a pass/fail gate), Medium (wea
 Set due a few days before the response deadline when it is known. Status is Open.`;
 
 const BID_GUARDRAILS = `Writing guardrails:
+- Requirements to address are the facts labeled "Requirement to address" and the solicitation's own instructions. Vendor questions and the issuer's answers (a Q&A document) are clarifications: use the answers as facts, never answer those questions, and never add a section for that document.
 - Cite only GROUNDING FACTS. Never invent past performance, clients, contract numbers, certifications, people, rates, prices, metrics, or identifiers.
 - Commit only to what the facts show the team can deliver. Where delivery depends on something unverified (staffing, a partner, a certification, a price), write the commitment with a placeholder instead of asserting it.
 - Past performance and key personnel name only engagements and people in the facts. Attribute partner experience to that partner.
@@ -674,7 +677,7 @@ export interface RfiResponseDraft extends RfiResponsePackage {
 export async function generateRfiResponsePackage(rawBriefing: unknown): Promise<RfiResponseDraft> {
   const briefing = ResponseDraftBriefing.parse(rawBriefing);
   const projectType = briefing.projectType ?? "rfi";
-  const facts = collectResponseFacts(briefing, { includeSourceExcerpt: !briefing.pursuit.docSummary?.rfiSummary });
+  const facts = collectResponseFacts(briefing, { includeSourceExcerpt: projectType === "rfi" || !briefing.pursuit.docSummary?.rfiSummary });
   const fallbackDue = daysBefore(briefing.pursuit.dueDate, 3);
   const prompt = [
     buildResponseDraftPrompt(briefing, facts),

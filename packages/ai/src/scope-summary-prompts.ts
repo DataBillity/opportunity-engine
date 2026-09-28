@@ -131,7 +131,7 @@ export function bidStructurePrompt(projectType: "rfp" | "sow"): string {
 Hard rules:
 - Use only the document text. Each uploaded file starts with a line "===== DOCUMENT: file name =====".
 - Ignore the cover page, table of contents, and page headers and footers.
-- requirements: what the contractor must do, deliver, or comply with (shall and must statements, tasks, deliverables, and proposal requirements), shortened to at most 25 words each, in document order. sectionRef is the section or paragraph number. Group near-duplicates; return at most 60, keeping every mandatory and evaluated item. Never include questions that vendors asked in a Q&A.
+- requirements: what the contractor must do, deliver, or comply with (shall and must statements, tasks, deliverables, and proposal requirements), shortened to at most 25 words each, in document order. sectionRef is the section or paragraph number. Group near-duplicates; return at most 60, keeping every mandatory and evaluated item. Never include questions that vendors asked in a Q&A or "Response to Vendor Questions" document, and never make that document a response section.
 - passFail: true only for mandatory gates (required certifications, registrations, licenses, bonding, security authorizations, mandatory forms). weight: the evaluation weight if the document gives one, else 0.
 - responseSections: the response structure the document prescribes, as {"ref", "title", "sectionId"}. Empty if none.
 - responseConstraints: how to write and submit the response (due date, page limits, font, file type, portal, forms).

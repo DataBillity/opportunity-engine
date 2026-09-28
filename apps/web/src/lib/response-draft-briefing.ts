@@ -1,4 +1,5 @@
 import type { GraphExperience, GraphPerson, Organization, Partner, Pursuit } from "@/lib/mock-data";
+import { omitQuestionAnswerDocuments } from "@opportunity-engine/core";
 import type { ResponseDraftBriefing, ResponseDraftExperience, ResponseDraftPerson, ResponseDraftSection } from "@opportunity-engine/contracts";
 
 function cleanText(text: string | undefined): string | undefined {
@@ -126,7 +127,9 @@ export function buildResponseDraftBriefing(input: {
         .map(item => item.req),
       gaps: input.pursuit.gaps.map(item => `${item.title} (${item.crit})`),
       rationale: input.pursuit.rationale,
-      sourceExcerpt: cleanText(input.pursuit.sourceText),
+      sourceExcerpt: cleanText(input.pursuit.sourceText
+        ? omitQuestionAnswerDocuments(input.pursuit.sourceText, "vendor questions and issuer answers omitted; the answers are summarized in the facts")
+        : undefined),
     },
     people: assignedPeople,
     experience: experienceForDraft(assignedGraphPeople, input.experience ?? []),
