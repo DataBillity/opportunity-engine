@@ -209,6 +209,17 @@ export interface Partner {
   employeeHeadcount?: string;
   ein?: string;
   uei?: string;
+  /** File tracking — which documents were uploaded and when */
+  partnerDetailsFileName?: string;
+  partnerDetailsUploadedAt?: string;
+  capabilityUploadFileName?: string;
+  capabilityUploadedAt?: string;
+  experienceUploadFileName?: string;
+  experienceUploadedAt?: string;
+  credentialUploadFileName?: string;
+  credentialUploadedAt?: string;
+  peopleUploadFileName?: string;
+  peopleUploadedAt?: string;
   _sharedCapIds?: string[];
   _sharedExpIds?: string[];
 }
