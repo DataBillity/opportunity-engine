@@ -7,6 +7,11 @@ function cleanText(text: string | undefined): string | undefined {
   return trimmed || undefined;
 }
 
+function recordField(text: string | undefined): string | undefined {
+  const value = cleanText(text);
+  return value && value !== "—" && value !== "-" ? value : undefined;
+}
+
 export function peopleForDraft(
   assignments: Record<string, string>,
   people: GraphPerson[],
@@ -95,6 +100,16 @@ export function buildResponseDraftBriefing(input: {
       covers: partner.covers,
       summary: cleanText(partner.summary),
       confirmed: partner.teamingAgreementSigned === true,
+      website: recordField(partner.website),
+      yearFounded: recordField(partner.yearFounded),
+      hqAddress: recordField(partner.hqAddress),
+      hqPhone: recordField(partner.hqPhone),
+      hqEmail: recordField(partner.hqEmail),
+      primaryContact: recordField(partner.primaryContact) ?? recordField(partner.contact),
+      contactEmail: recordField(partner.contactEmail),
+      employeeHeadcount: recordField(partner.employeeHeadcount),
+      ein: recordField(partner.ein),
+      uei: recordField(partner.uei),
     })),
     organization: {
       name: input.org?.name || "Unknown account",

@@ -6,7 +6,7 @@ import {
 import { callModel, ModelGatewayError } from "./gateway";
 import { parseModelJson } from "./json";
 
-export const RESPONSE_DRAFT_PROMPT_VERSION = "response-draft-v1.3";
+export const RESPONSE_DRAFT_PROMPT_VERSION = "response-draft-v1.4";
 
 export interface ResponseGroundingFact {
   id: string;
@@ -33,6 +33,23 @@ export interface ResponseSectionDraft {
   promptVersion: string;
   latencyMs: number;
   usedFallback: boolean;
+}
+
+function companyRecordFact(partner: ResponseDraftBriefingType["partners"][number]): string | undefined {
+  const contact = [partner.primaryContact, partner.contactEmail].filter(Boolean).join(", ");
+  const fields = [
+    partner.hqAddress ? `HQ address (street, city, state, ZIP): ${partner.hqAddress}` : "",
+    partner.hqPhone ? `HQ phone: ${partner.hqPhone}` : "",
+    partner.hqEmail ? `HQ email: ${partner.hqEmail}` : "",
+    partner.website ? `Website: ${partner.website}` : "",
+    contact ? `Point of contact: ${contact}` : "",
+    partner.yearFounded ? `Year founded: ${partner.yearFounded}` : "",
+    partner.employeeHeadcount ? `Employee headcount: ${partner.employeeHeadcount}` : "",
+    partner.ein ? `EIN: ${partner.ein}` : "",
+    partner.uei ? `UEI: ${partner.uei}` : "",
+  ].filter(Boolean);
+  if (!fields.length) return undefined;
+  return `${partner.name} company record on file (Partner Details). Use these values directly and do not log a gap for any of them: ${fields.join("; ")}.`;
 }
 
 export function collectResponseFacts(
@@ -106,8 +123,10 @@ export function collectResponseFacts(
 
   const primePartner = (briefing.partners ?? []).find(p => p.role === "Prime" || p.role === "prime");
   const primeName = primePartner?.name ?? "DataBillity";
-  push("account", `${primeName} responds as Prime. Do not invent UEI, CAGE, NAICS, size, or socioeconomic status. When assigning action items or gaps, use "${primeName}" as the owner name instead of the generic "Prime".`);
+  push("account", `${primeName} responds as Prime. Use company details and identifiers only from the company record facts. Do not invent a UEI, CAGE, NAICS, size, or socioeconomic status that is not listed there. When assigning action items or gaps, use "${primeName}" as the owner name instead of the generic "Prime".`);
+  if (primePartner) push("account", companyRecordFact(primePartner));
   for (const partner of briefing.partners ?? []) {
+    if (partner === primePartner) continue;
     const covers = partner.covers.filter(Boolean);
     push(
       "account",
@@ -117,6 +136,7 @@ export function collectResponseFacts(
           : `Not confirmed on this response. Do not assign gaps to this partner; assign ${primeName} and mention the partner in notes.`
       }${covers.length ? ` Covers: ${covers.join(", ")}.` : ""}${partner.summary ? ` ${partner.summary}` : ""}`,
     );
+    if (partner.confirmed) push("account", companyRecordFact(partner));
   }
 
   for (const person of briefing.people) {

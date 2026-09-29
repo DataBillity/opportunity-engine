@@ -223,6 +223,16 @@ export const ResponseDraftPartner = z.object({
   covers: z.array(z.string()).default([]),
   summary: z.string().optional(),
   confirmed: z.boolean().default(false),
+  website: z.string().optional(),
+  yearFounded: z.string().optional(),
+  hqAddress: z.string().optional(),
+  hqPhone: z.string().optional(),
+  hqEmail: z.string().optional(),
+  primaryContact: z.string().optional(),
+  contactEmail: z.string().optional(),
+  employeeHeadcount: z.string().optional(),
+  ein: z.string().optional(),
+  uei: z.string().optional(),
 });
 
 export const ResponseDraftSection = z.object({

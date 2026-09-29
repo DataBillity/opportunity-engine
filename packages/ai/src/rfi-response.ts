@@ -10,7 +10,7 @@ import { callModel, ModelGatewayError } from "./gateway";
 import { parseModelJson } from "./json";
 import { buildResponseDraftPrompt, collectResponseFacts, type ResponseGroundingFact } from "./response-draft";
 
-export const RFI_RESPONSE_PROMPT_VERSION = "rfi-response-v1.3";
+export const RFI_RESPONSE_PROMPT_VERSION = "rfi-response-v1.4";
 
 /** Total wall-clock budget for a package draft; the route allows 300s. */
 const PACKAGE_BUDGET_MS = 270_000;
@@ -41,6 +41,7 @@ Hard rules:
 - Cite only facts listed under GROUNDING FACTS. If a fact is not listed, do not use it.
 - Answer only what the issuer's response worksheet or questionnaire asks for this section. Vendor questions and the issuer's answers (a Q&A or "Response to Vendor Questions" document) are clarifications: use the answers as facts, never answer those questions.
 - Never fabricate past performance, clients, contract numbers, certifications, personnel, metrics, identifiers (UEI, CAGE, NAICS, size, socioeconomic status), or partner capabilities.
+- Company details (address, phone, point of contact, year founded, headcount, EIN, UEI) come from the company record facts. Log a gap only for details not listed there.
 - The first sentence of the section directly answers what that section is for. The rest supports it with methods, tools, standards, timelines, and outcomes that are actually in the facts.
 - Use the issuer's terminology. Plain language, active voice, short paragraphs. No "world-class", "best-in-breed", "cutting-edge", "synergies".
 - Attribute partner experience to that partner. Use a partner only when the facts say the partner is confirmed on the team.
@@ -81,7 +82,7 @@ Work in this order, then return the package below:
 4. Draft sections that mirror the RFI's headings and numbering. If SECTIONS TO DRAFT lists a structure, use those ids, refs, and titles exactly. Response format facts are binding: when they say the issuer's worksheet is the response, or that appendices, attachments, or supplemental materials are not allowed, add no cover letter or material outside those sections and keep the whole response within the page limit. Where format rules conflict, follow the most restrictive reading and log a compliance_risk gap.
 5. For every answer: first sentence answers the question; the rest supports it with specific methods, tools, standards, and outcomes from the facts. Use the issuer's words. Add customer-focused insight (risks, ambiguities, better approaches, acquisition recommendations) without exceeding the ask.
 6. Gaps: anything missing, unverified, or undecided becomes a placeholder in the draft and one Gap Log row.
-7. Administrative information for the Prime and each confirmed partner: name, address, identifiers, size and socioeconomic status, NAICS, vehicles, and point of contact. Missing items are gaps owned by that company.
+7. Administrative information for the Prime and each confirmed partner: name, address, identifiers, size and socioeconomic status, NAICS, vehicles, and point of contact. Fill these from the company record facts. Only items not listed there are gaps owned by that company.
 8. Self-check: every question is answered or logged; every placeholder has one Gap Log row and vice versa; format limits are respected; no fabricated claims; tone is plain and customer-focused.
 
 Placeholder format, in the draft body: [GAP-### | Owner | Short action]

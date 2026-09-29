@@ -101,3 +101,33 @@ describe("vendor Q&A handling", () => {
     expect(texts({ includeSourceExcerpt: false })).not.toContain("Source excerpt");
   });
 });
+
+describe("company records", () => {
+  it("grounds the Prime's Partner Details and keeps unconfirmed partner records out", () => {
+    const withRecords: ResponseDraftBriefing = {
+      ...briefing,
+      partners: [
+        {
+          name: "DataBillity",
+          role: "Prime",
+          covers: [],
+          confirmed: false,
+          hqAddress: "1007 N. Orange Street, Wilmington, DE 19801",
+          primaryContact: "Bryan Guy",
+          contactEmail: "bryan@databillity.com",
+          yearFounded: "2023",
+          uei: "KQUARCJTFZM5",
+        },
+        { name: "Acme Analytics", role: "Subcontractor", covers: [], confirmed: false, hqAddress: "1 Main St" },
+      ],
+    };
+    const texts = collectResponseFacts(withRecords).map(fact => fact.text);
+    const record = texts.find(text => text.startsWith("DataBillity company record"));
+    expect(record).toContain("1007 N. Orange Street, Wilmington, DE 19801");
+    expect(record).toContain("Point of contact: Bryan Guy, bryan@databillity.com");
+    expect(record).toContain("Year founded: 2023");
+    expect(record).toContain("UEI: KQUARCJTFZM5");
+    expect(texts.some(text => text.startsWith("Teaming partner DataBillity"))).toBe(false);
+    expect(texts.some(text => text.includes("1 Main St"))).toBe(false);
+  });
+});
