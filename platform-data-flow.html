@@ -377,7 +377,7 @@
 <h2>Monorepo Package Map</h2>
 <table>
 <tr><th>Package</th><th>Responsibility</th><th>Key Exports</th></tr>
-<tr><td><code>@opportunity-engine/ai</code></td><td>Single Model Gateway (Claude + Gemini), outreach drafting, solicitation extraction</td><td><code>callModel()</code>, <code>generateOutreachDraft()</code>, <code>extractSolicitationWithModel()</code></td></tr>
+<tr><td><code>@opportunity-engine/ai</code></td><td>Single Model Gateway (Claude Sonnet 5.5), outreach drafting, solicitation extraction</td><td><code>callModel()</code>, <code>generateOutreachDraft()</code>, <code>extractSolicitationWithModel()</code></td></tr>
 <tr><td><code>@opportunity-engine/core</code></td><td>Pure scoring, entity resolution, LinkedIn ingest, decision envelope, ICP taxonomy</td><td><code>computeOpportunityAlignment()</code>, <code>scorePursuitTriage()</code>, <code>evaluateLinkedInBatch()</code>, <code>buildDecisionRecord()</code></td></tr>
 <tr><td><code>@opportunity-engine/contracts</code></td><td>Shared Zod schemas for type-safe boundaries between web and worker</td><td><code>OutreachBriefing</code>, <code>SolicitationExtraction</code>, <code>PursuitTriageView</code>, <code>ScoreRunOutput</code></td></tr>
 <tr><td><code>@opportunity-engine/db</code></td><td>Drizzle ORM schema definitions and Neon PostgreSQL client</td><td>9 schema cluster exports, <code>createSql()</code></td></tr>
@@ -387,12 +387,12 @@
 <h2>AI Gateway Architecture</h2>
 <div class="card-grid">
   <div class="card">
-    <div class="card-title">Judgment Tier (Claude preferred)</div>
-    <p>Used for outreach generation and high-stakes reasoning. Models: <code>claude-sonnet-5</code>, <code>claude-sonnet-4-6</code>. Falls back to Gemini if Claude API key is missing or fails. Max 1,200 tokens, temperature 0.4.</p>
+    <div class="card-title">Claude Sonnet 5.5</div>
+    <p>Every model call: outreach, solicitation extraction, partner documents, Go/No-Go, and proposal drafting. Model: <code>claude-sonnet-5-5</code>. Up-front thinking is off. Output is capped only by the model maximum (128k tokens).</p>
   </div>
   <div class="card">
-    <div class="card-title">Extraction Tier (Gemini preferred)</div>
-    <p>Used for solicitation extraction and partner document parsing. Models: <code>gemini-2.5-flash</code>, <code>gemini-2.0-flash</code>. Falls back to Claude if Gemini is unavailable. JSON mode enabled, temperature 0.1.</p>
+    <div class="card-title">Prompt cache</div>
+    <p>The system prompt and the stable document prefix are written to a 1-hour cache. Later steps of a proposal read that prefix back instead of resending the RFP at full input price.</p>
   </div>
   <div class="card">
     <div class="card-title">Region &amp; Classification Guards</div>
@@ -449,8 +449,7 @@ function showTab(id) {
     { id: 'heuristic_extract',label: 'Heuristic Extraction',   group: 'core' },
 
     { id: 'ai_gateway',       label: 'Model Gateway',          group: 'ai' },
-    { id: 'claude',            label: 'Claude (Judgment)',      group: 'ai' },
-    { id: 'gemini',            label: 'Gemini (Extraction)',    group: 'ai' },
+    { id: 'claude',            label: 'Claude Sonnet 5.5',     group: 'ai' },
 
     { id: 'opp_alignment',    label: 'Opp. Alignment (40/35/25)', group: 'scoring' },
     { id: 'pursuit_triage',   label: 'Pursuit Triage',         group: 'scoring' },
@@ -484,12 +483,12 @@ function showTab(id) {
     ['doc_extractor','heuristic_extract'],['doc_extractor','capability_match'],
     ['partner_parser','capability_match'],['lead_parser','entity_resolution'],
     ['heuristic_extract','ai_gateway'],['partner_parser','ai_gateway'],
-    ['ai_gateway','claude'],['ai_gateway','gemini'],
+    ['ai_gateway','claude'],
     ['capability_match','opp_alignment'],['icp_matching','opp_alignment'],
     ['seniority_class','lead_routing'],['entity_resolution','lead_routing'],
     ['opp_alignment','lead_routing'],['opp_alignment','pursuit_triage'],
-    ['heuristic_extract','pursuit_triage'],['claude','pursuit_triage'],['gemini','pursuit_triage'],
-    ['claude','outreach_gen'],['gemini','outreach_gen'],['capability_match','personnel_fit'],
+    ['heuristic_extract','pursuit_triage'],['claude','pursuit_triage'],
+    ['claude','outreach_gen'],['capability_match','personnel_fit'],
     ['pursuit_triage','decision_envelope'],['lead_routing','decision_envelope'],
     ['outreach_gen','decision_envelope'],['decision_envelope','audit_log'],
     ['decision_envelope','cluster_g'],['lead_routing','cluster_a'],['pursuit_triage','cluster_e'],

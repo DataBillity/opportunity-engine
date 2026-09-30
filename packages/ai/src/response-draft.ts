@@ -271,17 +271,13 @@ export async function generateResponseDraft(rawBriefing: unknown): Promise<Respo
   const fallbackDue = briefing.pursuit.dueDate ?? "";
   const promptVersion = rfi ? "rfi-response-v1.0" : RESPONSE_DRAFT_PROMPT_VERSION;
 
-  const draftWith = (preferProvider?: "claude" | "gemini") => callModel({
+  const draftWith = () => callModel({
     tier: "judgment",
-    preferProvider,
     promptVersion,
     systemPrompt: rfi ? RFI_SECTION_PROMPT : bidSectionPrompt(projectType),
     prompt: buildResponseDraftPrompt(briefing, facts),
     classification: "internal",
     redactionProfile: "response-draft-v1",
-    maxTokens: 2200,
-    temperature: 0.35,
-    jsonMode: true,
     timeoutMs: 60_000,
   });
   const parseDraft = (content: string) => {
@@ -299,7 +295,7 @@ export async function generateResponseDraft(rawBriefing: unknown): Promise<Respo
   } catch {
     const first = result;
     try {
-      result = await draftWith(first.provider === "claude" ? "gemini" : "claude");
+      result = await draftWith();
       draft = parseDraft(result.content);
     } catch {
       result = first;

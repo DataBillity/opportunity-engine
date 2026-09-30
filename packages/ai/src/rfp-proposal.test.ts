@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseRfpProposal, parseRfpProposalPart } from "@opportunity-engine/contracts";
-import { buildRfpProposalUserPrompt } from "./rfp-proposal";
+import { buildRfpProposalPromptParts, buildRfpProposalUserPrompt } from "./rfp-proposal";
 import { RFP_DRAFTING_PROMPT } from "./rfp-proposal-prompt";
 
 describe("RFP drafting prompt", () => {
@@ -78,5 +78,23 @@ describe("buildRfpProposalUserPrompt", () => {
     expect(prompt).not.toContain("- 1a: 1(a) Prior Experience");
     expect(prompt).toContain("--- 1b ---\nEarlier text");
     expect(prompt).not.toContain("Not requested");
+  });
+
+  it("keeps the same cache prefix on the plan step and the later steps", () => {
+    const plan = parseRfpProposalPart({
+      sections: [{ id: "1b", heading: "1(b) Reference Projects", pageBudget: 6, brief: "Answer (i)-(iii)" }],
+    });
+    const planParts = buildRfpProposalPromptParts({ step: "plan", sources, nextGapNumber: 4 });
+    const sectionParts = buildRfpProposalPromptParts({
+      step: "sections",
+      sources,
+      plan,
+      sectionIds: ["1b"],
+    });
+    expect(planParts.cachePrefix).toBe(sectionParts.cachePrefix);
+    expect(planParts.cachePrefix).toContain("§4.1 Technical Proposal.");
+    expect(planParts.prompt).toContain("=== TASK FOR THIS CALL ===");
+    expect(sectionParts.prompt).toContain("=== PROPOSAL PLAN ===");
+    expect(planParts.prompt).not.toContain("=== PROPOSAL PLAN ===");
   });
 });

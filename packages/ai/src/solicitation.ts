@@ -252,17 +252,13 @@ export async function extractSolicitationWithModel(input: {
   // Two passes in parallel so a long questionnaire or requirement list can't crowd the scope summary out of the token budget.
   const [summary, structure] = await Promise.allSettled([
     runPass({
-      preferProvider: "claude",
       systemPrompt: systemPromptFor(projectType, "summary"),
       prompt: buildSolicitationExtractPrompt({ ...input, projectType, pass: "summary" }),
-      maxTokens: 12000,
       timeoutMs: 130_000,
     }),
     runPass({
-      preferProvider: "gemini",
       systemPrompt: systemPromptFor(projectType, "structure"),
       prompt: buildSolicitationExtractPrompt({ ...input, projectType, pass: "structure" }),
-      maxTokens: 8000,
       timeoutMs: 90_000,
     }),
   ]);
@@ -332,26 +328,30 @@ function pickPresent(source: Record<string, unknown>, keys: string[]): Record<st
     .map(key => [key, source[key]]));
 }
 
-/** One model call. If the output can't be parsed, retry once with the other provider first. */
+/** The document text is identical for both passes; the JSON schema after this marker is not. */
+function cachedDocumentPrompt(full: string): { cachePrefix: string; prompt: string } {
+  const marker = "\nReturn JSON:";
+  const at = full.lastIndexOf(marker);
+  if (at < 0) return { cachePrefix: "", prompt: full };
+  return { cachePrefix: full.slice(0, at), prompt: full.slice(at) };
+}
+
+/** One model call. If the output can't be parsed, retry once. */
 async function runPass(options: {
-  preferProvider: "claude" | "gemini";
   systemPrompt: string;
   prompt: string;
-  maxTokens: number;
   timeoutMs: number;
 }): Promise<PassResult> {
-  const attempt = async (preferProvider: "claude" | "gemini"): Promise<PassResult> => {
+  const parts = cachedDocumentPrompt(options.prompt);
+  const attempt = async (): Promise<PassResult> => {
     const result = await callModel({
-      tier: preferProvider === "claude" ? "judgment" : "extraction",
-      preferProvider,
+      tier: "extraction",
       promptVersion: SOLICITATION_EXTRACT_PROMPT_VERSION,
       systemPrompt: options.systemPrompt,
-      prompt: options.prompt,
+      cachePrefix: parts.cachePrefix,
+      prompt: parts.prompt,
       classification: "internal",
       redactionProfile: "solicitation-extract-v1",
-      maxTokens: options.maxTokens,
-      temperature: 0.1,
-      jsonMode: true,
       timeoutMs: options.timeoutMs,
     });
     let parsed: unknown;
@@ -369,9 +369,9 @@ async function runPass(options: {
   };
 
   try {
-    return await attempt(options.preferProvider);
+    return await attempt();
   } catch (err) {
     if (!(err instanceof ModelGatewayError) || err.code !== "empty_response") throw err;
-    return attempt(options.preferProvider === "claude" ? "gemini" : "claude");
+    return attempt();
   }
 }

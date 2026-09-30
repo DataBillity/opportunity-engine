@@ -41,12 +41,12 @@ export interface RfpProposalStepInput {
   nextGapNumber?: number;
 }
 
-const STEP_LIMITS: Record<RfpProposalStep, { maxTokens: number; attemptMs: number; temperature: number }> = {
-  plan: { maxTokens: 10_000, attemptMs: 200_000, temperature: 0.2 },
-  sections: { maxTokens: 12_000, attemptMs: 200_000, temperature: 0.3 },
-  forms: { maxTokens: 10_000, attemptMs: 190_000, temperature: 0.1 },
-  compliance: { maxTokens: 8_000, attemptMs: 170_000, temperature: 0.1 },
-  review: { maxTokens: 3_500, attemptMs: 150_000, temperature: 0.1 },
+const STEP_LIMITS: Record<RfpProposalStep, { attemptMs: number }> = {
+  plan: { attemptMs: 200_000 },
+  sections: { attemptMs: 200_000 },
+  forms: { attemptMs: 190_000 },
+  compliance: { attemptMs: 170_000 },
+  review: { attemptMs: 150_000 },
 };
 
 /** Every attempt in one step shares this deadline; the route allows 300s. */
@@ -200,6 +200,19 @@ export function buildRfpProposalUserPrompt(input: RfpProposalStepInput): string 
   return lines.filter((line, i, all) => line !== "" || all[i - 1] !== "").join("\n");
 }
 
+/**
+ * The package, capabilities, and reviewer notes are identical on every step.
+ * The plan, the draft, and the task are not, so the cache breakpoint sits in front of them.
+ */
+export function buildRfpProposalPromptParts(input: RfpProposalStepInput): { cachePrefix: string; prompt: string } {
+  const full = buildRfpProposalUserPrompt(input);
+  const planAt = full.indexOf("\n=== PROPOSAL PLAN ===");
+  const taskAt = full.indexOf("\n=== TASK FOR THIS CALL ===");
+  const cut = planAt >= 0 ? planAt : taskAt;
+  if (cut < 0) return { cachePrefix: "", prompt: full };
+  return { cachePrefix: full.slice(0, cut), prompt: full.slice(cut) };
+}
+
 export interface RfpProposalStepResult {
   part: RfpProposal;
   provider: "claude" | "gemini";
@@ -218,27 +231,24 @@ function usable(step: RfpProposalStep, part: RfpProposal, input: RfpProposalStep
   return true;
 }
 
-/** One step of a proposal draft. An unusable reply retries once on the other provider. */
+/** One step of a proposal draft. An unusable reply retries once. */
 export async function draftRfpProposalStep(input: RfpProposalStepInput): Promise<RfpProposalStepResult> {
   if (input.step === "review" ? !input.draft : input.step !== "plan" && !input.plan) {
     throw new ModelGatewayError(`The ${input.step} step needs the ${input.step === "review" ? "assembled draft" : "proposal plan"}`, "empty_response");
   }
   const limits = STEP_LIMITS[input.step];
-  const prompt = buildRfpProposalUserPrompt(input);
+  const parts = buildRfpProposalPromptParts(input);
   const deadlineAt = Date.now() + STEP_BUDGET_MS;
 
-  const attempt = async (preferProvider: "claude" | "gemini"): Promise<RfpProposalStepResult> => {
+  const attempt = async (): Promise<RfpProposalStepResult> => {
     const result = await callModel({
       tier: "judgment",
-      preferProvider,
       promptVersion: RFP_DRAFTING_PROMPT_VERSION,
       systemPrompt: RFP_DRAFTING_PROMPT,
-      prompt,
+      cachePrefix: parts.cachePrefix,
+      prompt: parts.prompt,
       classification: "internal",
       redactionProfile: "response-draft-v1",
-      maxTokens: limits.maxTokens,
-      temperature: limits.temperature,
-      jsonMode: true,
       timeoutMs: limits.attemptMs,
       deadlineAt,
     });
@@ -256,9 +266,9 @@ export async function draftRfpProposalStep(input: RfpProposalStepInput): Promise
   };
 
   try {
-    return await attempt("claude");
+    return await attempt();
   } catch (err) {
     if (!(err instanceof ModelGatewayError) || err.code !== "empty_response") throw err;
-    return attempt("gemini");
+    return attempt();
   }
 }

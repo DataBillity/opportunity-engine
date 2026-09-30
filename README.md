@@ -25,7 +25,7 @@ apps/web          Next.js 15 operator console (port 3100)
 apps/worker      BullMQ orchestration worker (Railway)
 
 packages/core    Scoring, entity resolution, LinkedIn ingest (pure functions)
-packages/ai      Model gateway (Claude primary writer, Gemini extraction/fallback)
+packages/ai      Model gateway (Claude Sonnet 5.5)
 packages/db      Drizzle schema and migrations (Neon Postgres)
 packages/contracts  Shared Zod contracts at every intake and model-output boundary
 ```
@@ -39,7 +39,7 @@ Database schema is grouped into clusters: identity, graph, gaps, partners, pursu
 | App | Next.js 15, React 19, Tailwind |
 | Data | Neon Postgres via Drizzle ORM |
 | Jobs | Redis + BullMQ |
-| AI | Anthropic Claude, Google Gemini, optional Cloudflare AI Gateway |
+| AI | Anthropic Claude |
 | Email | Resend |
 | Deploy | Vercel (web), Railway (worker) |
 
@@ -113,8 +113,7 @@ Copy `.env.example` to `.env.local`. The launcher will create `.env.local` from 
 | --- | --- | --- |
 | `DATABASE_URL` | Web, worker, Drizzle | Neon connection string |
 | `REDIS_URL` | Worker | Local default `redis://localhost:6379` |
-| `ANTHROPIC_API_KEY` | AI outreach and extraction | Claude is the primary writer |
-| `GOOGLE_AI_API_KEY` | AI extraction / fallback | Optional; heuristic triage still runs without keys |
+| `ANTHROPIC_API_KEY` | AI outreach, extraction, and drafting | Claude Sonnet 5.5 |
 | `AUTH_USERNAME` / `AUTH_PASSWORD` / `AUTH_SECRET` | `/login` | Shared operator gate |
 | `RESEND_API_KEY` / `RESEND_FROM` | Password reset email | |
 | `NEXT_PUBLIC_APP_URL` | Auth links, CORS-facing URLs | `http://localhost:3100` locally |

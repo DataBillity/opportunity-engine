@@ -58,9 +58,9 @@ export async function GET() {
   const providers = getAvailableProviders();
   return NextResponse.json({
     ready: true,
-    modelExtraction: providers.claude || providers.gemini,
+    modelExtraction: providers.claude,
     providers,
-    hint: providers.claude || providers.gemini ? undefined : describeMissingKeys(),
+    hint: providers.claude ? undefined : describeMissingKeys(),
   });
 }
 
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
       : "No document text was provided.";
   } else {
     const providers = getAvailableProviders();
-    if (providers.claude || providers.gemini) {
+    if (providers.claude) {
       const documentNames = ordered.map(doc => doc.name);
       const goNoGoSources = projectType === "rfp"
         ? buildGoNoGoSources({

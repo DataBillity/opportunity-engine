@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "The RFP text is missing, so the assessment cannot be rerun." }, { status: 400 });
   }
   const providers = getAvailableProviders();
-  if (!providers.claude && !providers.gemini) {
+  if (!providers.claude) {
     return NextResponse.json({ error: describeMissingKeys() }, { status: 503 });
   }
 

@@ -72,9 +72,13 @@ Document text:
 ${text}`;
 }
 
+function partnerPromptParts(full: string): { cachePrefix: string; prompt: string } {
+  return { cachePrefix: full, prompt: "" };
+}
+
 async function enhanceWithModel(kind: PartnerIngestKind, text: string, filename: string, fallback: PartnerIngestResult): Promise<PartnerIngestResult> {
   const providers = getAvailableProviders();
-  if (!providers.claude && !providers.gemini) {
+  if (!providers.claude) {
     return { ...fallback, warning: [fallback.warning, "No AI model key configured — used heuristic parser only."].filter(Boolean).join(" ") };
   }
   try {
@@ -83,11 +87,8 @@ async function enhanceWithModel(kind: PartnerIngestKind, text: string, filename:
       promptVersion: "partner-ingest-v2",
       classification: "internal",
       redactionProfile: "partner-document",
-      jsonMode: true,
-      temperature: 0,
-      maxTokens: 4000,
       systemPrompt: PARTNER_INGEST_SYSTEM_PROMPT,
-      prompt: buildPartnerIngestPrompt(kind, text, filename),
+      ...partnerPromptParts(buildPartnerIngestPrompt(kind, text, filename)),
     });
     const parsed = parseModelJson(result.content) as Partial<PartnerIngestResult>;
     return {

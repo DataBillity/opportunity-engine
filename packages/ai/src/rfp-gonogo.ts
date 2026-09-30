@@ -49,21 +49,22 @@ export interface RfpGoNoGoModelResult {
   provider: "claude" | "gemini";
 }
 
-/** One judgment-tier call. A parse failure retries once on the other provider. */
+/** One judgment-tier call. A parse failure retries once. */
 export async function assessRfpGoNoGo(input: RfpGoNoGoSources): Promise<RfpGoNoGoModelResult> {
-  const prompt = buildRfpGoNoGoUserPrompt(input);
-  const attempt = async (preferProvider: "claude" | "gemini"): Promise<RfpGoNoGoModelResult> => {
+  const full = buildRfpGoNoGoUserPrompt(input);
+  const marker = "\nReturn JSON:";
+  const at = full.lastIndexOf(marker);
+  const cachePrefix = at < 0 ? "" : full.slice(0, at);
+  const prompt = at < 0 ? full : full.slice(at);
+  const attempt = async (): Promise<RfpGoNoGoModelResult> => {
     const result = await callModel({
       tier: "judgment",
-      preferProvider,
       promptVersion: RFP_GONOGO_PROMPT_VERSION,
       systemPrompt: RFP_GONOGO_PROMPT,
+      cachePrefix,
       prompt,
       classification: "internal",
       redactionProfile: "solicitation-extract-v1",
-      maxTokens: 16000,
-      temperature: 0.1,
-      jsonMode: true,
       timeoutMs: 160_000,
     });
     let parsed: unknown;
@@ -80,9 +81,9 @@ export async function assessRfpGoNoGo(input: RfpGoNoGoSources): Promise<RfpGoNoG
   };
 
   try {
-    return await attempt("claude");
+    return await attempt();
   } catch (err) {
     if (!(err instanceof ModelGatewayError) || err.code !== "empty_response") throw err;
-    return attempt("gemini");
+    return attempt();
   }
 }

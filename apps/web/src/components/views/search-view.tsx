@@ -213,7 +213,7 @@ export function SearchView({
         <h1 className="oe-page-title">Search & Discovery</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Candidate organizations sourced from firmographic feeds and public signal harvesting (DISC-01 through DISC-04).
-          Both model tiers behind one gateway — Gemini for extraction, Claude for fit judgment.
+          Drafts and extraction run through one gateway on Claude.
         </p>
       </div>
 

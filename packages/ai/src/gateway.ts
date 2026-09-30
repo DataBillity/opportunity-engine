@@ -1,18 +1,25 @@
 /**
  * Mechanism C — The Single Model Gateway (I6, AIG-11)
  *
- * This is the ONE door to any model. The ESLint no-restricted-imports
- * rule enforces that @anthropic-ai/sdk and @google/genai are only
- * importable inside this package.
+ * This is the ONE door to any model. Every call goes to Claude Sonnet 5.5.
+ * Stable prefixes (the system prompt, and a caller-supplied document prefix)
+ * are marked for a 1-hour prompt cache so later steps of the same job read
+ * them back instead of paying full input price.
  *
- * Judgment tier → Claude. Extraction tier → Gemini.
- * Each call falls back to the other provider if the primary is missing
- * or fails, so a single configured key still produces a draft.
+ * Sonnet 5.5 bills thinking as output and rejects temperature. Up-front
+ * thinking is off (`between_tools`) so the output budget stays on the answer.
+ * Output is capped only by the model maximum.
  */
 
 export interface GatewayCallInput {
   tier: "judgment" | "extraction";
   prompt: string;
+  /**
+   * Text placed before `prompt` with a cache breakpoint after it. Use this for
+   * the part of the user message that is identical across calls (the RFP
+   * package, the solicitation text). The dynamic task stays in `prompt`.
+   */
+  cachePrefix?: string;
   systemPrompt?: string;
   promptVersion: string;
   modelVersion?: string;
@@ -21,18 +28,13 @@ export interface GatewayCallInput {
   classification: "public" | "internal" | "confidential" | "regulated";
   redactionProfile: string;
   decisionId?: string;
-  maxTokens?: number;
-  temperature?: number;
-  jsonMode?: boolean;
   timeoutMs?: number;
   /**
-   * Absolute epoch-ms deadline shared across every attempt in this call (all models and
-   * both providers). Each attempt's timeout is capped to the time remaining, so a slow
-   * provider cannot push the whole request past the host's function limit.
+   * Absolute epoch-ms deadline shared across every attempt in this call.
+   * Each attempt's timeout is capped to the time remaining, so a slow
+   * attempt cannot push the whole request past the host's function limit.
    */
   deadlineAt?: number;
-  /** Overrides the tier's provider order; the other provider is still the fallback. */
-  preferProvider?: "claude" | "gemini";
 }
 
 export interface GatewayCallOutput {
@@ -66,17 +68,30 @@ const APPROVED_REGIONS: Record<string, string[]> = {
   regulated: ["ca"],
 };
 
-const CLAUDE_MODELS = ["claude-sonnet-5", "claude-sonnet-4-6"];
-const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-flash-latest"];
+const CLAUDE_MODEL = "claude-sonnet-5-5";
+/** Sonnet 5.5 maximum output. Callers do not set a lower cap. */
+const MAX_OUTPUT_TOKENS = 128_000;
 
 const CLAUDE_INPUT_USD = 2 / 1_000_000;
 const CLAUDE_OUTPUT_USD = 10 / 1_000_000;
-const GEMINI_INPUT_USD = 0.15 / 1_000_000;
-const GEMINI_OUTPUT_USD = 0.60 / 1_000_000;
+const CLAUDE_CACHE_WRITE_5M_USD = 2.5 / 1_000_000;
+const CLAUDE_CACHE_WRITE_1H_USD = 4 / 1_000_000;
+const CLAUDE_CACHE_READ_USD = 0.2 / 1_000_000;
 
 const CALL_TIMEOUT_MS = 45_000;
 /** Do not start another attempt with less than this left before the deadline. */
 const MIN_ATTEMPT_MS = 8_000;
+
+interface ClaudeUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation?: {
+    ephemeral_5m_input_tokens?: number;
+    ephemeral_1h_input_tokens?: number;
+  };
+}
 
 function isTimeoutError(err: unknown): boolean {
   return err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
@@ -95,26 +110,69 @@ export function getAnthropicApiKey(): string {
   return (process.env.ANTHROPIC_API_KEY ?? "").trim();
 }
 
-export function getGeminiApiKey(): string {
-  return (process.env.GOOGLE_AI_API_KEY ?? process.env.GEMINI_API_KEY ?? "").trim();
-}
-
-export function getAvailableProviders(): { claude: boolean; gemini: boolean } {
-  return {
-    claude: Boolean(getAnthropicApiKey()),
-    gemini: Boolean(getGeminiApiKey()),
-  };
+export function getAvailableProviders(): { claude: boolean } {
+  return { claude: Boolean(getAnthropicApiKey()) };
 }
 
 export function describeMissingKeys(): string {
-  const available = getAvailableProviders();
-  const missing: string[] = [];
-  if (!available.claude) missing.push("ANTHROPIC_API_KEY (Claude)");
-  if (!available.gemini) missing.push("GOOGLE_AI_API_KEY (Gemini)");
-  if (missing.length === 2) {
-    return `Add ${missing.join(" and ")} to the repo-root .env.local (or apps/web/.env.local), then restart the dev server.`;
+  return "Add ANTHROPIC_API_KEY (Claude) to the repo-root .env.local (or apps/web/.env.local), then restart the dev server.";
+}
+
+function cachedBlock(text: string): Record<string, unknown> {
+  return {
+    type: "text",
+    text,
+    cache_control: { type: "ephemeral", ttl: "1h" },
+  };
+}
+
+function buildClaudeRequestBody(model: string, input: GatewayCallInput): Record<string, unknown> {
+  const prefix = input.cachePrefix?.trim() ? input.cachePrefix : "";
+  const prompt = input.prompt ?? "";
+  const userContent = prefix
+    ? [
+      cachedBlock(prefix),
+      ...(prompt.trim() ? [{ type: "text", text: prompt }] : []),
+    ]
+    : prompt;
+
+  const body: Record<string, unknown> = {
+    model,
+    max_tokens: MAX_OUTPUT_TOKENS,
+    messages: [{ role: "user", content: userContent }],
+    // No up-front thinking. Sonnet 5.5 rejects thinking.type disabled.
+    thinking: { type: "between_tools" },
+  };
+
+  if (input.systemPrompt?.trim()) {
+    body.system = [cachedBlock(input.systemPrompt)];
   }
-  return `Optional: add ${missing.join(" and ")} so the gateway can use both providers.`;
+
+  return body;
+}
+
+function costFromUsage(usage: ClaudeUsage | undefined): {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  cached: boolean;
+} {
+  const uncached = usage?.input_tokens ?? 0;
+  const read = usage?.cache_read_input_tokens ?? 0;
+  const outputTokens = usage?.output_tokens ?? 0;
+  const fiveMinute = usage?.cache_creation?.ephemeral_5m_input_tokens;
+  const oneHour = usage?.cache_creation?.ephemeral_1h_input_tokens;
+  const wroteBreakdown = fiveMinute !== undefined || oneHour !== undefined;
+  // Requests ask for a 1-hour cache. The aggregate field is that write when the breakdown is absent.
+  const write5m = wroteBreakdown ? (fiveMinute ?? 0) : 0;
+  const write1h = wroteBreakdown ? (oneHour ?? 0) : (usage?.cache_creation_input_tokens ?? 0);
+  const inputTokens = uncached + write5m + write1h + read;
+  const costUsd = uncached * CLAUDE_INPUT_USD
+    + write5m * CLAUDE_CACHE_WRITE_5M_USD
+    + write1h * CLAUDE_CACHE_WRITE_1H_USD
+    + read * CLAUDE_CACHE_READ_USD
+    + outputTokens * CLAUDE_OUTPUT_USD;
+  return { inputTokens, outputTokens, costUsd, cached: read > 0 };
 }
 
 export async function callModel(input: GatewayCallInput): Promise<GatewayCallOutput> {
@@ -123,66 +181,19 @@ export async function callModel(input: GatewayCallInput): Promise<GatewayCallOut
     throw new Error(`Unknown classification: ${input.classification}`);
   }
 
-  const preferred: "claude" | "gemini" = input.preferProvider ?? (input.tier === "judgment" ? "claude" : "gemini");
-  const available = getAvailableProviders();
-  const order: Array<"claude" | "gemini"> = preferred === "claude"
-    ? ["claude", "gemini"]
-    : ["gemini", "claude"];
-  const usable = order.filter(provider => available[provider]);
-
-  if (usable.length === 0) {
+  if (!getAnthropicApiKey()) {
     throw new ModelGatewayError(describeMissingKeys(), "keys_missing");
   }
 
-  const errors: string[] = [];
-  for (const provider of usable) {
-    try {
-      const result = provider === "claude"
-        ? await callClaude(input, allowedRegions[0] ?? "us")
-        : await callGemini(input, allowedRegions[0] ?? "us");
-      return result;
-    } catch (err) {
-      errors.push(`${provider}: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-
-  throw new ModelGatewayError(
-    `All configured providers failed. ${errors.join(" | ")}`,
-    "provider_error",
-  );
-}
-
-function usesClaudeSonnet5Api(model: string): boolean {
-  return model === "claude-sonnet-5" || model.startsWith("claude-sonnet-5-");
-}
-
-function buildClaudeRequestBody(model: string, input: GatewayCallInput): Record<string, unknown> {
-  const body: Record<string, unknown> = {
-    model,
-    max_tokens: input.maxTokens ?? 1200,
-    system: input.systemPrompt || undefined,
-    messages: [{ role: "user", content: input.prompt }],
-  };
-
-  if (usesClaudeSonnet5Api(model)) {
-    // Sonnet 5 turns adaptive thinking on by default and rejects non-default
-    // sampling params. Keep the existing no-thinking JSON path so outreach and
-    // extraction stay within their current max_tokens budgets.
-    body.thinking = { type: "disabled" };
-  } else {
-    body.temperature = input.temperature ?? 0.4;
-  }
-
-  return body;
+  return callClaude(input, allowedRegions[0] ?? "us");
 }
 
 async function callClaude(input: GatewayCallInput, region: string): Promise<GatewayCallOutput> {
   const apiKey = getAnthropicApiKey();
-  const models = input.modelVersion ? [input.modelVersion, ...CLAUDE_MODELS] : CLAUDE_MODELS;
-  const unique = [...new Set(models)];
+  const models = [...new Set([input.modelVersion, CLAUDE_MODEL].filter((model): model is string => Boolean(model)))];
   let lastError = "Claude call failed";
 
-  for (const model of unique) {
+  for (const model of models) {
     const started = Date.now();
     const timeoutMs = attemptTimeoutMs(input);
     if (timeoutMs === 0) throw new Error(`${lastError} (time budget exhausted)`);
@@ -201,7 +212,7 @@ async function callClaude(input: GatewayCallInput, region: string): Promise<Gate
       const payload = await response.json() as {
         error?: { message?: string };
         content?: Array<{ type?: string; text?: string }>;
-        usage?: { input_tokens?: number; output_tokens?: number };
+        usage?: ClaudeUsage;
       };
 
       if (!response.ok) {
@@ -218,103 +229,22 @@ async function callClaude(input: GatewayCallInput, region: string): Promise<Gate
 
       if (!content) throw new ModelGatewayError("Claude returned an empty response", "empty_response");
 
-      const inputTokens = payload.usage?.input_tokens ?? 0;
-      const outputTokens = payload.usage?.output_tokens ?? 0;
+      const usage = costFromUsage(payload.usage);
       return {
         content,
         modelVersion: model,
         provider: "claude",
-        inputTokens,
-        outputTokens,
-        costUsd: inputTokens * CLAUDE_INPUT_USD + outputTokens * CLAUDE_OUTPUT_USD,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        costUsd: usage.costUsd,
         latencyMs: Date.now() - started,
         region,
-        cached: false,
+        cached: usage.cached,
       };
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
       if (err instanceof ModelGatewayError) throw err;
-      // A timeout means the provider is slow, not that this model id is wrong.
-      // Retrying the next model would burn the same budget again.
       if (isTimeoutError(err)) throw new Error(`Claude timed out after ${Math.round(timeoutMs / 1000)}s`);
-    }
-  }
-
-  throw new Error(lastError);
-}
-
-async function callGemini(input: GatewayCallInput, region: string): Promise<GatewayCallOutput> {
-  const apiKey = getGeminiApiKey();
-  const models = input.modelVersion ? [input.modelVersion, ...GEMINI_MODELS] : GEMINI_MODELS;
-  const unique = [...new Set(models)];
-  let lastError = "Gemini call failed";
-
-  for (const model of unique) {
-    const started = Date.now();
-    const timeoutMs = attemptTimeoutMs(input);
-    if (timeoutMs === 0) throw new Error(`${lastError} (time budget exhausted)`);
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-      const generationConfig: Record<string, unknown> = {
-        temperature: input.temperature ?? 0.4,
-        maxOutputTokens: input.maxTokens ?? 1200,
-      };
-      if (input.jsonMode) generationConfig.responseMimeType = "application/json";
-
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-goog-api-key": apiKey,
-        },
-        body: JSON.stringify({
-          system_instruction: input.systemPrompt
-            ? { parts: [{ text: input.systemPrompt }] }
-            : undefined,
-          contents: [{ role: "user", parts: [{ text: input.prompt }] }],
-          generationConfig,
-        }),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-
-      const payload = await response.json() as {
-        error?: { message?: string };
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-        usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
-      };
-
-      if (!response.ok) {
-        lastError = payload.error?.message || `Gemini HTTP ${response.status}`;
-        if (response.status === 404) continue;
-        throw new Error(lastError);
-      }
-
-      const content = (payload.candidates ?? [])
-        .flatMap(candidate => candidate.content?.parts ?? [])
-        .map(part => part.text)
-        .filter((text): text is string => Boolean(text))
-        .join("\n")
-        .trim();
-
-      if (!content) throw new ModelGatewayError("Gemini returned an empty response", "empty_response");
-
-      const inputTokens = payload.usageMetadata?.promptTokenCount ?? 0;
-      const outputTokens = payload.usageMetadata?.candidatesTokenCount ?? 0;
-      return {
-        content,
-        modelVersion: model,
-        provider: "gemini",
-        inputTokens,
-        outputTokens,
-        costUsd: inputTokens * GEMINI_INPUT_USD + outputTokens * GEMINI_OUTPUT_USD,
-        latencyMs: Date.now() - started,
-        region,
-        cached: false,
-      };
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err);
-      if (err instanceof ModelGatewayError) throw err;
-      if (isTimeoutError(err)) throw new Error(`Gemini timed out after ${Math.round(timeoutMs / 1000)}s`);
     }
   }
 

@@ -43,9 +43,9 @@ function tooManyAttempts(key: string): boolean {
 export async function GET() {
   const providers = getAvailableProviders();
   return NextResponse.json({
-    ready: providers.claude || providers.gemini,
+    ready: providers.claude,
     providers,
-    hint: providers.claude || providers.gemini ? undefined : describeMissingKeys(),
+    hint: providers.claude ? undefined : describeMissingKeys(),
   });
 }
 

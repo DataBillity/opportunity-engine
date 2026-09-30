@@ -3,7 +3,6 @@ export {
   getAvailableProviders,
   describeMissingKeys,
   getAnthropicApiKey,
-  getGeminiApiKey,
   ModelGatewayError,
 } from "./gateway";
 export type { GatewayCallInput, GatewayCallOutput, ModelGatewayCode } from "./gateway";
@@ -52,6 +51,7 @@ export type { RfpGoNoGoSources, RfpGoNoGoModelResult } from "./rfp-gonogo";
 export {
   draftRfpProposalStep,
   buildRfpProposalUserPrompt,
+  buildRfpProposalPromptParts,
   RFP_DRAFTING_PROMPT,
   RFP_DRAFTING_PROMPT_VERSION,
   RFP_PROPOSAL_STEPS,

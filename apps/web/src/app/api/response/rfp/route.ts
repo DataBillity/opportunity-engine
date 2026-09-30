@@ -77,7 +77,7 @@ export async function POST(request: Request) {
   }
 
   const providers = getAvailableProviders();
-  if (!providers.claude && !providers.gemini) {
+  if (!providers.claude) {
     return NextResponse.json({ error: describeMissingKeys() }, { status: 503 });
   }
 

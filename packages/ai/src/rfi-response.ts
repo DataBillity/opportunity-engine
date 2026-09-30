@@ -712,23 +712,19 @@ export async function generateRfiResponsePackage(rawBriefing: unknown): Promise<
   let provider: "claude" | "gemini" = "claude";
   let latencyMs = 0;
 
-  // The route is capped at 300s (maxDuration). Every attempt, across both providers, shares
-  // this deadline so the request always ends with JSON (a draft or the honest shell) instead
-  // of the host's plain-text timeout page.
+  // The route is capped at 300s (maxDuration). Every attempt shares this deadline so the
+  // request always ends with JSON (a draft or the honest shell) instead of the host's
+  // plain-text timeout page.
   const deadlineAt = Date.now() + PACKAGE_BUDGET_MS;
 
-  const draftWith = async (preferProvider: "claude" | "gemini") => {
+  const draftWith = async () => {
     const result = await callModel({
       tier: "judgment",
-      preferProvider,
       promptVersion: RFI_RESPONSE_PROMPT_VERSION,
       systemPrompt: packagePromptFor(projectType),
       prompt,
       classification: "internal",
       redactionProfile: "response-draft-v1",
-      maxTokens: 14000,
-      temperature: 0.3,
-      jsonMode: true,
       timeoutMs: PACKAGE_ATTEMPT_MS,
       deadlineAt,
     });
@@ -740,10 +736,10 @@ export async function generateRfiResponsePackage(rawBriefing: unknown): Promise<
 
   try {
     try {
-      parsed = await draftWith("claude");
+      parsed = await draftWith();
     } catch (err) {
       if (err instanceof ModelGatewayError) throw err;
-      parsed = await draftWith(provider === "claude" ? "gemini" : "claude");
+      parsed = await draftWith();
     }
   } catch (err) {
     if (err instanceof ModelGatewayError && err.code !== "empty_response" && err.code !== "keys_missing") {

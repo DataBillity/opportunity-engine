@@ -128,17 +128,13 @@ export async function generateCoverLetter(rawBriefing: unknown): Promise<CoverLe
   const facts = collectResponseFacts({ ...briefing, resolvedGaps: [], openGaps: [] }, { includeSourceExcerpt: false });
   const prompt = buildCoverLetterPrompt(briefing, facts);
 
-  const draftWith = (preferProvider?: "claude" | "gemini") => callModel({
+  const draftWith = () => callModel({
     tier: "judgment",
-    preferProvider,
     promptVersion: COVER_LETTER_PROMPT_VERSION,
     systemPrompt: COVER_LETTER_PROMPT,
     prompt,
     classification: "internal",
     redactionProfile: "response-draft-v1",
-    maxTokens: 1400,
-    temperature: 0.45,
-    jsonMode: true,
     timeoutMs: 60_000,
   });
   const parse = (content: string) => CoverLetterOutput.parse(parseModelJson(content));
@@ -159,7 +155,7 @@ export async function generateCoverLetter(rawBriefing: unknown): Promise<CoverLe
     } catch {
       const first = result;
       try {
-        result = await draftWith(first.provider === "claude" ? "gemini" : "claude");
+        result = await draftWith();
         const parsed = parse(result.content);
         body = parsed.body;
         usedIds = parsed.usedInsightIds;

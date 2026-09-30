@@ -119,9 +119,6 @@ export async function generateOutreachDraft(rawBriefing: unknown): Promise<Outre
     prompt: buildOutreachPrompt(briefing, facts),
     classification: "internal",
     redactionProfile: "outreach-v1",
-    maxTokens: 1200,
-    temperature: 0.4,
-    jsonMode: true,
   });
 
   let parsed: unknown;
