@@ -551,6 +551,7 @@ export default function CommandCenter() {
                     || item.partners.some(id => selectedPursuit.includedPartnerIds!.includes(id))
                   ))
                   .map(item => item.name)}
+                graph={graph}
                 onBack={() => setActiveView("decision")}
                 onUpdatePursuit={handleUpdatePursuit}
                 onApplyToPursuit={handleApplyToPursuit}

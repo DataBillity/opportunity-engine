@@ -26,6 +26,7 @@ export const GAP_TYPE_LABELS: Record<string, string> = {
   decision_needed: "Decision needed",
   clarification: "Clarification for the issuer",
   compliance_risk: "Compliance risk",
+  signature: "Signature",
 };
 
 export function isResolvedStatus(status: string | undefined): boolean {
@@ -89,7 +90,7 @@ export function gapLogRows(pursuit: Pick<Pursuit, "rfiResponse" | "responseActio
   return rows;
 }
 
-export type GapLogSortKey = "id" | "owner" | "priority" | "due" | "status";
+export type GapLogSortKey = "id" | "owner" | "priority" | "due" | "status" | "owner_group";
 
 const PRIORITY_RANK: Record<GapLogPriority, number> = { High: 0, Medium: 1, Low: 2 };
 const STATUS_RANK: Record<GapLogStatus, number> = { Open: 0, "In progress": 1, Resolved: 2 };
@@ -99,16 +100,26 @@ function idNumber(id: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-export function sortGapLogRows(rows: GapLogRow[], key: GapLogSortKey, direction: "asc" | "desc"): GapLogRow[] {
+/** `primeOwner` puts the Prime Partner's group first when sorting by owner group. */
+export function sortGapLogRows(rows: GapLogRow[], key: GapLogSortKey, direction: "asc" | "desc", primeOwner?: string): GapLogRow[] {
   const sign = direction === "asc" ? 1 : -1;
   const byId = (a: GapLogRow, b: GapLogRow) => idNumber(a.id) - idNumber(b.id) || a.id.localeCompare(b.id);
+  const owner = (a: GapLogRow, b: GapLogRow) => a.owner.localeCompare(b.owner, undefined, { sensitivity: "base" });
+  const priority = (a: GapLogRow, b: GapLogRow) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+  // Undated items sort last in ascending order.
+  const due = (a: GapLogRow, b: GapLogRow) => (a.dueAt || "9999").localeCompare(b.dueAt || "9999");
+  const prime = primeOwner?.trim().toLowerCase();
+  const primeRank = (row: GapLogRow) => {
+    const name = row.owner.trim().toLowerCase();
+    return (prime && name.startsWith(prime)) || /^prime\b/.test(name) ? 0 : 1;
+  };
   const compare: Record<GapLogSortKey, (a: GapLogRow, b: GapLogRow) => number> = {
     id: byId,
-    owner: (a, b) => a.owner.localeCompare(b.owner, undefined, { sensitivity: "base" }),
-    priority: (a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority],
-    // Undated items sort last in ascending order.
-    due: (a, b) => (a.dueAt || "9999").localeCompare(b.dueAt || "9999"),
+    owner,
+    priority,
+    due,
     status: (a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status],
+    owner_group: (a, b) => primeRank(a) - primeRank(b) || owner(a, b) || priority(a, b) || due(a, b),
   };
   return [...rows].sort((a, b) => sign * compare[key](a, b) || byId(a, b));
 }

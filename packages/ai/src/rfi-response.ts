@@ -36,6 +36,7 @@ const GAP_TYPE_ALIASES: Record<string, RfiGapLogEntry["gapType"]> = {
   issuer_question: "clarification",
   compliance_risk: "compliance_risk",
   compliance: "compliance_risk",
+  signature: "signature",
 };
 
 export const RFI_SECTION_PROMPT = `You write one section of a DataBillity (Billity AI) response to a Request for Information. DataBillity is the Prime. A human reviewer approves and submits every response.

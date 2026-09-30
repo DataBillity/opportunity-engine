@@ -10,6 +10,7 @@ import {
 } from "@/lib/gap-log";
 
 const SORT_OPTIONS: { key: GapLogSortKey; label: string }[] = [
+  { key: "owner_group", label: "By owner" },
   { key: "id", label: "ID" },
   { key: "owner", label: "Owner" },
   { key: "priority", label: "Priority" },
@@ -55,13 +56,18 @@ export function GapLogActionItems({
   onOpen,
   emptyText = "No gaps or action items yet.",
   className,
+  primeOwner,
 }: {
   rows: GapLogRow[];
   onOpen?: (id: string) => void;
   emptyText?: string;
   className?: string;
+  /** Set for proposals: items are grouped by owner, the Prime Partner first, then by priority and due date. */
+  primeOwner?: string;
 }) {
-  const [sortKey, setSortKey] = useState<GapLogSortKey>("priority");
+  const grouped = primeOwner !== undefined;
+  const sortOptions = grouped ? SORT_OPTIONS : SORT_OPTIONS.filter(option => option.key !== "owner_group");
+  const [sortKey, setSortKey] = useState<GapLogSortKey>(grouped ? "owner_group" : "priority");
   const [direction, setDirection] = useState<"asc" | "desc">("asc");
   const [hideResolved, setHideResolved] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -79,9 +85,11 @@ export function GapLogActionItems({
   }, [expanded]);
 
   const visible = useMemo(
-    () => sortGapLogRows(hideResolved ? rows.filter(row => row.status !== "Resolved") : rows, sortKey, direction),
-    [rows, hideResolved, sortKey, direction],
+    () => sortGapLogRows(hideResolved ? rows.filter(row => row.status !== "Resolved") : rows, sortKey, direction, primeOwner),
+    [rows, hideResolved, sortKey, direction, primeOwner],
   );
+  const groupStart = (index: number) => sortKey === "owner_group" && (index === 0 || visible[index - 1]!.owner !== visible[index]!.owner);
+  const groupCount = (owner: string) => visible.filter(row => row.owner === owner).length;
   const open = rows.filter(row => row.status !== "Resolved").length;
   const high = rows.filter(row => row.status !== "Resolved" && row.priority === "High").length;
   const resolved = rows.length - open;
@@ -105,7 +113,7 @@ export function GapLogActionItems({
           className="oe-select text-[11px] w-24"
           aria-label="Sort gap log by"
         >
-          {SORT_OPTIONS.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
+          {sortOptions.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
         </select>
         <button
           type="button"
@@ -139,8 +147,13 @@ export function GapLogActionItems({
     <>
       {/* Small screens: one full-width card per item */}
       <ul className="md:hidden divide-y divide-border">
-        {visible.map(row => (
+        {visible.map((row, index) => (
           <li key={row.id}>
+            {groupStart(index) && (
+              <div className="px-4 py-2 bg-muted/40 text-[10px] uppercase tracking-widest font-bold text-muted-foreground">
+                {row.owner} · {groupCount(row.owner)}
+              </div>
+            )}
             <button
               type="button"
               onClick={() => onOpen?.(row.id)}
@@ -187,7 +200,14 @@ export function GapLogActionItems({
           </tr>
         </thead>
         <tbody>
-          {visible.map(row => (
+          {visible.map((row, index) => [
+            groupStart(index) && (
+              <tr key={`group-${row.id}`} className="bg-muted/40 border-b border-border">
+                <td colSpan={6} className="px-4 py-2 text-[10px] uppercase tracking-widest font-bold text-muted-foreground">
+                  {row.owner} · {groupCount(row.owner)}
+                </td>
+              </tr>
+            ),
             <tr
               key={row.id}
               className="oe-table-row border-b border-border last:border-b-0 cursor-pointer align-top"
@@ -199,8 +219,8 @@ export function GapLogActionItems({
               <td className="px-4 py-3"><PriorityBadge priority={row.priority} /></td>
               <td className="px-4 py-3 font-mono text-muted-foreground whitespace-nowrap">{row.dueAt || "—"}</td>
               <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
-            </tr>
-          ))}
+            </tr>,
+          ])}
         </tbody>
       </table>
     </>

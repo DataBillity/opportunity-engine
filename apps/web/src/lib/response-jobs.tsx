@@ -47,7 +47,8 @@ export interface ResponseJobResult {
 }
 
 interface ResponseJobsApi {
-  start: (job: Omit<ResponseJob, "id" | "startedAt"> & { run: () => Promise<ResponseJobOutcome> }) => boolean;
+  /** `run` may report progress; each call replaces the running job's label. */
+  start: (job: Omit<ResponseJob, "id" | "startedAt"> & { run: (progress: (label: string) => void) => Promise<ResponseJobOutcome> }) => boolean;
   running: Record<string, ResponseJob>;
   results: Record<string, ResponseJobResult>;
 }
@@ -99,7 +100,15 @@ export function ResponseJobsProvider({
       toast(`${job.pursuitName}: ${outcome.toast}`, outcome.tone);
     };
 
-    void run().then(finish, (err: unknown) => {
+    const progress = (label: string) => {
+      if (!active.current.has(job.pursuitId)) return;
+      setRunning(prev => {
+        const current = prev[job.pursuitId];
+        return current?.id === job.id ? { ...prev, [job.pursuitId]: { ...current, label } } : prev;
+      });
+    };
+
+    void run(progress).then(finish, (err: unknown) => {
       const message = err instanceof Error ? err.message : "Generation failed";
       finish({ message, toast: message, tone: "error" });
     });

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
-import type { GraphExperience, GraphPerson, Organization, Partner, Pursuit, PursuitCoverLetter, ResponseActionItem } from "@/lib/mock-data";
-import { outlineSectionsFor, RFI_OUTLINE_SECTIONS } from "@opportunity-engine/core";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import type { GraphData, GraphExperience, GraphPerson, Organization, Partner, Pursuit, PursuitCoverLetter, ResponseActionItem } from "@/lib/mock-data";
+import type { RfpProposal } from "@opportunity-engine/contracts";
+import { estimatePages, outlineSectionsFor, RFI_OUTLINE_SECTIONS, summarizeRfpProposal } from "@opportunity-engine/core";
 import { getPartner } from "@/lib/mock-data";
 import { Modal, FormField, TextInput, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
 import { ActionItemResponseModal } from "@/components/action-items/action-item-response-modal";
@@ -14,8 +15,11 @@ import { cn } from "@/lib/cn";
 import { rankPeopleForRole } from "@/lib/personnel-fit";
 import { RfiResponsePackagePanel } from "@/components/views/rfi-response-package";
 import { escapeHtml, htmlToPlainText, isEmptyRichText, plainTextToHtml, sanitizeRichText } from "@/lib/rich-text";
-import { GAP_TYPE_LABELS, applyActionItemUpdate, gapLogRows, gapsToActionItems, isResolvedStatus } from "@/lib/gap-log";
+import { GAP_TYPE_LABELS, applyActionItemUpdate, gapLogRows, gapsToActionItems, isResolvedStatus, sortGapLogRows, type GapLogRow } from "@/lib/gap-log";
 import { useResponseJob, type ResponseJobKind, type ResponseJobOutcome } from "@/lib/response-jobs";
+import { liveProposal, runRfpProposalJob, runRfpSectionJob, type RfpProposalContext } from "@/lib/rfp-proposal-generation";
+import { primePartnerOf } from "@/lib/rfp-proposal-sources";
+import { PageBudgetBar, ProposalFormsPanel, ProposalStatusStrip, ProposalSupportPanel } from "@/components/views/rfp-proposal-panels";
 import {
   COVER_LETTER_ID,
   COVER_LETTER_MAX_WORDS,
@@ -67,7 +71,7 @@ function sectionsForPursuit(pursuit: Pursuit): SectionMeta[] {
 }
 
 function outlineForPursuit(pursuit: Pursuit): SectionMeta[] {
-  if (pursuit.id === "OPP-2219") return initialSections;
+  if (pursuit.id === "OPP-2219" && !pursuit.rfpProposal) return initialSections;
   if (pursuit.projectType === "rfi") {
     const matrix = pursuit.complianceMatrix ?? [];
     const source = matrix.length && !isGenericRfiMatrix(matrix)
@@ -213,8 +217,38 @@ export function ResponseBuilderEmptyState({
   );
 }
 
+const EMPTY_GRAPH: GraphData = { capabilities: [], experience: [], credentials: [], people: [] };
+
+function proposalExportHtml(proposal: RfpProposal, summary: string, rows: GapLogRow[]): string {
+  const cell = (value: string) => `<td>${escapeHtml(value)}</td>`;
+  const table = (headers: string[], body: string[][]) => body.length
+    ? `<table border="1" cellpadding="6" cellspacing="0"><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join("")}</tr>${body.map(row => `<tr>${row.map(cell).join("")}</tr>`).join("")}</table>`
+    : "<p><em>None</em></p>";
+  const forms = proposal.forms.map(form => `<h2>${escapeHtml([form.form, form.name].filter(Boolean).join(" — "))}</h2>${
+    form.completedBy.length ? `<p>Completed by: ${escapeHtml(form.completedBy.join(", "))}</p>` : ""
+  }${form.placement ? `<p>Placement: ${escapeHtml(form.placement)}</p>` : ""}${
+    table(["Field", "Value"], form.fields.map(field => [field.field, field.value]))
+  }${form.notes ? `<p>${escapeHtml(form.notes)}</p>` : ""}`).join("");
+  const gapTable = table(
+    ["ID", "Location", "Type", "Description", "Owner", "Priority", "Due", "Status"],
+    rows.map(row => [row.id, row.location, GAP_TYPE_LABELS[row.type] ?? row.type, row.description, row.owner, row.priority, row.dueAt, row.status]),
+  );
+  return [
+    `<br style="page-break-before:always"><h1>Forms</h1>${forms || "<p><em>No forms completed</em></p>"}`,
+    `<h1>Gap Log - Action Items</h1>${gapTable}`,
+    `<h1>Supporting material</h1><h2>Reviewer summary</h2><p>${escapeHtml(summary)}</p>`,
+    `<h2>Compliance matrix</h2>${table(["Requirement", "Cite", "Answered in", "Criterion", "Owner", "Status"], proposal.complianceMatrix.map(row => [row.requirement, row.cite, row.answeredIn, row.criterion, row.owner, row.status]))}`,
+    `<h2>Page budget</h2>${table(["Section", "RFP ref", "Points", "Budget (pages)", "Estimate (pages)"], proposal.sections.map(section => [
+      section.heading, section.rfpRef, section.points, section.pageBudget == null ? "Outside budget" : String(section.pageBudget), String(estimatePages(section.content)),
+    ]))}`,
+    `<h2>Consistency checks</h2>${table(["Check", "Result", "Detail", "Source"], proposal.consistencyChecks.map(check => [check.check, check.result, check.detail, check.source]))}`,
+    `<h2>Submission checklist</h2><ul>${proposal.submissionChecklist.map(line => `<li>${escapeHtml(line)}</li>`).join("")}</ul>`,
+    `<h2>Questions for the issuer</h2>${table(["Question", "Basis", "Priority", "Timing"], proposal.issuerQuestions.map(row => [row.question, row.basis, row.priority, row.timing]))}`,
+  ].join("");
+}
+
 export function ResponseBuilderView({
-  pursuit, org, onBack, onUpdatePursuit, onApplyToPursuit, partners, people, experience, capabilities,
+  pursuit, org, onBack, onUpdatePursuit, onApplyToPursuit, partners, people, experience, capabilities, graph,
 }: {
   pursuit: Pursuit;
   org?: Organization;
@@ -225,6 +259,8 @@ export function ResponseBuilderView({
   people?: GraphPerson[];
   experience?: GraphExperience[];
   capabilities?: string[];
+  /** The capability graph, for RFP proposal sources (capabilities, credentials, resumes). */
+  graph?: GraphData;
 }) {
   const { toast } = useToast();
   const { profile } = useOperator();
@@ -267,6 +303,17 @@ export function ResponseBuilderView({
   const logRows = gapLogRows(pursuit, partners);
   const isRfi = pursuit.projectType === "rfi";
   const packageLabel = PACKAGE_LABEL[pursuit.projectType ?? "rfp"];
+  const isRfp = (pursuit.projectType ?? "rfp") === "rfp";
+  const proposal = isRfp ? pursuit.rfpProposal : undefined;
+  const primeName = primePartnerOf(partners)?.name;
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
+  const [instructionsText, setInstructionsText] = useState(pursuit.proposalInstructions ?? "");
+  const openGaps = pursuit.rfiResponse?.gaps;
+  const live = useMemo(
+    () => (proposal ? liveProposal(proposal, drafts, coverDraft, openGaps) : null),
+    [proposal, drafts, coverDraft, openGaps],
+  );
+  const planned = useMemo(() => new Map((live?.sections ?? []).map(section => [section.id, section])), [live]);
 
   // Upload final
   const [uploadFinalOpen, setUploadFinalOpen] = useState(false);
@@ -347,9 +394,13 @@ export function ResponseBuilderView({
     const saved = pursuit.responseDrafts ?? {};
     if (jobResult.kind === "package" && written.size) {
       const tracePct = jobResult.hints?.tracePct ?? "model";
-      setSections(sectionsForPursuit(pursuit).map(section =>
+      const next = sectionsForPursuit(pursuit);
+      setSections(next.map(section =>
         written.has(section.id) ? { ...section, trace: "partial" as const, tracePct, reviewNeeded: false } : section,
       ));
+      setActiveSection(current => current === COVER_LETTER_ID || next.some(section => section.id === current)
+        ? current
+        : next[0]?.id ?? COVER_LETTER_ID);
     } else if (jobResult.kind === "section") {
       setSections(prev => prev.map(section => {
         if (written.has(section.id) || section.id === jobResult.sectionId) {
@@ -386,20 +437,47 @@ export function ResponseBuilderView({
     };
   }
 
-  function launch(kind: ResponseJobKind, label: string, run: () => Promise<ResponseJobOutcome>, sectionId?: string) {
+  function launch(kind: ResponseJobKind, label: string, run: (progress: (label: string) => void) => Promise<ResponseJobOutcome>, sectionId?: string) {
     const started = startJob({ pursuitId: pursuit.id, pursuitName: pursuit.name, kind, label, sectionId, run });
     if (!started) toast("A draft is already being generated for this opportunity", "warning");
   }
 
+  function proposalContext(): RfpProposalContext {
+    flushEdits();
+    return {
+      pursuit,
+      partners: partners ?? [],
+      graph: graph ?? { ...EMPTY_GRAPH, people: people ?? [], experience: experience ?? [] },
+      assignments: personnelAssignments,
+      drafts,
+    };
+  }
+
   function requestRfiPackage() {
-    const ctx = generationContext();
     const redo = sections.some(section => !isEmptyRichText(drafts[section.id]));
+    if (isRfp) {
+      const ctx = proposalContext();
+      launch("package", `${redo ? "Regenerating" : "Drafting"} the proposal`, progress => runRfpProposalJob(ctx, progress));
+      return;
+    }
+    const ctx = generationContext();
     launch("package", `${redo ? "Regenerating" : "Drafting"} the ${packageLabel}`, () => runPackageJob(ctx));
+  }
+
+  function saveInstructions() {
+    onUpdatePursuit(pursuit.id, { proposalInstructions: instructionsText.trim() });
+    setInstructionsOpen(false);
+    toast("Drafting instructions saved. They apply the next time the proposal is drafted.", "success");
   }
 
   function requestSectionDraft(options: { regenerate: boolean }) {
     const section = sections.find(item => item.id === activeSection);
     if (!section) return;
+    if (proposal?.sections.some(item => item.id === section.id)) {
+      const ctx = proposalContext();
+      launch("section", `${options.regenerate ? "Regenerating" : "Drafting"} “${section.name}”`, () => runRfpSectionJob(ctx, section.id), section.id);
+      return;
+    }
     const ctx = generationContext();
     const fallbackText = pursuit.id === "OPP-2219" && section.id === "mgmt"
       ? generatedMgmtDraft
@@ -466,7 +544,7 @@ export function ResponseBuilderView({
   }
 
   function handleExportWord() {
-    const summary = rfiPacket
+    const summary = rfiPacket && !live
       ? `<h1>Reviewer summary</h1><p>${escapeHtml(rfiPacket.reviewerSummary)}</p>${
         rfiPacket.questions.length
           ? `<h2>Suggested questions</h2><ul>${rfiPacket.questions.map(question => `<li>${escapeHtml(question)}</li>`).join("")}</ul>`
@@ -487,9 +565,12 @@ export function ResponseBuilderView({
         : sanitizeRichText(drafts[s.id] ?? "");
       return `<h1>${escapeHtml(s.name)}</h1><p><strong>${escapeHtml(s.ref)}</strong></p>${content}`;
     }).join("");
+    const tail = live
+      ? proposalExportHtml(live, summarizeRfpProposal(live, primeName), sortGapLogRows(logRows, "owner_group", "asc", primeName))
+      : gapTable;
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(pursuit.name)} — Response Draft</title>
 <style>body{font-family:Georgia,serif;max-width:720px;margin:40px auto;line-height:1.65;color:#111}h1{font-family:Calibri,sans-serif;font-size:20px;margin:28px 0 8px}h2{font-size:16px}ul,ol{padding-left:1.4em}</style>
-</head><body><p style="color:#555;font-size:13px">${escapeHtml(pursuit.solicitationRef || pursuit.typeLabel)}</p><h1>${escapeHtml(pursuit.name)} — Response Draft</h1>${summary}${letter}${body}${gapTable}</body></html>`;
+</head><body><p style="color:#555;font-size:13px">${escapeHtml(pursuit.solicitationRef || pursuit.typeLabel)}</p><h1>${escapeHtml(pursuit.name)} — Response Draft</h1>${summary}${letter}${body}${tail}</body></html>`;
     const blob = new Blob(["\ufeff", html], { type: "application/msword" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -519,8 +600,29 @@ export function ResponseBuilderView({
   const quickPrompts = ["Strengthen the fraud analytics paragraph", "Add a risk mitigation section", "Which claims aren't source-traced?"];
 
   const isCover = activeSection === COVER_LETTER_ID;
-  const isKeyPersonnel = !isCover && activeSection === "pers";
   const activeMeta = sections.find(s => s.id === activeSection);
+  const isKeyPersonnel = !isCover && (activeSection === "pers" || (isRfp && /key personnel|staffing/i.test(activeMeta?.name ?? "")));
+  const activePlan = isCover ? undefined : planned.get(activeSection);
+  const budgetLine = (id: string) => {
+    const plan = planned.get(id);
+    if (!plan) return "";
+    return [
+      plan.points ? `${plan.points} pts` : "",
+      plan.pageBudget != null ? `~${estimatePages(plan.content)} of ${plan.pageBudget} pp` : "outside page budget",
+    ].filter(Boolean).join(" · ");
+  };
+  const navGroups: { label: string; items: SectionMeta[] }[] = (() => {
+    if (!proposal?.structure.volumes.length) return [{ label: "", items: sections }];
+    const used = new Set<string>();
+    const groups = proposal.structure.volumes.map(volume => {
+      const ids = new Set(volume.sectionIds.map(id => id.toLowerCase()));
+      const items = sections.filter(section => !used.has(section.id) && ids.has(section.id.toLowerCase()));
+      for (const item of items) used.add(item.id);
+      return { label: `${volume.volume}${volume.pageLimit ? ` · ${volume.pageLimit}` : ""}`, items };
+    }).filter(group => group.items.length);
+    const rest = sections.filter(section => !used.has(section.id));
+    return rest.length ? [...groups, { label: "Other sections", items: rest }] : groups;
+  })();
   const hasDraft = !isCover && !isEmptyRichText(drafts[activeSection]);
   const draftedCount = sections.filter(s => !isEmptyRichText(drafts[s.id])).length;
   const coverLetter: PursuitCoverLetter | undefined = pursuit.coverLetter;
@@ -571,7 +673,17 @@ export function ResponseBuilderView({
         </div>
       </div>
 
-      {rfiPacket && (
+      {proposal && live && (
+        <ProposalStatusStrip
+          record={proposal}
+          live={live}
+          summary={summarizeRfpProposal(live, primeName)}
+          hasInstructions={Boolean(pursuit.proposalInstructions?.trim())}
+          onEditInstructions={() => { setInstructionsText(pursuit.proposalInstructions ?? ""); setInstructionsOpen(true); }}
+        />
+      )}
+
+      {rfiPacket && !live && (
         <RfiResponsePackagePanel
           packet={rfiPacket}
           logRows={logRows}
@@ -579,7 +691,7 @@ export function ResponseBuilderView({
         />
       )}
 
-      {logRows.length > 0 && (
+      {logRows.length > 0 && !live && (
         <GapLogActionItems
           rows={logRows}
           onOpen={id => {
@@ -594,7 +706,7 @@ export function ResponseBuilderView({
         {/* Section nav card */}
         <div className="w-full xl:w-[260px] shrink-0 bg-card rounded-xl border shadow-sm overflow-hidden">
           <div className="px-4 py-3 text-[10px] text-muted-foreground border-b border-border bg-muted/40 font-medium flex items-center justify-between">
-            <span>Sections per compliance matrix</span>
+            <span>{proposal ? "Sections by volume" : "Sections per compliance matrix"}</span>
             <button onClick={() => setInsertOpen(true)} className="text-primary font-semibold cursor-pointer hover:underline">+ Insert</button>
           </div>
           <div className="flex xl:flex-col overflow-x-auto oe-touch-scroll xl:overflow-visible">
@@ -614,31 +726,39 @@ export function ResponseBuilderView({
                 coverStatus === "Not drafted" ? "oe-status-pending" : coverStatus === "Update" ? "oe-status-cond" : "oe-status-trace",
               )}>{coverStatus === "Update" ? "Update ↻" : coverStatus}</span>
             </button>
-            {sections.map(s => (
-              <button
-                key={s.id}
-                onClick={() => { setActiveSection(s.id); setAssertionResults(null); }}
-                className={cn(
-                  "flex justify-between items-center gap-2 w-full px-4 py-3 border-b xl:border-b border-r xl:border-r-0 border-border cursor-pointer text-left text-xs transition-all min-w-[11.5rem] xl:min-w-0",
-                  "hover:bg-muted/20",
-                  activeSection === s.id ? "bg-accent border-l-[3px] border-l-primary" : "bg-card border-l-[3px] border-l-transparent"
-                )}
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1">
-                    <span className="block font-mono text-[9px] text-muted-foreground uppercase tracking-wider">{s.ref}</span>
-                    {s.mandatory && <span className="text-destructive text-[10px] font-bold">*</span>}
-                    {s.reviewNeeded && <span className="text-cond text-[9px] font-bold ml-1">REVIEW</span>}
-                  </div>
-                  <span className="font-semibold text-foreground">{s.name}</span>
+            {navGroups.map(group => [
+              group.label && (
+                <div key={`group-${group.label}`} className="hidden xl:block px-4 pt-3 pb-1.5 text-[9px] uppercase tracking-widest font-bold text-muted-foreground bg-muted/30 border-b border-border">
+                  {group.label}
                 </div>
-                <span className={cn("font-mono text-[10px] px-1.5 py-0.5 rounded-md shrink-0 font-semibold",
-                  reviewedSections.has(s.id) ? "oe-status-go" :
-                  s.trace === "full" ? "oe-status-trace" :
-                  s.trace === "partial" ? "oe-status-cond" : "oe-status-pending"
-                )}>{reviewedSections.has(s.id) ? "Reviewed ✓" : s.tracePct}</span>
-              </button>
-            ))}
+              ),
+              ...group.items.map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => { setActiveSection(s.id); setAssertionResults(null); }}
+                  className={cn(
+                    "flex justify-between items-center gap-2 w-full px-4 py-3 border-b xl:border-b border-r xl:border-r-0 border-border cursor-pointer text-left text-xs transition-all min-w-[11.5rem] xl:min-w-0",
+                    "hover:bg-muted/20",
+                    activeSection === s.id ? "bg-accent border-l-[3px] border-l-primary" : "bg-card border-l-[3px] border-l-transparent"
+                  )}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1">
+                      <span className="block font-mono text-[9px] text-muted-foreground uppercase tracking-wider">{s.ref}</span>
+                      {s.mandatory && <span className="text-destructive text-[10px] font-bold">*</span>}
+                      {s.reviewNeeded && <span className="text-cond text-[9px] font-bold ml-1">REVIEW</span>}
+                    </div>
+                    <span className="font-semibold text-foreground">{s.name}</span>
+                    {planned.has(s.id) && <span className="block text-[10px] text-muted-foreground font-mono mt-0.5">{budgetLine(s.id)}</span>}
+                  </div>
+                  <span className={cn("font-mono text-[10px] px-1.5 py-0.5 rounded-md shrink-0 font-semibold",
+                    reviewedSections.has(s.id) ? "oe-status-go" :
+                    s.trace === "full" ? "oe-status-trace" :
+                    s.trace === "partial" ? "oe-status-cond" : "oe-status-pending"
+                  )}>{reviewedSections.has(s.id) ? "Reviewed ✓" : s.tracePct}</span>
+                </button>
+              )),
+            ])}
           </div>
           <div className="px-4 py-3 bg-muted/20 border-t border-border xl:border-t-0">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">Completion</div>
@@ -691,6 +811,19 @@ export function ResponseBuilderView({
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {activePlan && (
+            <div className="bg-card rounded-xl border shadow-sm px-5 py-3.5 space-y-2 text-xs">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Section brief</span>
+                {activePlan.rfpRef && <span className="font-mono text-[11px] text-muted-foreground">{activePlan.rfpRef}</span>}
+                {activePlan.points && <span className="font-mono text-[11px] text-muted-foreground">{activePlan.points} pts</span>}
+                <div className="ml-auto"><PageBudgetBar pages={estimatePages(activePlan.content)} budget={activePlan.pageBudget} /></div>
+              </div>
+              {activePlan.criterion && <p className="text-muted-foreground">Criterion: <span className="text-foreground">{activePlan.criterion}</span></p>}
+              {activePlan.brief && <p className="text-foreground leading-relaxed">{activePlan.brief}</p>}
             </div>
           )}
 
@@ -776,7 +909,10 @@ export function ResponseBuilderView({
                 <div className="flex items-center gap-3">
                   <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
                   <span className="text-sm text-muted-foreground">
-                    {job.kind === "package" ? `Drafting the ${packageLabel}, Gap Log - Action Items, and reviewer summary…` : `${job.label}…`}
+                    {job.kind === "package" && !isRfp ? `Drafting the ${packageLabel}, Gap Log - Action Items, and reviewer summary…` : `${job.label}…`}
+                    {job.kind === "package" && isRfp && (
+                      <span className="block text-[11px]">A full proposal takes several minutes: the plan first, then sections, forms, and compliance in parallel, then a consistency review.</span>
+                    )}
                     <span className="block text-[11px]">You can leave this page — the draft keeps running and is saved when it finishes.</span>
                   </span>
                 </div>
@@ -807,6 +943,14 @@ export function ResponseBuilderView({
             <button onClick={requestRfiPackage} disabled={generating} className="text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm disabled:opacity-50">
               {job?.kind === "package" ? "Drafting…" : draftedCount ? `Regenerate ${packageLabel}` : `Generate ${packageLabel}`}
             </button>
+            {isRfp && !proposal && (
+              <button
+                onClick={() => { setInstructionsText(pursuit.proposalInstructions ?? ""); setInstructionsOpen(true); }}
+                className="text-xs font-medium px-4 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+              >
+                {pursuit.proposalInstructions?.trim() ? "Edit drafting instructions" : "Add drafting instructions"}
+              </button>
+            )}
             {isCover && (
               <button
                 onClick={() => requestCoverLetter()}
@@ -894,6 +1038,43 @@ export function ResponseBuilderView({
           </div>
         </div>
       </div>
+
+      {live && (
+        <>
+          <ProposalFormsPanel forms={live.forms} />
+          <GapLogActionItems
+            rows={logRows}
+            primeOwner={primeName ?? "Prime"}
+            emptyText="No open gaps. Every placeholder has been resolved."
+            onOpen={id => {
+              const existing = (pursuit.responseActionItems ?? []).find(item => item.id === id);
+              const gap = rfiPacket?.gaps.find(item => item.id === id);
+              setActionItem(existing ?? (gap ? gapsToActionItems([gap], partners)[0] ?? null : null));
+            }}
+          />
+          <ProposalSupportPanel proposal={live} />
+        </>
+      )}
+
+      <Modal open={instructionsOpen} onClose={() => setInstructionsOpen(false)} title="Drafting instructions" wide>
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            What the draft should know that the RFP and the capability graph don't: win strategy, prices and pricing assumptions,
+            named key personnel, exceptions to take, anything to avoid. Prices are only entered from here or by the Prime Partner.
+          </p>
+          <textarea
+            value={instructionsText}
+            onChange={e => setInstructionsText(e.target.value)}
+            rows={10}
+            className="oe-field w-full text-xs font-mono"
+            placeholder={"e.g. Lead with our transit fare-system track record.\nPricing: blended rate $185/hr, fixed fee for Phase 1.\nDo not take exceptions to the insurance terms."}
+          />
+          <div className="flex justify-end gap-2">
+            <SecondaryButton onClick={() => setInstructionsOpen(false)}>Cancel</SecondaryButton>
+            <PrimaryButton onClick={saveInstructions}>Save</PrimaryButton>
+          </div>
+        </div>
+      </Modal>
 
       {/* Full Preview Modal */}
       <Modal open={previewOpen} onClose={() => setPreviewOpen(false)} title="Full Response Preview" wide>

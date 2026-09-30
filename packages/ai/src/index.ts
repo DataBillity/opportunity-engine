@@ -49,4 +49,12 @@ export {
   RFP_GONOGO_PROMPT_VERSION,
 } from "./rfp-gonogo";
 export type { RfpGoNoGoSources, RfpGoNoGoModelResult } from "./rfp-gonogo";
+export {
+  draftRfpProposalStep,
+  buildRfpProposalUserPrompt,
+  RFP_DRAFTING_PROMPT,
+  RFP_DRAFTING_PROMPT_VERSION,
+  RFP_PROPOSAL_STEPS,
+} from "./rfp-proposal";
+export type { RfpProposalStep, RfpProposalSources, RfpProposalStepInput, RfpProposalStepResult } from "./rfp-proposal";
 export type { CoverLetterDraft } from "./cover-letter";

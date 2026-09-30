@@ -87,5 +87,23 @@ export type {
   ResolvedAccount,
   LinkedInBatchResult,
 } from "./ingest/linkedin-connections";
+export {
+  answeringParts,
+  batchProposalSections,
+  complianceWithStatus,
+  estimatePages,
+  gapIdFor,
+  gapIdsInOrder,
+  gapNumber,
+  mergeProposalParts,
+  proposalPlatformChecks,
+  proseWords,
+  reconcileRfpProposal,
+  remapGapIds,
+  renumberPartGaps,
+  summarizeRfpProposal,
+  WORDS_PER_PAGE,
+} from "./proposal/rfp-proposal";
+export type { ReconcileOptions, ReconcileReport } from "./proposal/rfp-proposal";
 export { buildDecisionRecord, computeRowHash } from "./decision/envelope";
 export type { DecisionInput, DecisionOutput } from "./decision/envelope";

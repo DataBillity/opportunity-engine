@@ -33,6 +33,23 @@ export type {
   GoNoGoScoreRow as GoNoGoScoreRowFields,
   RfpGoNoGoAssessment as RfpGoNoGoAssessmentFields,
 } from "./rfp-gonogo";
+export {
+  parseRfpProposal,
+  parseRfpProposalPart,
+  ProposalStructureBasis,
+  ProposalGapType,
+  ProposalVolume,
+  ProposalStructure,
+  ProposalWinTheme,
+  ProposalSection,
+  ProposalForm,
+  ProposalFormField,
+  ProposalGap,
+  ProposalComplianceRow,
+  ProposalConsistencyCheck,
+  RfpProposal,
+} from "./rfp-proposal";
+export type { RfpProposalMeta, RfpProposalRecord } from "./rfp-proposal";
 
 // Scoring weights (40/35/25 for Opportunity Alignment)
 export const OpportunityAlignmentWeights = z.object({
@@ -279,6 +296,7 @@ export const RfiGapType = z.enum([
   "decision_needed",
   "clarification",
   "compliance_risk",
+  "signature",
 ]);
 
 export const RfiGapLogEntry = z.object({
