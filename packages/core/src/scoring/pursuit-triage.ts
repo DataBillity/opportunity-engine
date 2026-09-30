@@ -200,35 +200,9 @@ export function scorePursuitTriage(input: {
   const coverage = reqmap.length ? mapped.length / reqmap.length : 0;
   const topicalCoverage = coverage;
 
-  let rec: PursuitTriageView["rec"] = "go";
-  let recRule = "";
-  if (!sourceText.trim()) {
-    rec = "pending";
-    recRule = "No extractable document text.";
-  } else if (projectType === "rfi") {
-    if (topicalCoverage >= thresholds.goCoverage && alignment.total >= thresholds.goScore) {
-      rec = "go";
-      recRule = `RFI Respond: topical coverage ≥ ${Math.round(thresholds.goCoverage * 100)}% and score ≥ ${thresholds.goScore}.`;
-    } else if (topicalCoverage >= thresholds.condCoverage && alignment.total >= thresholds.condScore) {
-      rec = "cond";
-      recRule = `RFI Respond with caveats: scope coverage ≥ ${Math.round(thresholds.condCoverage * 100)}% and score ≥ ${thresholds.condScore}. Page limits are not part of this rule.`;
-    } else {
-      rec = "nogo";
-      recRule = "RFI Pass: topical fit is too thin to spend a response.";
-    }
-  } else if (passFailUnmapped) {
-    rec = "nogo";
-    recRule = "Unmapped pass/fail requirement blocks Go, regardless of score.";
-  } else if (coverage >= thresholds.goCoverage && alignment.total >= thresholds.goScore) {
-    rec = "go";
-    recRule = `Go requires ≥ ${Math.round(thresholds.goCoverage * 100)}% requirement coverage and score ≥ ${thresholds.goScore}.`;
-  } else if (coverage >= thresholds.condCoverage && alignment.total >= thresholds.condScore) {
-    rec = "cond";
-    recRule = `Go with conditions: coverage ≥ ${Math.round(thresholds.condCoverage * 100)}% and score ≥ ${thresholds.condScore}.`;
-  } else {
-    rec = "nogo";
-    recRule = `No-Go: coverage is ${Math.round(coverage * 100)}% (Go needs ${Math.round(thresholds.goCoverage * 100)}%) or score ${alignment.total} is below ${thresholds.goScore}.`;
-  }
+  const { rec, recRule } = sourceText.trim()
+    ? recommendFromCoverage({ projectType, coverage, score: alignment.total, passFailUnmapped })
+    : { rec: "pending" as const, recRule: "No extractable document text." };
 
   const score = rec === "pending" ? 50 : alignment.total;
   const gaps = buildGaps(reqs, reqmap, projectType);
@@ -305,6 +279,43 @@ export function scorePursuitTriage(input: {
     modelVersion,
     provider,
   };
+}
+
+/** Coverage gates for the recommendation. The score alone never makes a Go. */
+export function recommendFromCoverage(input: {
+  projectType: ProjectType;
+  coverage: number;
+  score: number;
+  passFailUnmapped: boolean;
+}): { rec: Exclude<PursuitTriageView["rec"], "pending">; recRule: string } {
+  const { projectType, coverage, score, passFailUnmapped } = input;
+  const thresholds = thresholdsFor(projectType);
+  if (projectType === "rfi") {
+    if (coverage >= thresholds.goCoverage && score >= thresholds.goScore) {
+      return { rec: "go", recRule: `RFI Respond: topical coverage ≥ ${Math.round(thresholds.goCoverage * 100)}% and score ≥ ${thresholds.goScore}.` };
+    }
+    if (coverage >= thresholds.condCoverage && score >= thresholds.condScore) {
+      return { rec: "cond", recRule: `RFI Respond with caveats: scope coverage ≥ ${Math.round(thresholds.condCoverage * 100)}% and score ≥ ${thresholds.condScore}. Page limits are not part of this rule.` };
+    }
+    return { rec: "nogo", recRule: "RFI Pass: topical fit is too thin to spend a response." };
+  }
+  if (passFailUnmapped) {
+    return { rec: "nogo", recRule: "Unmapped pass/fail requirement blocks Go, regardless of score." };
+  }
+  if (coverage >= thresholds.goCoverage && score >= thresholds.goScore) {
+    return { rec: "go", recRule: `Go requires ≥ ${Math.round(thresholds.goCoverage * 100)}% requirement coverage and score ≥ ${thresholds.goScore}.` };
+  }
+  if (coverage >= thresholds.condCoverage && score >= thresholds.condScore) {
+    return { rec: "cond", recRule: `Go with conditions: coverage ≥ ${Math.round(thresholds.condCoverage * 100)}% and score ≥ ${thresholds.condScore}.` };
+  }
+  return {
+    rec: "nogo",
+    recRule: `No-Go: coverage is ${Math.round(coverage * 100)}% (Go needs ${Math.round(thresholds.goCoverage * 100)}%) or score ${score} is below ${thresholds.goScore}.`,
+  };
+}
+
+export function isPassFailRequirement(text: string, projectType: ProjectType): boolean {
+  return projectType === "rfi" ? RFI_ELIGIBILITY.test(text) : PASS_FAIL.test(text);
 }
 
 function intentSignalsFor(projectType: ProjectType, sourceText: string): IntentSignal[] {
@@ -788,7 +799,7 @@ function scopeRequirements(extraction: SolicitationExtraction, scopeCorpus: stri
   return items.map(requirementText => ({ requirementText, passFail: false }));
 }
 
-function matchCatalog(
+export function matchCatalog(
   text: string,
   catalog: CapabilityCatalogEntry[],
 ): { label: string; evidence: string } | undefined {

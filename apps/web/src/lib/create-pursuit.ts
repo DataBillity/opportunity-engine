@@ -1,4 +1,5 @@
 import type { Organization, Pursuit, PursuitDocument } from "@/lib/mock-data";
+import { decisionOf } from "@/lib/pursuit-assessment";
 import { PursuitIngestResult, type ProjectType, type PursuitIngestResult as IngestResult } from "@opportunity-engine/contracts";
 import {
   laneForProjectType,
@@ -133,11 +134,18 @@ export function applyIngestToPursuit(
     },
     informationRequests: extraction.requirements.map(item => item.requirementText),
     score: triage.score,
-    rec: triage.rec,
+    rec: decisionOf(pursuit)?.value ?? triage.rec,
+    platformRec: {
+      rec: triage.rec,
+      score: triage.score,
+      confidence: triage.confidence,
+      reason: triage.scoreBreakdown?.recRule ?? triage.rationale[0] ?? "",
+      at: new Date().toISOString(),
+    },
     confidence: triage.confidence,
     confidenceNote: triage.confidenceNote,
     scoreBreakdown: triage.scoreBreakdown,
-    status: triage.status,
+    status: decisionOf(pursuit) || pursuit.closed ? pursuit.status : triage.status,
     rationale: triage.rationale,
     reqmap: triage.reqmap,
     gaps: triage.gaps,

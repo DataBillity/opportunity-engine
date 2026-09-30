@@ -24,6 +24,7 @@ export {
   generateResponseDraft,
   collectResponseFacts,
   buildResponseDraftPrompt,
+  renumberResolvedGapIds,
   RESPONSE_DRAFT_PROMPT_VERSION,
 } from "./response-draft";
 export type { ResponseGroundingFact, ResponseSectionDraft } from "./response-draft";
@@ -34,3 +35,11 @@ export {
   RFI_RESPONSE_PROMPT_VERSION,
 } from "./rfi-response";
 export type { RfiResponseDraft } from "./rfi-response";
+export {
+  generateCoverLetter,
+  fallbackCoverLetter,
+  buildCoverLetterPrompt,
+  COVER_LETTER_MAX_WORDS,
+  COVER_LETTER_PROMPT_VERSION,
+} from "./cover-letter";
+export type { CoverLetterDraft } from "./cover-letter";

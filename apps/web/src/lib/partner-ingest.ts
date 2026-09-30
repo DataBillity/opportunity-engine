@@ -137,6 +137,48 @@ export function normalizeGraphName(name: string): string {
   return name.trim().toLowerCase().replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+const NAME_SUFFIXES = new Set(["jr", "sr", "ii", "iii", "iv", "phd", "pmp", "mba", "cpa", "pe", "md", "esq", "cissp", "csm"]);
+const NAME_PREFIXES = new Set(["mr", "mrs", "ms", "dr", "prof"]);
+
+/** "Dr. Dana J. Whitfield, PMP" and "Dana Whitfield" resolve to the same key. */
+export function personNameKey(name: string): string {
+  const base = name.split(",")[0]!.replace(/\([^)]*\)/g, " ");
+  const tokens = normalizeGraphName(base)
+    .split(" ")
+    .filter(token => token.length > 1 && !NAME_SUFFIXES.has(token) && !NAME_PREFIXES.has(token));
+  if (tokens.length < 2) return tokens.join(" ");
+  return `${tokens[0]} ${tokens[tokens.length - 1]}`;
+}
+
+export function findExistingPerson(people: GraphPerson[], partnerId: string, name: string): GraphPerson | undefined {
+  const key = personNameKey(name);
+  if (!key) return undefined;
+  return people.find(person => person.partner === partnerId && personNameKey(person.name) === key);
+}
+
+/** Fold a newly parsed profile into the record already on file for that person. */
+export function mergePersonRecord(existing: GraphPerson, parsed: ParsedPerson, stamp = today()): GraphPerson {
+  const existingRoles = existing.roles ?? (existing.role ? [existing.role] : []);
+  const parsedRoles = (parsed.roles ?? []).filter(role => !(role === "Contributor" && existingRoles.length));
+  const roles = uniqueStrings([...existingRoles, ...parsedRoles]);
+  const incomingResume = (parsed.resumeText ?? "").trim();
+  const replaceResume = Boolean(incomingResume) && (
+    !(existing.resumeText ?? "").trim() || existing.resumeFileName === parsed.resumeFileName
+  );
+  return {
+    ...existing,
+    role: existing.role && existing.role !== "Contributor" ? existing.role : roles[0] ?? existing.role,
+    roles,
+    expertise: (parsed.expertise ?? "").trim() || existing.expertise,
+    technologies: uniqueStrings([...(existing.technologies ?? []), ...(parsed.technologies ?? [])]),
+    industries: uniqueStrings([...(existing.industries ?? []), ...(parsed.industries ?? [])]),
+    resumeText: replaceResume ? incomingResume : existing.resumeText,
+    resumeFileName: replaceResume ? parsed.resumeFileName : existing.resumeFileName,
+    status: existing.status === "Archived" ? "Pending" : existing.status,
+    updated: stamp,
+  };
+}
+
 function uniqueStrings(values: string[]): string[] {
   const seen = new Set<string>();
   const next: string[] = [];
@@ -417,6 +459,12 @@ export function applyPartnerIngest(
   }
 
   for (const item of result.people) {
+    const existing = findExistingPerson(people, partnerId, item.name);
+    if (existing) {
+      people = people.map(person => person.id === existing.id ? mergePersonRecord(person, item, stamp) : person);
+      if (!merged.includes(existing.name)) merged.push(existing.name);
+      continue;
+    }
     const created: GraphPerson = {
       id: nextId("PPL", people, 3),
       name: item.name,

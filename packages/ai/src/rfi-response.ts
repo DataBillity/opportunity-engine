@@ -8,7 +8,12 @@ import {
 } from "@opportunity-engine/contracts";
 import { callModel, ModelGatewayError } from "./gateway";
 import { parseModelJson } from "./json";
-import { buildResponseDraftPrompt, collectResponseFacts, type ResponseGroundingFact } from "./response-draft";
+import {
+  buildResponseDraftPrompt,
+  collectResponseFacts,
+  renumberResolvedGapIds,
+  type ResponseGroundingFact,
+} from "./response-draft";
 
 export const RFI_RESPONSE_PROMPT_VERSION = "rfi-response-v1.4";
 
@@ -751,7 +756,17 @@ export async function generateRfiResponsePackage(rawBriefing: unknown): Promise<
     }
   }
 
-  const reconciled = reconcileRfiPackage(parsed, fallbackDue);
+  const draftReconciled = reconcileRfiPackage(parsed, fallbackDue);
+  const closed = renumberResolvedGapIds(
+    draftReconciled.gaps,
+    draftReconciled.sections.map(section => section.body),
+    briefing,
+  );
+  const reconciled: RfiResponsePackage = {
+    ...draftReconciled,
+    sections: draftReconciled.sections.map((section, i) => ({ ...section, body: closed.bodies[i]! })),
+    gaps: sortRfiGaps(closed.gaps),
+  };
   const byId = new Map(facts.map(fact => [fact.id, fact]));
   const insights = reconciled.usedInsightIds
     .map(id => byId.get(id))

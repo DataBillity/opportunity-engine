@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ResponseDraftBriefing } from "@opportunity-engine/contracts";
 import {
+  generateCoverLetter,
   generateResponseDraft,
   generateRfiResponsePackage,
   getAvailableProviders,
@@ -70,6 +71,10 @@ export async function POST(request: Request) {
     if (briefing.mode === "package") {
       const draft = await generateRfiResponsePackage(briefing);
       return NextResponse.json({ kind: "package", ...draft });
+    }
+    if (briefing.mode === "cover_letter") {
+      const letter = await generateCoverLetter(briefing);
+      return NextResponse.json({ kind: "cover_letter", ...letter });
     }
     const draft = await generateResponseDraft(briefing);
     return NextResponse.json({ kind: "section", ...draft });

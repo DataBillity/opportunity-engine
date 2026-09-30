@@ -126,6 +126,52 @@ export interface Pursuit {
   draftStatusDate?: string;
   outcome?: "Won" | "Lost" | "Postponed" | "Canceled";
   outcomeDate?: string;
+  /** Latest platform recommendation and its reason; `rec` holds the effective (possibly user-decided) value. */
+  platformRec?: PursuitRecommendation;
+  decision?: PursuitDecision;
+  decisionHistory?: PursuitDecision[];
+  assessments?: PursuitAssessment[];
+  closedAt?: string;
+  closedReason?: string;
+  closedBy?: string;
+  /** Response Builder section drafts, keyed by section id (HTML). */
+  responseDrafts?: Record<string, string>;
+  coverLetter?: PursuitCoverLetter;
+}
+
+export interface PursuitRecommendation {
+  rec: "go" | "nogo" | "cond" | "pending";
+  score: number;
+  confidence: number;
+  reason: string;
+  at: string;
+}
+
+export interface PursuitDecision {
+  value: "go" | "nogo";
+  reason: string;
+  /** True when the decision goes against the platform recommendation at the time it was made. */
+  override: boolean;
+  platformRec: "go" | "nogo" | "cond" | "pending";
+  reviewer: string;
+  at: string;
+}
+
+export interface PursuitAssessment {
+  at: string;
+  trigger: "partner_added" | "partner_removed" | "rerun";
+  summary: string;
+  from: { score: number; rec: Pursuit["rec"]; mapped: number; total: number };
+  to: { score: number; rec: Pursuit["rec"]; mapped: number; total: number };
+}
+
+export interface PursuitCoverLetter {
+  body: string;
+  generatedAt: string;
+  provider: string;
+  /** Fingerprint of the drafted sections the letter was written from. */
+  sourceSignature: string;
+  editedAt?: string;
 }
 
 export interface RequirementMapping {
@@ -133,6 +179,7 @@ export interface RequirementMapping {
   status: "mapped" | "unmapped";
   node: string | null;
   evidence: string;
+  gapId?: string;
 }
 
 export interface GapItem {

@@ -10,7 +10,7 @@ export const RESPONSE_DRAFT_PROMPT_VERSION = "response-draft-v1.4";
 
 export interface ResponseGroundingFact {
   id: string;
-  source: "rfp" | "people" | "experience" | "account";
+  source: "rfp" | "people" | "experience" | "account" | "action";
   text: string;
 }
 
@@ -62,12 +62,17 @@ export function collectResponseFacts(
   let people = 1;
   let experience = 1;
   let account = 1;
+  let action = 1;
 
   const push = (source: ResponseGroundingFact["source"], text: string | undefined) => {
     const value = text?.trim();
     if (!value) return;
-    const prefix = source === "rfp" ? "R" : source === "people" ? "P" : source === "experience" ? "E" : "A";
-    const n = source === "rfp" ? rfp++ : source === "people" ? people++ : source === "experience" ? experience++ : account++;
+    const prefix = { rfp: "R", people: "P", experience: "E", account: "A", action: "G" }[source];
+    const n = source === "rfp" ? rfp++
+      : source === "people" ? people++
+        : source === "experience" ? experience++
+          : source === "action" ? action++
+            : account++;
     facts.push({ id: `${prefix}${n}`, source, text: value });
   };
 
@@ -171,6 +176,15 @@ export function collectResponseFacts(
     push("experience", parts.join(". ") + ".");
   }
 
+  for (const gap of briefing.resolvedGaps ?? []) {
+    push("action", gap.resolution.trim()
+      ? `Resolved action item ${gap.id}${gap.owner ? ` (${gap.owner})` : ""}: ${gap.description} Owner's response: ${gap.resolution.trim()} Use this response as a fact in the draft. Do not insert a placeholder or log a gap for ${gap.id}.`
+      : `Resolved action item ${gap.id}${gap.owner ? ` (${gap.owner})` : ""}: ${gap.description} The owner marked it resolved without details. Do not insert a placeholder or log a gap for ${gap.id}; write around it without inventing specifics.`);
+  }
+  for (const gap of briefing.openGaps ?? []) {
+    push("action", `Open action item ${gap.id}${gap.owner ? ` (${gap.owner}${gap.priority ? `, ${gap.priority}` : ""})` : ""}${gap.location ? ` in ${gap.location}` : ""}: ${gap.description} If it still applies, keep the placeholder with the same id ${gap.id}.`);
+  }
+
   return facts;
 }
 
@@ -200,8 +214,51 @@ export function buildResponseDraftPrompt(
   if (briefing.existingGapIds?.length) {
     lines.push("", "EXISTING GAP IDS (number new placeholders after the highest of these):", briefing.existingGapIds.join(", "));
   }
+  if (briefing.resolvedGaps?.length || briefing.openGaps?.length) {
+    lines.push(
+      "",
+      "REGENERATION RULES (these override any rule to number gaps from GAP-001):",
+      "- Resolved action items (facts starting \"Resolved action item\") are closed. Write the owner's response into the draft as fact and never reuse their ids.",
+      "- Open action items keep their existing id when they still apply. Drop one only when the facts now answer it.",
+      "- New gaps get ids after the highest EXISTING GAP id.",
+      "- Capability, partner, people, and experience facts reflect the current Capability Sources. Prefer them over the previous draft.",
+    );
+  }
 
   return lines.join("\n");
+}
+
+/**
+ * Keep resolved action-item ids closed: any gap the model logs under a resolved id is renumbered
+ * after the highest known id, and its placeholders are rewritten to match.
+ */
+export function renumberResolvedGapIds<T extends { id: string }>(
+  gaps: T[],
+  bodies: string[],
+  briefing: Pick<ResponseDraftBriefingType, "resolvedGaps" | "existingGapIds">,
+): { gaps: T[]; bodies: string[] } {
+  const resolved = new Set((briefing.resolvedGaps ?? []).map(gap => gap.id.toUpperCase()));
+  if (!resolved.size) return { gaps, bodies };
+  const known = [
+    ...(briefing.existingGapIds ?? []),
+    ...gaps.map(gap => gap.id),
+    ...bodies.flatMap(body => [...body.matchAll(/\[GAP-(\d{3})/g)].map(match => `GAP-${match[1]}`)),
+  ];
+  let next = Math.max(0, ...known.map(id => Number(id.replace(/\D/g, "")) || 0)) + 1;
+  const remap = new Map<string, string>();
+  const idFor = (id: string) => {
+    const key = id.toUpperCase();
+    if (!resolved.has(key)) return id;
+    let mapped = remap.get(key);
+    if (!mapped) {
+      mapped = `GAP-${String(next++).padStart(3, "0")}`;
+      remap.set(key, mapped);
+    }
+    return mapped;
+  };
+  const nextGaps = gaps.map(gap => ({ ...gap, id: idFor(gap.id) }));
+  const nextBodies = bodies.map(body => body.replace(/\[(GAP-\d{3})(?=\s*\|)/g, (_, id: string) => `[${idFor(id)}`));
+  return { gaps: nextGaps, bodies: nextBodies };
 }
 
 export async function generateResponseDraft(rawBriefing: unknown): Promise<ResponseSectionDraft> {
@@ -259,10 +316,11 @@ export async function generateResponseDraft(rawBriefing: unknown): Promise<Respo
   const insights = draft.usedInsightIds
     .map(id => byId.get(id))
     .filter((fact): fact is ResponseGroundingFact => Boolean(fact));
+  const closed = renumberResolvedGapIds(draft.gaps, [draft.body], briefing);
 
   return {
-    body: draft.body.trim(),
-    gaps: draft.gaps,
+    body: closed.bodies[0]!.trim(),
+    gaps: closed.gaps,
     insights: insights.length ? insights : facts.slice(0, 6),
     modelVersion: result.modelVersion,
     provider: result.provider,

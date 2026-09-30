@@ -17,6 +17,9 @@ const briefing: ResponseDraftBriefing = {
   mode: "package",
   projectType: "rfi",
   existingGapIds: [],
+  resolvedGaps: [],
+  openGaps: [],
+  draftedSections: [],
   partners: [{ name: "Acme Analytics", role: "Subcontractor", covers: [], confirmed: false }],
   organization: { name: "Example Agency" },
   pursuit: {

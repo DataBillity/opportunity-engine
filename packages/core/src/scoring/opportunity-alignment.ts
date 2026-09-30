@@ -67,7 +67,9 @@ export function computeOpportunityAlignment(
   };
 }
 
-function computeCapabilityAlignment(inputs: ScoringInputs): number {
+export function computeCapabilityAlignment(
+  inputs: Pick<ScoringInputs, "capabilityMatchCount" | "totalCapabilitiesRequired" | "matchMaturity">,
+): number {
   if (inputs.totalCapabilitiesRequired === 0) return 50;
   const coverageRatio = inputs.capabilityMatchCount / inputs.totalCapabilitiesRequired;
   const maturityBonus = inputs.matchMaturity * 20;

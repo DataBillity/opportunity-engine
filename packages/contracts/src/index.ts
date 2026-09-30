@@ -271,14 +271,46 @@ export const RfiComplianceRow = z.object({
   status: z.string().default("Open"),
 });
 
+export const ResponseResolvedGap = z.object({
+  id: z.string().min(1),
+  description: z.string().min(1),
+  owner: z.string().default(""),
+  resolution: z.string().default(""),
+});
+
+export const ResponseOpenGap = z.object({
+  id: z.string().min(1),
+  description: z.string().min(1),
+  owner: z.string().default(""),
+  priority: z.string().default(""),
+  location: z.string().default(""),
+});
+
+export const ResponseDraftedSection = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  body: z.string().min(1),
+});
+
 export const ResponseDraftBriefing = z.object({
   section: ResponseDraftSection,
   sections: z.array(ResponseDraftSection).default([]),
-  mode: z.enum(["section", "package"]).default("section"),
+  mode: z.enum(["section", "package", "cover_letter"]).default("section"),
   projectType: ProjectType.optional(),
   instructions: z.string().optional(),
   existingDraft: z.string().optional(),
   existingGapIds: z.array(z.string()).default([]),
+  /** Action items the owners have answered; their responses are facts for the next draft. */
+  resolvedGaps: z.array(ResponseResolvedGap).default([]),
+  /** Action items still open; regeneration keeps their ids where they still apply. */
+  openGaps: z.array(ResponseOpenGap).default([]),
+  /** Current section text, used to write the cover letter. */
+  draftedSections: z.array(ResponseDraftedSection).default([]),
+  signatory: z.object({
+    name: z.string().optional(),
+    title: z.string().optional(),
+    email: z.string().optional(),
+  }).optional(),
   partners: z.array(ResponseDraftPartner).default([]),
   organization: z.object({
     name: z.string().min(1),
@@ -317,6 +349,11 @@ export const ResponseDraftOutput = z.object({
   body: z.string().min(1),
   usedInsightIds: z.array(z.string()).default([]),
   gaps: z.array(RfiGapLogEntry).default([]),
+});
+
+export const CoverLetterOutput = z.object({
+  body: z.string().min(1),
+  usedInsightIds: z.array(z.string()).default([]),
 });
 
 export const RfiResponsePackageOutput = z.object({
@@ -466,6 +503,10 @@ export type RfiGapType = z.infer<typeof RfiGapType>;
 export type RfiGapLogEntry = z.infer<typeof RfiGapLogEntry>;
 export type RfiComplianceRow = z.infer<typeof RfiComplianceRow>;
 export type RfiResponsePackageOutput = z.infer<typeof RfiResponsePackageOutput>;
+export type CoverLetterOutput = z.infer<typeof CoverLetterOutput>;
+export type ResponseResolvedGap = z.infer<typeof ResponseResolvedGap>;
+export type ResponseOpenGap = z.infer<typeof ResponseOpenGap>;
+export type ResponseDraftedSection = z.infer<typeof ResponseDraftedSection>;
 export type SolicitationRequirement = z.infer<typeof SolicitationRequirement>;
 export type SolicitationExtraction = z.infer<typeof SolicitationExtraction>;
 export type RfiScopeSummary = z.infer<typeof RfiScopeSummary>;

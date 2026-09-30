@@ -1,4 +1,15 @@
-export { computeOpportunityAlignment } from "./scoring/opportunity-alignment";
+export { computeOpportunityAlignment, computeCapabilityAlignment } from "./scoring/opportunity-alignment";
+export { reassessPursuit, gapForRequirement, PARTNER_COVERAGE_NODE } from "./scoring/reassess";
+export type {
+  ReassessInput,
+  ReassessResult,
+  ReassessRequirement,
+  ReassessGap,
+  ReassessCapability,
+  ReassessPartner,
+  ReassessBreakdown,
+  RequirementChange,
+} from "./scoring/reassess";
 export type { ScoringInputs, IntentSignal, AccountValue } from "./scoring/opportunity-alignment";
 export {
   extractSolicitationHeuristic,
@@ -6,6 +17,7 @@ export {
   sanitizeRfiObjective,
   scorePursuitTriage,
   capSourceText,
+  recommendFromCoverage,
 } from "./scoring/pursuit-triage";
 export type { OrgTriageContext } from "./scoring/pursuit-triage";
 export {

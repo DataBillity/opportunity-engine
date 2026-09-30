@@ -13,31 +13,36 @@ import { applyIngestToPursuit, ingestPursuitDocuments, recLabel } from "@/lib/cr
 import { recShortLabel } from "@opportunity-engine/core";
 import { useOperator } from "@/components/auth/operator-provider";
 import { operatorReviewerLabel } from "@/lib/operator-profile";
+import {
+  applyClose,
+  applyReopen,
+  decisionOf,
+  isOverride,
+  partnerComposition as buildPartnerComposition,
+  platformRecommendation,
+  projectTypeOf,
+  reassessForTeam,
+  teamIdsFor,
+} from "@/lib/pursuit-assessment";
+import { gapForRequirement } from "@opportunity-engine/core";
+import { GapLogActionItems } from "@/components/action-items/gap-log-action-items";
+import { applyActionItemUpdate, gapLogRows, gapsToActionItems, isResolvedStatus } from "@/lib/gap-log";
 import { cn } from "@/lib/cn";
 
-function projectTypeOf(pursuit: Pursuit): "rfp" | "rfi" | "sow" {
-  return pursuit.projectType ?? (pursuit.lane === "C" ? "sow" : "rfp");
-}
+const REC_TEXT = { go: "text-go", nogo: "text-nogo", cond: "text-cond", pending: "text-muted-foreground" } as const;
 
 function RecBig({ rec, closed, projectType }: { rec: string; closed?: boolean; projectType: "rfp" | "rfi" | "sow" }) {
   if (closed) return <div className="text-xl font-extrabold text-closed">CLOSED</div>;
   const typed = rec === "go" || rec === "nogo" || rec === "cond" || rec === "pending" ? rec : "pending";
-  const cls = { go: "text-go", nogo: "text-nogo", cond: "text-cond", pending: "text-muted-foreground" }[typed];
-  return <div className={`text-xl font-extrabold ${cls}`}>{recShortLabel(typed, projectType)}</div>;
+  return <div className={`text-xl font-extrabold ${REC_TEXT[typed]}`}>{recShortLabel(typed, projectType)}</div>;
 }
 
-function StatusBadge({ status, label }: { status: string; label: string }) {
-  const cls: Record<string, string> = {
-    mapped: "oe-status-trace",
-    unmapped: "oe-status-nogo",
-    Open: "oe-status-cond",
-    Done: "oe-status-go",
-  };
-  return (
-    <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md ${cls[status] ?? "oe-status-pending"}`}>
-      {label}
-    </span>
-  );
+function formatWhen(iso: string | undefined): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? iso
+    : date.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 export function OpportunityView({
@@ -47,15 +52,19 @@ export function OpportunityView({
   partners?: Partner[];
   graph?: GraphData;
   onBack: () => void; onDraft: () => void;
-  onConfirmDecision: (pursuitId: string, decision: "go" | "nogo") => void;
+  onConfirmDecision: (pursuitId: string, decision: "go" | "nogo", meta: { reason: string; reviewer: string }) => void;
   onUpdatePursuit: (pursuitId: string, updates: Partial<Pursuit>) => void;
   onDeletePursuit?: (pursuitId: string) => void;
 }) {
   const { toast } = useToast();
   const { profile } = useOperator();
+  const reviewer = profile ? operatorReviewerLabel(profile) : "Operator";
   const [confirmOpen, setConfirmOpen] = useState<"go" | "nogo" | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmReason, setConfirmReason] = useState("");
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [closeReason, setCloseReason] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [docUploadOpen, setDocUploadOpen] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -67,6 +76,7 @@ export function OpportunityView({
   const [advisorInput, setAdvisorInput] = useState("");
   const [advisorTyping, setAdvisorTyping] = useState(false);
   const [actionItem, setActionItem] = useState<ResponseActionItem | null>(null);
+  const logRows = gapLogRows(pursuit, partners);
   const advisorEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { advisorEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [advisorMessages]);
@@ -108,70 +118,40 @@ export function OpportunityView({
   const allPartners = partners ?? [];
   const activePartners = allPartners.filter(p => p.status !== "Archived");
 
-  function computePartnerContributions(): { partnerId: string; partner: Partner; contributions: string[]; needed: boolean }[] {
-    if (!graph) return [];
-    const capsByPartner = new Map<string, string[]>();
-    const mappedNodes = new Set(pursuit.reqmap.filter(r => r.status === "mapped" && r.node).map(r => r.node!));
-    for (const cap of graph.capabilities) {
-      if (!mappedNodes.has(`${cap.id} ${cap.name}`) && !mappedNodes.has(cap.id)) {
-        const nameMatch = Array.from(mappedNodes).find(n => n.includes(cap.id) || n.includes(cap.name));
-        if (!nameMatch) continue;
-      }
-      for (const pid of cap.partners) {
-        const existing = capsByPartner.get(pid) ?? [];
-        existing.push(cap.name);
-        capsByPartner.set(pid, existing);
-      }
-    }
-    const gapPartners = new Map<string, string[]>();
-    for (const gap of pursuit.gaps) {
-      for (const p of allPartners) {
-        if (p.covers.includes(gap.id)) {
-          const existing = gapPartners.get(p.id) ?? [];
-          existing.push(`Covers gap: ${gap.title}`);
-          gapPartners.set(p.id, existing);
-        }
-      }
-    }
-    const included = pursuit.includedPartnerIds
-      ? new Set(pursuit.includedPartnerIds)
-      : new Set([...capsByPartner.keys(), ...gapPartners.keys()]);
-    const result: { partnerId: string; partner: Partner; contributions: string[]; needed: boolean }[] = [];
-    for (const p of activePartners) {
-      if (!included.has(p.id)) continue;
-      const contribs = [
-        ...(capsByPartner.get(p.id) ?? []).map(c => `Capability: ${c}`),
-        ...(gapPartners.get(p.id) ?? []),
-      ];
-      result.push({
-        partnerId: p.id,
-        partner: p,
-        contributions: contribs,
-        needed: contribs.length > 0,
-      });
-    }
-    return result;
-  }
-
-  const partnerComposition = computePartnerContributions();
+  const partnerComposition = buildPartnerComposition(pursuit, allPartners, graph);
+  const teamIds = teamIdsFor(pursuit, allPartners, graph);
   const [addPartnerToOppOpen, setAddPartnerToOppOpen] = useState(false);
 
-  function handleRemovePartnerFromOpp(partnerId: string) {
-    const current = pursuit.includedPartnerIds ?? partnerComposition.map(p => p.partnerId);
-    onUpdatePursuit(pursuit.id, {
-      includedPartnerIds: current.filter(id => id !== partnerId),
+  function reassess(nextTeam: string[], trigger: "partner_added" | "partner_removed" | "rerun", partner?: Partner) {
+    if (!graph) {
+      onUpdatePursuit(pursuit.id, { includedPartnerIds: nextTeam });
+      return;
+    }
+    const outcome = reassessForTeam({
+      pursuit,
+      partners: allPartners,
+      graph,
+      teamIds: nextTeam,
+      trigger,
+      partnerName: partner?.name,
     });
-    toast("Partner removed from this opportunity", "success");
+    onUpdatePursuit(pursuit.id, outcome.updates);
+    const worse = outcome.updates.score !== undefined && outcome.updates.score < pursuit.score;
+    toast(outcome.summary, worse ? "warning" : "success");
+  }
+
+  function handleRemovePartnerFromOpp(partnerId: string) {
+    reassess(teamIds.filter(id => id !== partnerId), "partner_removed", allPartners.find(p => p.id === partnerId));
   }
 
   function handleAddPartnerToOpp(partnerId: string) {
-    const current = pursuit.includedPartnerIds ?? partnerComposition.map(p => p.partnerId);
-    if (current.includes(partnerId)) return;
-    onUpdatePursuit(pursuit.id, {
-      includedPartnerIds: [...current, partnerId],
-    });
-    toast("Partner added to this opportunity", "success");
+    if (teamIds.includes(partnerId)) return;
+    reassess([...teamIds, partnerId], "partner_added", allPartners.find(p => p.id === partnerId));
     setAddPartnerToOppOpen(false);
+  }
+
+  function handleRerunAssessment() {
+    reassess(teamIds, "rerun");
   }
 
   const advisorQuickPrompts = [
@@ -182,16 +162,29 @@ export function OpportunityView({
 
   function handleConfirm() {
     if (!confirmOpen) return;
-    onConfirmDecision(pursuit.id, confirmOpen);
+    if (confirmIsOverride && !confirmReason.trim()) return;
+    onConfirmDecision(pursuit.id, confirmOpen, { reason: confirmReason, reviewer });
     const isRfi = projectTypeOf(pursuit) === "rfi";
     toast(
       confirmOpen === "go"
-        ? `Project "${pursuit.name}" confirmed ${isRfi ? "RESPOND" : "GO"} — ready for response drafting`
-        : `Project "${pursuit.name}" confirmed ${isRfi ? "PASS" : "NO-GO"} — project closed`,
+        ? `Project "${pursuit.name}" set to ${isRfi ? "RESPOND" : "GO"} — ready for response drafting`
+        : `Project "${pursuit.name}" set to ${isRfi ? "PASS" : "NO-GO"} — it stays open until you close it`,
       confirmOpen === "go" ? "success" : "warning"
     );
     setConfirmOpen(null);
     setConfirmReason("");
+  }
+
+  function handleClose() {
+    onUpdatePursuit(pursuit.id, applyClose(pursuit, { reason: closeReason, reviewer }));
+    toast(`Project "${pursuit.name}" closed`, "warning");
+    setCloseOpen(false);
+    setCloseReason("");
+  }
+
+  function handleReopen() {
+    onUpdatePursuit(pursuit.id, applyReopen(pursuit));
+    toast(`Project "${pursuit.name}" reopened`, "success");
   }
 
   async function handleUploadDocs() {
@@ -225,7 +218,17 @@ export function OpportunityView({
   const projectType = projectTypeOf(pursuit);
   const isRfi = projectType === "rfi";
   const breakdown = pursuit.scoreBreakdown;
-  const mappedCount = pursuit.reqmap.filter(r => r.status === "mapped").length;
+  const mappedRows = pursuit.reqmap.filter(r => r.status === "mapped");
+  const mappedCount = mappedRows.length;
+  const unmappedWithoutGap = pursuit.reqmap.filter(r => r.status === "unmapped" && !gapForRequirement(r, pursuit.gaps));
+  const gapCount = pursuit.gaps.length + unmappedWithoutGap.length;
+  const platform = platformRecommendation(pursuit);
+  const decision = decisionOf(pursuit);
+  const decisionDiffers = decision ? isOverride(decision.value, platform.rec) : false;
+  const confirmIsOverride = confirmOpen ? isOverride(confirmOpen, platform.rec) : false;
+  const latestAssessment = pursuit.assessments?.[0];
+  const goLabel = isRfi ? "Respond" : "Go";
+  const noGoLabel = isRfi ? "Pass" : "No-Go";
 
   return (
     <div className="space-y-4">
@@ -269,17 +272,12 @@ export function OpportunityView({
                 Outreach
               </button>
               <button
-                onClick={() => {
-                  const delta = Math.floor(Math.random() * 8) - 2;
-                  const newScore = Math.max(0, Math.min(100, pursuit.score + delta));
-                  onUpdatePursuit(pursuit.id, {
-                    score: newScore,
-                  });
-                  toast(`Score refreshed: ${newScore}`, "success");
-                }}
-                className="text-xs font-medium px-3.5 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+                onClick={handleRerunAssessment}
+                disabled={!graph || pursuit.closed}
+                title="Re-score coverage, score, and recommendation using the current partners and Capability Sources"
+                className="text-xs font-medium px-3.5 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Refresh Score
+                Rerun Assessment
               </button>
               <button
                 onClick={() => setDeleteOpen(true)}
@@ -291,13 +289,110 @@ export function OpportunityView({
           </div>
           <div className="text-left sm:text-right shrink-0">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">
-              Recommendation
+              {decision ? "Your decision" : "Recommendation"}
             </div>
             <RecBig rec={pursuit.rec} closed={pursuit.closed} projectType={projectType} />
+            {decision && (
+              <div className="text-[11px] text-muted-foreground mt-1">
+                Platform:{" "}
+                <span className={cn("font-semibold", REC_TEXT[platform.rec])}>{recShortLabel(platform.rec, projectType)}</span>
+                {decisionDiffers && (
+                  <span className="ml-1.5 inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-md oe-status-cond">Override</span>
+                )}
+              </div>
+            )}
             <div className="text-[11px] text-muted-foreground mt-1">
               Confidence: <span className="font-mono font-semibold text-foreground">{pursuit.confidence}%</span>
             </div>
           </div>
+        </div>
+
+        {/* Decision card */}
+        <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+            <h3 className="oe-card-title">Decision</h3>
+            <span className="text-[11px] text-muted-foreground font-mono">{pursuit.decisionRecord.id}</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
+            <div className="p-4 sm:p-5 space-y-1.5">
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Platform recommendation</div>
+              <div className={cn("text-sm font-bold", REC_TEXT[platform.rec])}>
+                {recLabel(platform.rec, projectType)}
+                <span className="ml-2 text-xs font-normal text-muted-foreground">score {platform.score}/100</span>
+              </div>
+              <p className="text-xs text-foreground">{platform.reason || "Awaiting triage."}</p>
+              {platform.at && <p className="text-[10px] text-muted-foreground">As of {formatWhen(platform.at)}</p>}
+            </div>
+            <div className="p-4 sm:p-5 space-y-1.5">
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Your decision</div>
+              {decision ? (
+                <>
+                  <div className={cn("text-sm font-bold flex items-center gap-2 flex-wrap", REC_TEXT[decision.value])}>
+                    {recLabel(decision.value, projectType)}
+                    {decision.override && (
+                      <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md oe-status-cond">
+                        Overrides platform {recLabel(decision.platformRec, projectType)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-foreground">
+                    {decision.reason
+                      ? <>Reason: {decision.reason}</>
+                      : <span className="italic text-muted-foreground">No reason recorded.</span>}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">{[decision.reviewer, formatWhen(decision.at)].filter(Boolean).join(" · ")}</p>
+                  {!decision.override && decisionDiffers && (
+                    <p className="text-[11px] text-cond">
+                      The platform recommendation has since changed to {recLabel(platform.rec, projectType)}. Your decision stands until you change it.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">
+                  No decision yet. Confirm {goLabel} or {noGoLabel} below.
+                </p>
+              )}
+              {pursuit.closed && (
+                <div className="pt-2 mt-2 border-t border-border">
+                  <div className="text-[10px] uppercase tracking-widest text-closed font-bold">Closed</div>
+                  <p className="text-xs text-foreground">
+                    {pursuit.closedReason ? pursuit.closedReason : <span className="italic text-muted-foreground">No reason recorded.</span>}
+                  </p>
+                  {(pursuit.closedBy || pursuit.closedAt) && (
+                    <p className="text-[10px] text-muted-foreground">{[pursuit.closedBy, formatWhen(pursuit.closedAt)].filter(Boolean).join(" · ")}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          {latestAssessment && (
+            <div className="px-4 sm:px-5 py-3.5 border-t border-border bg-muted/20 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
+                  Latest reassessment · {formatWhen(latestAssessment.at)}
+                </div>
+                {(pursuit.assessments?.length ?? 0) > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setHistoryOpen(open => !open)}
+                    className="text-[11px] text-primary font-medium bg-transparent border-none cursor-pointer hover:underline"
+                  >
+                    {historyOpen ? "Hide history" : `History (${pursuit.assessments!.length})`}
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-foreground">{latestAssessment.summary}</p>
+              {historyOpen && (
+                <ul className="pt-1 space-y-2">
+                  {pursuit.assessments!.slice(1).map(item => (
+                    <li key={item.at} className="text-[11px] text-muted-foreground">
+                      <span className="font-mono">{formatWhen(item.at)}</span> — {item.summary}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
@@ -318,7 +413,7 @@ export function OpportunityView({
                 ?? "is extraction and mapping certainty, not the opportunity score. Thin requirement mapping keeps confidence near 50% even when intent and account value lift the score."}
             </p>
             <p>
-              <strong>Recommendation ({recLabel(pursuit.rec, projectType)})</strong>{" "}
+              <strong>Platform recommendation ({recLabel(platform.rec, projectType)})</strong>{" "}
               {isRfi
                 ? "uses the purpose, challenges, and likely services — not page limits or the questions in the response worksheet."
                 : `uses coverage gates, not “score ≥ 75”. ${recLabel("go", projectType)} needs ≥ ${breakdown?.goCoverageFloor ?? 75}% requirement coverage and score ≥ ${breakdown?.goScoreFloor ?? 68}.`}
@@ -404,11 +499,11 @@ export function OpportunityView({
         <Modal open={addPartnerToOppOpen} onClose={() => setAddPartnerToOppOpen(false)} title="Add Partner to Opportunity">
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Select a partner to include in the assessment and response for this opportunity. Partners that contribute capabilities, experience, credentials, or people will improve the score.
+              Select a partner to include in the assessment and response for this opportunity. The score and recommendation are reassessed against the new team, with a note on what changed.
             </p>
             <div className="divide-y divide-border border border-border rounded-md max-h-60 overflow-y-auto">
               {activePartners
-                .filter(p => !(pursuit.includedPartnerIds ?? partnerComposition.map(pc => pc.partnerId)).includes(p.id))
+                .filter(p => !teamIds.includes(p.id))
                 .map(p => (
                   <button
                     key={p.id}
@@ -423,7 +518,7 @@ export function OpportunityView({
                   </button>
                 ))
               }
-              {activePartners.filter(p => !(pursuit.includedPartnerIds ?? partnerComposition.map(pc => pc.partnerId)).includes(p.id)).length === 0 && (
+              {activePartners.filter(p => !teamIds.includes(p.id)).length === 0 && (
                 <div className="px-3 py-4 text-xs text-muted-foreground text-center italic">All active partners are already included.</div>
               )}
             </div>
@@ -432,48 +527,6 @@ export function OpportunityView({
             </div>
           </div>
         </Modal>
-
-        {/* Scope summary card */}
-        <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-border">
-            <h3 className="oe-card-title">Scope Summary</h3>
-          </div>
-          {pursuit.projectType === "rfi" && pursuit.docSummary.rfi ? (
-            <RfiScopeSummaryBody docSummary={pursuit.docSummary} rfi={pursuit.docSummary.rfi} />
-          ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 divide-border">
-            {([
-              ["Objective", pursuit.docSummary.objective],
-              ["Challenges", pursuit.docSummary.challenges ?? []],
-              ["Services", pursuit.docSummary.services],
-              ["Deliverables", pursuit.docSummary.deliverables],
-            ] as const).map(([heading, items]) => (
-              <div key={heading} className="p-4 sm:p-5">
-                <h4 className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">
-                  {heading}
-                </h4>
-                {items.length > 0 ? (
-                  <ul className="list-disc pl-4 text-xs space-y-1.5 text-foreground">
-                    {items.map((item, i) => <li key={i}>{item}</li>)}
-                  </ul>
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">Not yet populated.</p>
-                )}
-              </div>
-            ))}
-          </div>
-          )}
-          {(pursuit.docSummary.responseConstraints ?? []).length > 0 && (
-            <div className="px-5 py-4 border-t border-border bg-muted/20">
-              <h4 className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">
-                Response instructions — not scored
-              </h4>
-              <ul className="list-disc pl-4 text-xs space-y-1.5 text-foreground">
-                {pursuit.docSummary.responseConstraints!.map((item, i) => <li key={i}>{item}</li>)}
-              </ul>
-            </div>
-          )}
-        </div>
 
         {/* Documents card */}
         <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
@@ -517,56 +570,107 @@ export function OpportunityView({
           </div>
         </div>
 
-        {/* Requirement mapping card */}
+        {/* Scope summary card */}
+        <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-border">
+            <h3 className="oe-card-title">Scope Summary</h3>
+          </div>
+          {pursuit.projectType === "rfi" && pursuit.docSummary.rfi ? (
+            <RfiScopeSummaryBody docSummary={pursuit.docSummary} rfi={pursuit.docSummary.rfi} />
+          ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 divide-border">
+            {([
+              ["Objective", pursuit.docSummary.objective],
+              ["Challenges", pursuit.docSummary.challenges ?? []],
+              ["Services", pursuit.docSummary.services],
+              ["Deliverables", pursuit.docSummary.deliverables],
+            ] as const).map(([heading, items]) => (
+              <div key={heading} className="p-4 sm:p-5">
+                <h4 className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">
+                  {heading}
+                </h4>
+                {items.length > 0 ? (
+                  <ul className="list-disc pl-4 text-xs space-y-1.5 text-foreground">
+                    {items.map((item, i) => <li key={i}>{item}</li>)}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">Not yet populated.</p>
+                )}
+              </div>
+            ))}
+          </div>
+          )}
+          {(pursuit.docSummary.responseConstraints ?? []).length > 0 && (
+            <div className="px-5 py-4 border-t border-border bg-muted/20">
+              <h4 className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">
+                Response instructions — not scored
+              </h4>
+              <ul className="list-disc pl-4 text-xs space-y-1.5 text-foreground">
+                {pursuit.docSummary.responseConstraints!.map((item, i) => <li key={i}>{item}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {/* Mapped capabilities card */}
         {pursuit.reqmap.length > 0 && (
           <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
-              <h3 className="oe-card-title">{isRfi ? "Scope → Capability" : "Requirement → Capability Mapping"}</h3>
-              <span className="text-xs text-muted-foreground">
-                <span className="font-mono font-semibold text-foreground">
-                  {mappedCount}
-                </span>{" "}
-                of {pursuit.reqmap.length} {isRfi ? "topics we can speak to" : "mapped"}
+            <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-border">
+              <h3 className="oe-card-title">Mapped Capabilities</h3>
+              <span className="text-xs text-muted-foreground text-right">
+                <span className="font-mono font-semibold text-foreground">{mappedCount}</span>
+                {" "}of {pursuit.reqmap.length} {isRfi ? "topics we can speak to" : "requirements mapped"}
+                {gapCount > 0 && <> · <span className="font-mono font-semibold text-cond">{gapCount}</span> gap{gapCount === 1 ? "" : "s"}</>}
               </span>
             </div>
-            <div className="overflow-x-auto oe-touch-scroll">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="oe-table-header">
-                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">{isRfi ? "Scope topic" : "Requirement"}</th>
-                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
-                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Mapped Node</th>
-                    <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Evidence</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pursuit.reqmap.map((r, i) => (
-                    <tr key={i} className="oe-table-row border-b border-border last:border-b-0">
-                      <td className="px-4 py-3 align-top text-foreground">{r.req}</td>
-                      <td className="px-4 py-3 align-top">
-                        <StatusBadge
-                          status={r.status}
-                          label={r.status === "mapped" ? "MAPPED" : "UNMAPPED"}
-                        />
-                      </td>
-                      <td className="px-4 py-3 align-top font-mono text-[11px] text-primary">{r.node ?? "—"}</td>
-                      <td className="px-4 py-3 align-top text-muted-foreground">{r.evidence}</td>
+            {mappedRows.length > 0 ? (
+              <div className="overflow-x-auto oe-touch-scroll">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="oe-table-header">
+                      <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">{isRfi ? "Scope topic" : "Requirement"}</th>
+                      <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Capability</th>
+                      <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Evidence</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {mappedRows.map((r, i) => (
+                      <tr key={i} className="oe-table-row border-b border-border last:border-b-0">
+                        <td className="px-4 py-3 align-top text-foreground">{r.req}</td>
+                        <td className="px-4 py-3 align-top font-mono text-[11px] text-primary">{r.node ?? "—"}</td>
+                        <td className="px-4 py-3 align-top text-muted-foreground">{r.evidence}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="px-5 py-4 text-xs text-muted-foreground italic">
+                No {isRfi ? "scope topics" : "requirements"} map to the current team’s capabilities yet — see Gaps in Capabilities below.
+              </p>
+            )}
           </div>
         )}
 
-        {/* Gap analysis card */}
-        {pursuit.gaps.length > 0 && (
+        {/* Gaps in capabilities card */}
+        {gapCount > 0 && (
           <div className="bg-card rounded-xl border border-dashed border-destructive/30 shadow-sm overflow-hidden">
             <div className="px-5 py-3.5 border-b border-border flex items-center gap-2">
               <div className="w-2 h-2 rounded-sm bg-cond" />
-              <h3 className="oe-card-title">Capability Gap Analysis</h3>
+              <h3 className="oe-card-title">Gaps in Capabilities</h3>
             </div>
             <div className="divide-y divide-border">
+              {unmappedWithoutGap.map((r, i) => (
+                <div key={`unmapped-${i}`} className="px-4 sm:px-5 py-4 flex flex-col xs:flex-row justify-between gap-2 xs:gap-4 items-start">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-foreground mb-1">{r.req}</div>
+                    <div className="text-[11px] text-muted-foreground">{r.evidence}</div>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md oe-status-nogo whitespace-nowrap shrink-0">
+                    Unmapped {isRfi ? "topic" : "requirement"}
+                  </span>
+                </div>
+              ))}
               {pursuit.gaps.map(g => (
                 <div key={g.id} className="px-4 sm:px-5 py-4 flex flex-col xs:flex-row justify-between gap-2 xs:gap-4 items-start">
                   <div className="flex-1 min-w-0">
@@ -606,41 +710,15 @@ export function OpportunityView({
           </div>
         </div>
 
-        {/* Response action items card */}
-        {pursuit.responseActionItems && pursuit.responseActionItems.length > 0 && (
-          <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
-              <h3 className="oe-card-title">Response Action Items</h3>
-              <span className="text-xs font-mono">
-                <span className="text-cond font-semibold">
-                  {pursuit.responseActionItems.filter(r => r.status === "Open").length}
-                </span>{" "}
-                <span className="text-muted-foreground">open</span>
-              </span>
-            </div>
-            <div className="divide-y divide-border">
-              {pursuit.responseActionItems.map(item => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActionItem(item)}
-                  className="w-full text-left px-5 py-3.5 flex justify-between items-start gap-4 hover:bg-muted/30 cursor-pointer"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-foreground mb-1">{item.description}</div>
-                    <div className="text-[11px] text-muted-foreground">
-                      {item.assignedPartnerId
-                        ? <>{getPartner(item.assignedPartnerId, partners)?.name ?? item.assignedPartnerId}{item.assignedInternal ? ` (${item.assignedInternal})` : ""}</>
-                        : item.assignedInternal ?? "Unassigned"}
-                      {" · Due "}{item.dueAt}
-                      {" · Blocks "}{item.gates.join(", ")}
-                    </div>
-                  </div>
-                  <StatusBadge status={item.status} label={item.status} />
-                </button>
-              ))}
-            </div>
-          </div>
+        {logRows.length > 0 && (
+          <GapLogActionItems
+            rows={logRows}
+            onOpen={id => {
+              const existing = (pursuit.responseActionItems ?? []).find(item => item.id === id);
+              const gap = pursuit.rfiResponse?.gaps.find(item => item.id === id);
+              setActionItem(existing ?? (gap ? gapsToActionItems([gap], partners)[0] ?? null : null));
+            }}
+          />
         )}
 
         {/* Draft status & outcome */}
@@ -682,21 +760,36 @@ export function OpportunityView({
                 Open Response Builder →
               </button>
             )}
-            {!pursuit.closed && (
-              <>
-                <button
-                  onClick={() => { setConfirmReason(""); setConfirmOpen("go"); }}
-                  className="text-xs font-semibold px-4 py-2 rounded-md bg-go text-white cursor-pointer transition-all hover:opacity-90 shadow-sm"
-                >
-                  Confirm {isRfi ? "Respond" : "Go"}
-                </button>
-                <button
-                  onClick={() => { setConfirmReason(""); setConfirmOpen("nogo"); }}
-                  className="text-xs font-semibold px-4 py-2 rounded-md border border-nogo text-nogo bg-card cursor-pointer transition-all hover:bg-nogo-soft"
-                >
-                  Confirm {isRfi ? "Pass" : "No-Go"}
-                </button>
-              </>
+            {!pursuit.closed && decision?.value !== "go" && (
+              <button
+                onClick={() => { setConfirmReason(""); setConfirmOpen("go"); }}
+                className="text-xs font-semibold px-4 py-2 rounded-md bg-go text-white cursor-pointer transition-all hover:opacity-90 shadow-sm"
+              >
+                {decision ? `Change to ${goLabel}` : `Confirm ${goLabel}`}
+              </button>
+            )}
+            {!pursuit.closed && decision?.value !== "nogo" && (
+              <button
+                onClick={() => { setConfirmReason(""); setConfirmOpen("nogo"); }}
+                className="text-xs font-semibold px-4 py-2 rounded-md border border-nogo text-nogo bg-card cursor-pointer transition-all hover:bg-nogo-soft"
+              >
+                {decision ? `Change to ${noGoLabel}` : `Confirm ${noGoLabel}`}
+              </button>
+            )}
+            {!pursuit.closed ? (
+              <button
+                onClick={() => { setCloseReason(""); setCloseOpen(true); }}
+                className="text-xs font-semibold px-4 py-2 rounded-md border border-input text-foreground bg-card cursor-pointer transition-all hover:bg-secondary"
+              >
+                Close Opportunity
+              </button>
+            ) : (
+              <button
+                onClick={handleReopen}
+                className="text-xs font-semibold px-4 py-2 rounded-md border border-input text-foreground bg-card cursor-pointer transition-all hover:bg-secondary"
+              >
+                Reopen Opportunity
+              </button>
             )}
           </div>
         </div>
@@ -773,39 +866,66 @@ export function OpportunityView({
               : "bg-[hsl(var(--status-nogo-soft))] border-[hsl(var(--status-nogo))]/20 text-[hsl(var(--status-nogo))]"
           )}>
             {confirmOpen === "go"
-              ? `You are confirming ${isRfi ? "RESPOND" : "GO"} for "${pursuit.name}". This will advance the project to response drafting.`
-              : `You are confirming ${isRfi ? "PASS" : "NO-GO"} for "${pursuit.name}". This will close the project.`
+              ? `You are setting "${pursuit.name}" to ${isRfi ? "RESPOND" : "GO"}. This advances the project to response drafting.`
+              : `You are setting "${pursuit.name}" to ${isRfi ? "PASS" : "NO-GO"}. The project stays open until you choose Close Opportunity.`
             }
           </div>
-          <FormField label="Reason / notes (optional)">
+          <div className="text-xs text-foreground rounded-md border border-border bg-muted/20 px-3 py-2.5">
+            Platform recommendation:{" "}
+            <strong className={REC_TEXT[platform.rec]}>{recLabel(platform.rec, projectType)}</strong>
+            {platform.reason && <span className="text-muted-foreground"> — {platform.reason}</span>}
+          </div>
+          <FormField label={confirmIsOverride ? "Reason for overriding the platform recommendation (required)" : "Reason / notes (optional)"}>
             <TextArea
               value={confirmReason}
               onChange={setConfirmReason}
-              placeholder="Add context for the decision record…"
+              placeholder={confirmIsOverride
+                ? `Why ${confirmOpen === "go" ? goLabel : noGoLabel} despite the ${recLabel(platform.rec, projectType)} recommendation?`
+                : "Add context for the decision record…"}
               rows={3}
             />
           </FormField>
           <div className="text-[11px] text-muted-foreground">
             Decision record <span className="font-mono text-foreground">{pursuit.decisionRecord.id}</span> will be updated.
-            Reviewer: <span className="text-foreground">{profile ? operatorReviewerLabel(profile) : "Operator"}</span>
+            Reviewer: <span className="text-foreground">{reviewer}</span>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <SecondaryButton onClick={() => setConfirmOpen(null)}>Cancel</SecondaryButton>
-            {confirmOpen === "go" ? (
-              <button
-                onClick={handleConfirm}
-                className="text-xs font-semibold px-4 py-2 rounded-md bg-go text-white cursor-pointer transition-all hover:opacity-90 shadow-sm"
-              >
-                Confirm {isRfi ? "Respond" : "Go"}
-              </button>
-            ) : (
-              <button
-                onClick={handleConfirm}
-                className="text-xs font-semibold px-4 py-2 rounded-md bg-destructive text-white cursor-pointer transition-all hover:opacity-90 shadow-sm"
-              >
-                Confirm {isRfi ? "Pass" : "No-Go"}
-              </button>
-            )}
+            <button
+              onClick={handleConfirm}
+              disabled={confirmIsOverride && !confirmReason.trim()}
+              className={cn(
+                "text-xs font-semibold px-4 py-2 rounded-md text-white cursor-pointer transition-all hover:opacity-90 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed",
+                confirmOpen === "go" ? "bg-go" : "bg-destructive",
+              )}
+            >
+              Confirm {confirmOpen === "go" ? goLabel : noGoLabel}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={closeOpen} onClose={() => setCloseOpen(false)} title="Close Opportunity">
+        <div className="space-y-4">
+          <p className="text-sm text-foreground">
+            Close <strong>{pursuit.name}</strong>? Closed opportunities keep their assessment, decision, and response work, and can be reopened.
+          </p>
+          <FormField label="Reason (optional)">
+            <TextArea
+              value={closeReason}
+              onChange={setCloseReason}
+              placeholder="e.g. Customer cancelled the solicitation, submitted, not pursuing…"
+              rows={3}
+            />
+          </FormField>
+          <div className="flex justify-end gap-2 pt-2">
+            <SecondaryButton onClick={() => setCloseOpen(false)}>Cancel</SecondaryButton>
+            <button
+              onClick={handleClose}
+              className="text-xs font-semibold px-4 py-2 rounded-md bg-closed text-white cursor-pointer transition-all hover:opacity-90 shadow-sm"
+            >
+              Close Opportunity
+            </button>
           </div>
         </div>
       </Modal>
@@ -920,12 +1040,8 @@ export function OpportunityView({
         onClose={() => setActionItem(null)}
         onSave={updates => {
           if (!actionItem) return;
-          onUpdatePursuit(pursuit.id, {
-            responseActionItems: (pursuit.responseActionItems ?? []).map(item =>
-              item.id === actionItem.id ? { ...item, ...updates } : item
-            ),
-          });
-          toast("Action item updated", "success");
+          onUpdatePursuit(pursuit.id, applyActionItemUpdate(pursuit, actionItem.id, updates, partners));
+          toast(isResolvedStatus(updates.status) ? `${actionItem.id} resolved — regenerate the response to use it` : "Action item updated", "success");
         }}
       />
     </div>

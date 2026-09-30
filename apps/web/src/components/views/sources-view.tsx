@@ -1042,37 +1042,14 @@ export function SourcesView({
           nextPerson = applyResumeReplacement(nextPerson, result.people[0]!);
         }
         if (result.people.length > 1) {
-          const additionalPeople = result.people.slice(1);
-          onUpdateGraph(prev => {
-            const stamp = new Date().toISOString().slice(0, 10);
-            const existingIds = new Set(prev.people.map(p => p.id));
-            let maxNum = prev.people
-              .map(p => Number(p.id.replace(/\D/g, "")))
-              .filter(n => Number.isFinite(n))
-              .reduce((a, b) => Math.max(a, b), 100);
-            const newPeople = additionalPeople.map(parsed => {
-              maxNum += 1;
-              const newPerson: GraphPerson = {
-                id: `PPL-${String(maxNum).padStart(3, "0")}`,
-                name: parsed.name,
-                partner: editPerson.partner,
-                role: parsed.roles[0] ?? "Contributor",
-                roles: parsed.roles,
-                skills: [],
-                technologies: parsed.technologies,
-                expertise: parsed.expertise,
-                industries: parsed.industries,
-                projectHistory: [],
-                status: "Pending",
-                updated: stamp,
-                resumeText: parsed.resumeText,
-                resumeFileName: parsed.resumeFileName,
-              };
-              return newPerson;
-            });
-            return { ...prev, people: [...prev.people, ...newPeople] };
-          });
-          toast(`Found ${result.people.length} people in the document — ${result.people.length - 1} additional added to the graph`, "success");
+          const additional: PartnerIngestResult = { ...result, people: result.people.slice(1) };
+          const preview = applyPartnerIngest(graph, editPerson.partner, additional);
+          onUpdateGraph(prev => applyPartnerIngest(prev, editPerson.partner, additional).graph);
+          const mergedCount = preview.merged.length;
+          toast(
+            `Found ${result.people.length} people in the document — ${preview.added.length} added${mergedCount ? `, ${mergedCount} existing record${mergedCount === 1 ? "" : "s"} updated` : ""}`,
+            "success",
+          );
         }
         if (result.warning) toast(result.warning, "warning");
       } catch (error) {
@@ -1091,21 +1068,16 @@ export function SourcesView({
     setDetailPerson(nextPerson);
   }
 
-  const matchesQuery = (name: string, id: string, partnerIds: string[] = []) => {
-    if (!searchQ) return true;
-    const q = searchQ.toLowerCase();
-    return name.toLowerCase().includes(q)
-      || id.toLowerCase().includes(q)
-      || partnerIds.some(pid => partnerName2(pid).toLowerCase().includes(q));
+  const matchesSearch = (fields: (string | null | undefined)[]) => {
+    const q = searchQ.trim().toLowerCase();
+    if (!q) return true;
+    return fields.some(field => (field ?? "").toLowerCase().includes(q));
   };
-  const matchesBasic = (name: string, id: string) => {
-    if (!searchQ) return true;
-    const q = searchQ.toLowerCase();
-    return name.toLowerCase().includes(q) || id.toLowerCase().includes(q);
-  };
+  const partnerNames = (ids: string[]) => ids.map(id => partnerName2(id)).join(", ");
+  const teamingLabel = (flag: boolean | null) => flag === true ? "Signed" : flag === false ? "Pending" : "N/A";
   const visibleCapabilities = capabilities.filter(c =>
     isActive(c.status)
-    && matchesBasic(c.name, c.id)
+    && matchesSearch([c.id, c.name, partnerNames(c.partners), c.updated])
   ).sort((a, b) => {
     const { field, dir } = capSort;
     if (field === "id") return cmp(a.id, b.id, dir);
@@ -1121,7 +1093,7 @@ export function SourcesView({
   );
   const visibleExperience = experience.filter(e =>
     isActive(e.status)
-    && matchesBasic(e.name, e.id)
+    && matchesSearch([e.id, e.name, e.industry, partnerNames(e.partners)])
   ).sort((a, b) => {
     const { field, dir } = expSort;
     if (field === "id") return cmp(a.id, b.id, dir);
@@ -1131,7 +1103,7 @@ export function SourcesView({
   });
   const visibleCredentials = credentials.filter(c =>
     isActive(c.status)
-    && matchesBasic(c.name, c.id)
+    && matchesSearch([c.id, c.name, c.credType, partnerName2(c.partner), c.expiration])
   ).sort((a, b) => {
     const { field, dir } = credSort;
     if (field === "id") return cmp(a.id, b.id, dir);
@@ -1142,7 +1114,7 @@ export function SourcesView({
   });
   const visiblePeople = people.filter(p =>
     isActive(p.status)
-    && matchesBasic(p.name, p.id)
+    && matchesSearch([p.id, p.name, partnerName2(p.partner), (p.roles ?? [p.role]).filter(Boolean).join(", ") || p.role, p.expertise])
   ).sort((a, b) => {
     const { field, dir } = peopleSort;
     if (field === "id") return cmp(a.id, b.id, dir);
@@ -1153,7 +1125,7 @@ export function SourcesView({
   });
   const visiblePartners = partners.filter(p =>
     (showArchived || isActive(p.status))
-    && matchesQuery(p.name, p.id)
+    && matchesSearch([p.name, p.type, p.contact, p.contactEmail, teamingLabel(p.teamingAgreementSigned), p.status])
   ).sort((a, b) => {
     const { field, dir } = partnerSort;
     if (field === "type") return cmp(a.type, b.type, dir);

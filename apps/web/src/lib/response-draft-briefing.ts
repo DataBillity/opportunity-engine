@@ -1,6 +1,7 @@
 import type { GraphExperience, GraphPerson, Organization, Partner, Pursuit } from "@/lib/mock-data";
 import { omitQuestionAnswerDocuments } from "@opportunity-engine/core";
 import type { ResponseDraftBriefing, ResponseDraftExperience, ResponseDraftPerson, ResponseDraftSection } from "@opportunity-engine/contracts";
+import { gapLogRows } from "@/lib/gap-log";
 
 function cleanText(text: string | undefined): string | undefined {
   const trimmed = text?.replace(/\u0000/g, "").trim();
@@ -72,10 +73,28 @@ export function buildResponseDraftBriefing(input: {
   partners?: Partner[];
   existingDraft?: string;
   instructions?: string;
-  mode?: "section" | "package";
+  mode?: "section" | "package" | "cover_letter";
   existingGapIds?: string[];
+  draftedSections?: { id: string; title: string; body: string }[];
+  signatory?: { name?: string; title?: string; email?: string };
 }): ResponseDraftBriefing {
-  const partners = (input.partners ?? []).filter(partner => partner.status !== "Archived");
+  const team = input.pursuit.includedPartnerIds ? new Set(input.pursuit.includedPartnerIds) : null;
+  const partners = (input.partners ?? []).filter(partner =>
+    partner.status !== "Archived" && (!team || team.has(partner.id)),
+  );
+  const logRows = gapLogRows(input.pursuit, input.partners);
+  const resolvedGaps = logRows
+    .filter(row => row.status === "Resolved")
+    .map(row => ({
+      id: row.id,
+      description: row.description,
+      owner: row.owner,
+      resolution: [row.resolution, row.documentName ? `Supporting file on record: ${row.documentName}.` : ""].filter(Boolean).join(" "),
+    }));
+  const openGaps = logRows
+    .filter(row => row.status !== "Resolved")
+    .map(row => ({ id: row.id, description: row.description, owner: row.owner, priority: row.priority, location: row.location }));
+  const existingGapIds = [...new Set([...(input.existingGapIds ?? []), ...logRows.map(row => row.id)])];
   const assignedPeople = peopleForDraft(input.assignments, input.people, partners);
   const assignedIds = new Set(Object.values(input.assignments).filter(Boolean));
   const assignedGraphPeople = input.people.filter(person =>
@@ -93,7 +112,13 @@ export function buildResponseDraftBriefing(input: {
     projectType: input.pursuit.projectType,
     instructions: cleanText(input.instructions),
     existingDraft: cleanText(input.existingDraft),
-    existingGapIds: input.existingGapIds ?? [],
+    existingGapIds,
+    resolvedGaps,
+    openGaps,
+    draftedSections: (input.draftedSections ?? [])
+      .map(section => ({ id: section.id, title: section.title, body: section.body.replace(/\u0000/g, "").trim() }))
+      .filter(section => section.body && section.title),
+    signatory: input.signatory,
     partners: partners.map(partner => ({
       name: partner.name,
       role: partner.type || undefined,

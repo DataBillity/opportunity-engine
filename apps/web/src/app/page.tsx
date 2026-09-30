@@ -28,6 +28,8 @@ import {
   type GraphData,
 } from "@/lib/mock-data";
 import { mergeLeadOrganizations, mergePipelineLeads } from "@/lib/create-lead";
+import { applyDecision } from "@/lib/pursuit-assessment";
+import { ResponseJobsProvider } from "@/lib/response-jobs";
 
 export type ViewId = "dashboard" | "search" | "pipeline" | "org" | "decision" | "draft" | "sources" | "archive" | "settings";
 
@@ -249,22 +251,11 @@ export default function CommandCenter() {
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
 
   const handleConfirmDecision = useCallback(
-    (pursuitId: string, decision: "go" | "nogo") => {
+    (pursuitId: string, decision: "go" | "nogo", meta: { reason: string; reviewer: string }) => {
       setAllPursuits(prev => {
         const p = prev[pursuitId];
         if (!p) return prev;
-        return {
-          ...prev,
-          [pursuitId]: {
-            ...p,
-            rec: decision,
-            confidence: decision === "go" ? Math.max(p.confidence, 90) : Math.max(p.confidence, 85),
-            status: decision === "go"
-              ? (p.projectType === "rfi" ? "Respond confirmed" : "Go confirmed")
-              : (p.projectType === "rfi" ? "Pass confirmed — closed" : "No-Go confirmed — closed"),
-            closed: decision === "nogo",
-          },
-        };
+        return { ...prev, [pursuitId]: { ...p, ...applyDecision(p, decision, meta) } };
       });
     },
     []
@@ -329,6 +320,17 @@ export default function CommandCenter() {
         const p = prev[pursuitId];
         if (!p) return prev;
         return { ...prev, [pursuitId]: { ...p, ...updates } };
+      });
+    },
+    []
+  );
+
+  const handleApplyToPursuit = useCallback(
+    (pursuitId: string, apply: (pursuit: Pursuit) => Partial<Pursuit>) => {
+      setAllPursuits(prev => {
+        const p = prev[pursuitId];
+        if (!p) return prev;
+        return { ...prev, [pursuitId]: { ...p, ...apply(p) } };
       });
     },
     []
@@ -428,6 +430,7 @@ export default function CommandCenter() {
 
   return (
     <OperatorProvider>
+      <ResponseJobsProvider onApply={handleApplyToPursuit}>
       <div className="flex flex-col h-dvh overflow-hidden">
       <TopBar
         activeView={activeView}
@@ -541,9 +544,16 @@ export default function CommandCenter() {
                 partners={partners}
                 people={graph.people}
                 experience={graph.experience}
-                capabilities={graph.capabilities.filter(item => item.status !== "Archived").map(item => item.name)}
+                capabilities={graph.capabilities
+                  .filter(item => item.status !== "Archived" && (
+                    !selectedPursuit.includedPartnerIds
+                    || item.partners.length === 0
+                    || item.partners.some(id => selectedPursuit.includedPartnerIds!.includes(id))
+                  ))
+                  .map(item => item.name)}
                 onBack={() => setActiveView("decision")}
                 onUpdatePursuit={handleUpdatePursuit}
+                onApplyToPursuit={handleApplyToPursuit}
               />
             )}
             {activeView === "draft" && selectedPursuit?.rec !== "go" && (
@@ -581,6 +591,7 @@ export default function CommandCenter() {
         </main>
       </div>
       </div>
+      </ResponseJobsProvider>
     </OperatorProvider>
   );
 }

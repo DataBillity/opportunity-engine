@@ -1,18 +1,31 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import type { GraphExperience, GraphPerson, Organization, Partner, Pursuit, ResponseActionItem, RfiGapLogItem, RfiResponseMeta } from "@/lib/mock-data";
+import { useState, useRef, useEffect, useCallback } from "react";
+import type { GraphExperience, GraphPerson, Organization, Partner, Pursuit, PursuitCoverLetter, ResponseActionItem } from "@/lib/mock-data";
 import { outlineSectionsFor, RFI_OUTLINE_SECTIONS } from "@opportunity-engine/core";
 import { getPartner } from "@/lib/mock-data";
-import { Modal, FormField, TextInput, TextArea, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
+import { Modal, FormField, TextInput, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
 import { ActionItemResponseModal } from "@/components/action-items/action-item-response-modal";
+import { GapLogActionItems } from "@/components/action-items/gap-log-action-items";
 import { RichTextEditor, RichTextHtml } from "@/components/ui/rich-text-editor";
 import { useToast } from "@/components/ui/toast";
+import { useOperator } from "@/components/auth/operator-provider";
 import { cn } from "@/lib/cn";
 import { rankPeopleForRole } from "@/lib/personnel-fit";
-import { buildResponseDraftBriefing } from "@/lib/response-draft-briefing";
 import { RfiResponsePackagePanel } from "@/components/views/rfi-response-package";
 import { escapeHtml, htmlToPlainText, isEmptyRichText, plainTextToHtml, sanitizeRichText } from "@/lib/rich-text";
+import { GAP_TYPE_LABELS, applyActionItemUpdate, gapLogRows, gapsToActionItems, isResolvedStatus } from "@/lib/gap-log";
+import { useResponseJob, type ResponseJobKind, type ResponseJobOutcome } from "@/lib/response-jobs";
+import {
+  COVER_LETTER_ID,
+  COVER_LETTER_MAX_WORDS,
+  coverLetterConstraint,
+  responseSignature,
+  runCoverLetterJob,
+  runPackageJob,
+  runSectionJob,
+  type GenerationContext,
+} from "@/lib/response-generation";
 
 interface SectionMeta {
   id: string;
@@ -39,7 +52,21 @@ function isGenericRfiMatrix(matrix: { sectionId: string }[]): boolean {
   return matrix.map(item => item.sectionId).sort().join(",") === "approach,experience,overview";
 }
 
+function isCoverSection(section: { id: string; name: string }): boolean {
+  return section.id === "cover" || section.id === COVER_LETTER_ID || /^cover (letter|page)$/i.test(section.name.trim());
+}
+
+/** Response sections, without the cover letter (which has its own editor) and with drafted ones marked. */
 function sectionsForPursuit(pursuit: Pursuit): SectionMeta[] {
+  const drafts = pursuit.responseDrafts ?? {};
+  return outlineForPursuit(pursuit)
+    .filter(section => !isCoverSection(section))
+    .map(section => section.trace === "none" && !isEmptyRichText(drafts[section.id])
+      ? { ...section, trace: "partial" as const, tracePct: "Drafted" }
+      : section);
+}
+
+function outlineForPursuit(pursuit: Pursuit): SectionMeta[] {
   if (pursuit.id === "OPP-2219") return initialSections;
   if (pursuit.projectType === "rfi") {
     const matrix = pursuit.complianceMatrix ?? [];
@@ -69,12 +96,22 @@ function draftsForPursuit(pursuit: Pursuit, sections: SectionMeta[]): Record<str
   const saved = new Map(
     (pursuit.rfiResponse?.sections ?? []).map(section => [section.id, plainTextToHtml(section.body)]),
   );
-  if (pursuit.id === "OPP-2219" && saved.size === 0) {
+  const persisted = pursuit.responseDrafts ?? {};
+  if (pursuit.id === "OPP-2219" && saved.size === 0 && !pursuit.responseDrafts) {
     return Object.fromEntries(
       Object.entries(seedDraftContent).map(([id, text]) => [id, plainTextToHtml(text)]),
     );
   }
-  return Object.fromEntries(sections.map(section => [section.id, saved.get(section.id) ?? ""]));
+  return Object.fromEntries(sections.map(section => [section.id, persisted[section.id] ?? saved.get(section.id) ?? ""]));
+}
+
+/** A cover letter saved before it had its own editor lived in the outline's "cover" section. */
+function initialCoverLetter(pursuit: Pursuit): string {
+  if (pursuit.coverLetter) return pursuit.coverLetter.body;
+  const legacy = pursuit.responseDrafts?.cover
+    ?? (pursuit.rfiResponse?.sections ?? []).find(section => isCoverSection({ id: section.id, name: section.title }))?.body;
+  if (!legacy) return "";
+  return /<\/?[a-z][\s\S]*>/i.test(legacy) ? legacy : plainTextToHtml(legacy);
 }
 
 function outlineSection(pursuit: Pursuit, section: SectionMeta): string {
@@ -126,54 +163,6 @@ The subcontracting plan ensures clear accountability across all consortium membe
 
 interface ChatMessage { role: "system" | "user" | "assistant"; text: string; }
 
-interface DraftGap {
-  id: string;
-  location: string;
-  gapType: string;
-  description: string;
-  owner: string;
-  priority: "High" | "Medium" | "Low" | string;
-  due: string;
-  status: string;
-  notes: string;
-}
-
-interface DraftApiResponse {
-  kind?: "section" | "package";
-  body?: string;
-  gaps?: DraftGap[];
-  reviewerSummary?: string;
-  strategicNotes?: string;
-  questions?: string[];
-  compliance?: RfiResponseMeta["compliance"];
-  sections?: { id: string; ref: string; title: string; body: string }[];
-  provider?: "claude" | "gemini";
-  modelVersion?: string;
-  insights?: { id: string }[];
-  usedFallback?: boolean;
-  error?: string;
-  hint?: string;
-}
-
-/**
- * Read the generate route's reply without assuming it is JSON. When the host kills the
- * function (timeout, crash) it returns a plain-text page, and res.json() would surface
- * as "Unexpected token 'A', "An error o"... is not valid JSON".
- */
-async function readDraftResponse(res: Response): Promise<DraftApiResponse> {
-  const raw = await res.text();
-  try {
-    return JSON.parse(raw) as DraftApiResponse;
-  } catch {
-    const timedOut = res.status === 504 || /timed out|FUNCTION_INVOCATION_TIMEOUT/i.test(raw);
-    return {
-      error: timedOut
-        ? "The draft took longer than the server allows and was cut off. Nothing was saved. Try again; if it repeats, generate one section at a time."
-        : `The server returned an unreadable response (HTTP ${res.status}). Try again in a moment.`,
-    };
-  }
-}
-
 const defaultPersonnelAssignments: Record<string, string> = {
   "Program Manager": "",
   "Lead Data Architect": "",
@@ -185,53 +174,6 @@ const demoPersonnelAssignments: Record<string, string> = {
   "Lead Data Architect": "PPL-119",
   "QA & Compliance Lead": "PPL-120",
 };
-
-function asGapPriority(value: string): RfiGapLogItem["priority"] {
-  if (value === "High" || value === "Low") return value;
-  return "Medium";
-}
-
-function asGapStatus(value: string): RfiGapLogItem["status"] {
-  if (value === "Resolved" || value === "In progress") return value;
-  return "Open";
-}
-
-function toGapItems(gaps: DraftGap[]): RfiGapLogItem[] {
-  return gaps.map(gap => ({
-    id: gap.id,
-    location: gap.location,
-    gapType: gap.gapType,
-    description: gap.description,
-    owner: gap.owner || "Prime",
-    priority: asGapPriority(gap.priority),
-    dueAt: gap.due,
-    status: asGapStatus(gap.status),
-    notes: gap.notes,
-  }));
-}
-
-function gapsToActionItems(gaps: RfiGapLogItem[], partners: Partner[] | undefined): ResponseActionItem[] {
-  return gaps.map(gap => {
-    const named = gap.owner.replace(/^Partner:\s*/i, "").trim().toLowerCase();
-    const partner = /^prime\b/i.test(gap.owner)
-      ? undefined
-      : partners?.find(item => item.name.toLowerCase() === named);
-    return {
-      id: gap.id,
-      kind: gap.gapType,
-      description: gap.description,
-      expectedResponseType: gap.gapType,
-      relatedSection: gap.location,
-      assignedPartnerId: partner?.id ?? null,
-      assignedInternal: partner ? null : gap.owner,
-      dueAt: gap.dueAt,
-      status: gap.status,
-      gates: [gap.priority],
-      responseContent: gap.notes,
-      responseDocument: null,
-    };
-  });
-}
 
 const copilotResponses: Record<string, string> = {
   "Strengthen the fraud analytics paragraph": "I've enhanced the fraud analytics paragraph with specific metrics and methodology details.",
@@ -272,22 +214,27 @@ export function ResponseBuilderEmptyState({
 }
 
 export function ResponseBuilderView({
-  pursuit, org, onBack, onUpdatePursuit, partners, people, experience, capabilities,
+  pursuit, org, onBack, onUpdatePursuit, onApplyToPursuit, partners, people, experience, capabilities,
 }: {
   pursuit: Pursuit;
   org?: Organization;
   onBack: () => void;
   onUpdatePursuit: (pursuitId: string, updates: Partial<Pursuit>) => void;
+  onApplyToPursuit: (pursuitId: string, apply: (pursuit: Pursuit) => Partial<Pursuit>) => void;
   partners?: Partner[];
   people?: GraphPerson[];
   experience?: GraphExperience[];
   capabilities?: string[];
 }) {
   const { toast } = useToast();
+  const { profile } = useOperator();
+  const { start: startJob, job, result: jobResult } = useResponseJob(pursuit.id);
+  const generating = Boolean(job);
   const [sections, setSections] = useState<SectionMeta[]>(() => sectionsForPursuit(pursuit));
   const [activeSection, setActiveSection] = useState(() => sectionsForPursuit(pursuit)[0]?.id ?? "tech");
   const [drafts, setDrafts] = useState<Record<string, string>>(() => draftsForPursuit(pursuit, sectionsForPursuit(pursuit)));
-  const [generating, setGenerating] = useState(false);
+  const [coverDraft, setCoverDraft] = useState(() => initialCoverLetter(pursuit));
+  const [confirmCoverOpen, setConfirmCoverOpen] = useState(false);
   const [checking, setChecking] = useState(false);
   const [assertionResults, setAssertionResults] = useState<{ text: string; traced: boolean }[] | null>(null);
   const [reviewedSections, setReviewedSections] = useState<Set<string>>(new Set());
@@ -316,7 +263,8 @@ export function ResponseBuilderView({
   const [addPersonTitle, setAddPersonTitle] = useState("");
   const [addPersonPartner, setAddPersonPartner] = useState("");
   const [actionItem, setActionItem] = useState<ResponseActionItem | null>(null);
-  const [rfiPacket, setRfiPacket] = useState<RfiResponseMeta | null>(pursuit.rfiResponse ?? null);
+  const rfiPacket = pursuit.rfiResponse ?? null;
+  const logRows = gapLogRows(pursuit, partners);
   const isRfi = pursuit.projectType === "rfi";
   const packageLabel = PACKAGE_LABEL[pursuit.projectType ?? "rfp"];
 
@@ -348,208 +296,139 @@ export function ResponseBuilderView({
     toast(`Outcome set to ${newOutcome}`, "success");
   }
 
-  function persistRfiPacket(packet: RfiResponseMeta) {
-    setRfiPacket(packet);
-    onUpdatePursuit(pursuit.id, {
-      rfiResponse: packet,
-      responseActionItems: gapsToActionItems(packet.gaps, partners),
-      complianceMatrix: sections.map(section => ({
-        ref: section.ref,
-        title: section.name,
-        sectionId: section.id,
-      })),
-    });
+  // Editor changes are saved onto the pursuit shortly after typing stops, so drafts survive leaving the view.
+  const pendingDrafts = useRef<Record<string, string>>({});
+  const pendingCover = useRef<string | null>(null);
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushEdits = useCallback(() => {
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = null;
+    const draftsToSave = pendingDrafts.current;
+    const coverToSave = pendingCover.current;
+    pendingDrafts.current = {};
+    pendingCover.current = null;
+    if (!Object.keys(draftsToSave).length && coverToSave === null) return;
+    const editedAt = new Date().toISOString();
+    onApplyToPursuit(pursuit.id, p => ({
+      ...(Object.keys(draftsToSave).length ? { responseDrafts: { ...(p.responseDrafts ?? {}), ...draftsToSave } } : {}),
+      ...(coverToSave !== null
+        ? {
+          coverLetter: p.coverLetter
+            ? { ...p.coverLetter, body: coverToSave, editedAt }
+            : { body: coverToSave, generatedAt: "", provider: "manual", sourceSignature: "", editedAt },
+        }
+        : {}),
+    }));
+  }, [onApplyToPursuit, pursuit.id]);
+  const scheduleFlush = useCallback(() => {
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(flushEdits, 700);
+  }, [flushEdits]);
+  useEffect(() => flushEdits, [flushEdits]);
+
+  function handleDraftChange(sectionId: string, html: string) {
+    setDrafts(prev => ({ ...prev, [sectionId]: html }));
+    pendingDrafts.current[sectionId] = html;
+    scheduleFlush();
   }
 
-  async function requestRfiPackage() {
-    const section = sections[0];
-    if (!section) return;
-    setGenerating(true);
-    const briefing = buildResponseDraftBriefing({
-      pursuit,
-      org,
-      section,
-      sections: sections.map(item => ({ id: item.id, name: item.name, ref: item.ref })),
-      assignments: personnelAssignments,
-      people: people ?? [],
-      experience,
-      capabilities,
-      partners,
-      mode: "package",
-      existingGapIds: rfiPacket?.gaps.map(gap => gap.id) ?? [],
-    });
+  function handleCoverChange(html: string) {
+    setCoverDraft(html);
+    pendingCover.current = html;
+    scheduleFlush();
+  }
 
-    try {
-      const res = await fetch("/api/response/generate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ briefing }),
-      });
-      const data = await readDraftResponse(res);
-      if (!res.ok || !data.reviewerSummary || !data.sections?.length) {
-        setMessages(prev => [...prev, {
-          role: "system",
-          text: data.error || data.hint || `Full ${packageLabel} unavailable.`,
-        }]);
-        toast(data.error || `Full ${packageLabel} unavailable`, "warning");
-        return;
-      }
-
-      const tracePct = data.usedFallback ? "shell" : (data.provider ?? "model");
-      const draftedById = new Map(data.sections.map(item => [item.id, item]));
-      const mergedSections = sections.map(section => {
-        const drafted = draftedById.get(section.id);
-        if (!drafted) return section;
-        return { ...section, name: drafted.title || section.name, ref: drafted.ref || section.ref, trace: "partial" as const, tracePct };
-      });
-      const extras = data.sections
-        .filter(item => !sections.some(section => section.id === item.id))
-        .map(item => ({
-          id: item.id,
-          name: item.title,
-          ref: item.ref || item.title,
-          trace: "partial" as const,
-          tracePct,
-          mandatory: true,
-        }));
-      const allSections = [...mergedSections, ...extras];
-      setSections(allSections);
+  // When a generation job for this pursuit finishes while the view is open, pull in what it wrote.
+  const seenJob = useRef(jobResult?.jobId);
+  useEffect(() => {
+    if (!jobResult || jobResult.jobId === seenJob.current) return;
+    seenJob.current = jobResult.jobId;
+    const written = new Set(jobResult.sectionIds);
+    const saved = pursuit.responseDrafts ?? {};
+    if (jobResult.kind === "package" && written.size) {
+      const tracePct = jobResult.hints?.tracePct ?? "model";
+      setSections(sectionsForPursuit(pursuit).map(section =>
+        written.has(section.id) ? { ...section, trace: "partial" as const, tracePct, reviewNeeded: false } : section,
+      ));
+    } else if (jobResult.kind === "section") {
+      setSections(prev => prev.map(section => {
+        if (written.has(section.id) || section.id === jobResult.sectionId) {
+          return { ...section, trace: "partial" as const, tracePct: jobResult.hints?.tracePct ?? "model" };
+        }
+        return jobResult.hints?.reviewOthers && !isEmptyRichText(drafts[section.id]) ? { ...section, reviewNeeded: true } : section;
+      }));
+    }
+    if (written.size) {
       setDrafts(prev => {
         const next = { ...prev };
-        for (const item of data.sections ?? []) next[item.id] = plainTextToHtml(item.body);
+        for (const id of written) if (id !== COVER_LETTER_ID && saved[id] !== undefined) next[id] = saved[id]!;
         return next;
       });
-      setActiveSection(allSections[0]?.id ?? section.id);
-      const packet: RfiResponseMeta = {
-        reviewerSummary: data.reviewerSummary,
-        strategicNotes: data.strategicNotes ?? "",
-        questions: data.questions ?? [],
-        compliance: data.compliance ?? [],
-        gaps: toGapItems(data.gaps ?? []),
-        sections: (data.sections ?? []).map(item => ({
-          id: item.id,
-          ref: item.ref,
-          title: item.title,
-          body: item.body,
-        })),
-      };
-      setRfiPacket(packet);
-      onUpdatePursuit(pursuit.id, {
-        rfiResponse: packet,
-        responseActionItems: gapsToActionItems(packet.gaps, partners),
-        complianceMatrix: allSections.map(item => ({ ref: item.ref, title: item.name, sectionId: item.id })),
-      });
-      setMessages(prev => [...prev, {
-        role: "system",
-        text: data.usedFallback
-          ? `Model draft unavailable. Saved a ${packageLabel} shell with a Gap Log. Do not submit it.`
-          : `${packageLabel[0]!.toUpperCase()}${packageLabel.slice(1)} drafted${data.provider ? ` via ${data.provider}${data.modelVersion ? ` (${data.modelVersion})` : ""}` : ""}. ${packet.gaps.length} gap${packet.gaps.length === 1 ? "" : "s"} logged for review.`,
-      }]);
-      toast(data.usedFallback ? `${packageLabel} shell saved — resolve the Gap Log before review` : `Full ${packageLabel} drafted for review`, data.usedFallback ? "warning" : "success");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : `Unable to generate the ${packageLabel}`;
-      setMessages(prev => [...prev, { role: "system", text: message }]);
-      toast(message, "warning");
-    } finally {
-      setGenerating(false);
     }
-  }
+    if (written.has(COVER_LETTER_ID) && pursuit.coverLetter) setCoverDraft(pursuit.coverLetter.body);
+    setMessages(prev => [...prev, { role: "system", text: jobResult.message }]);
+  }, [jobResult, pursuit, drafts]);
 
-  async function requestSectionDraft(options: { regenerate: boolean }) {
-    const section = sections.find(item => item.id === activeSection);
-    if (!section) return;
-    setGenerating(true);
-    const briefing = buildResponseDraftBriefing({
+  function generationContext(): GenerationContext {
+    flushEdits();
+    return {
       pursuit,
       org,
-      section,
-      assignments: personnelAssignments,
+      partners,
       people: people ?? [],
       experience,
       capabilities,
-      partners,
-      existingDraft: options.regenerate ? htmlToPlainText(drafts[activeSection] ?? "") : undefined,
-      existingGapIds: rfiPacket?.gaps.map(gap => gap.id) ?? [],
-    });
+      assignments: personnelAssignments,
+      sections: sections.map(section => ({ id: section.id, name: section.name, ref: section.ref })),
+      drafts,
+      signatory: profile ? { name: profile.displayName, title: profile.title, email: profile.email } : undefined,
+      packageLabel,
+    };
+  }
 
-    try {
-      const res = await fetch("/api/response/generate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ briefing }),
-      });
-      const data = await readDraftResponse(res);
-      if (!res.ok || !data.body?.trim()) {
-        if (!options.regenerate) {
-          const fallback = pursuit.id === "OPP-2219" && activeSection === "mgmt"
-            ? generatedMgmtDraft
-            : outlineSection(pursuit, section);
-          setDrafts(prev => ({ ...prev, [activeSection]: plainTextToHtml(fallback) }));
-        }
-        setSections(prev => prev.map(s => s.id === activeSection ? { ...s, trace: "partial", tracePct: "outline" } : s));
-        setMessages(prev => [...prev, {
-          role: "system",
-          text: data.error || data.hint || "Model draft unavailable. Used the solicitation outline.",
-        }]);
-        toast(data.error || "Model draft unavailable — showing the packet outline", "warning");
-        return;
-      }
+  function launch(kind: ResponseJobKind, label: string, run: () => Promise<ResponseJobOutcome>, sectionId?: string) {
+    const started = startJob({ pursuitId: pursuit.id, pursuitName: pursuit.name, kind, label, sectionId, run });
+    if (!started) toast("A draft is already being generated for this opportunity", "warning");
+  }
 
-      setDrafts(prev => ({ ...prev, [activeSection]: plainTextToHtml(data.body!.trim()) }));
-      if (data.gaps?.length) {
-        const incoming = toGapItems(data.gaps);
-        const prior = rfiPacket?.gaps ?? [];
-        const merged = [...prior.filter(gap => !incoming.some(next => next.id === gap.id)), ...incoming];
-        persistRfiPacket({
-          reviewerSummary: rfiPacket?.reviewerSummary ?? "Section updated. Review the Gap Log before submission.",
-          strategicNotes: rfiPacket?.strategicNotes ?? "",
-          questions: rfiPacket?.questions ?? [],
-          compliance: rfiPacket?.compliance ?? [],
-          gaps: merged,
-          sections: rfiPacket?.sections,
-        });
-      }
-      setSections(prev => {
-        const next = prev.map(s => s.id === activeSection
-          ? { ...s, trace: "partial" as const, tracePct: data.provider ?? "model" }
-          : options.regenerate && s.id !== activeSection && !isEmptyRichText(drafts[s.id])
-            ? { ...s, reviewNeeded: true }
-            : s);
-        return next;
-      });
-      const factCount = data.insights?.length ?? 0;
-      setMessages(prev => [...prev, {
-        role: "system",
-        text: `${options.regenerate ? "Section regenerated" : "Draft generated"} for "${section.name}"${
-          data.provider ? ` via ${data.provider}${data.modelVersion ? ` (${data.modelVersion})` : ""}` : ""
-        }${factCount ? ` (${factCount} grounded facts)` : ""}.`,
-      }]);
-      toast(
-        options.regenerate
-          ? "Section regenerated from the solicitation packet and team graph"
-          : "Draft generated from the solicitation packet and team graph",
-        "success",
-      );
-    } catch (err) {
-      if (!options.regenerate) {
-        setDrafts(prev => ({ ...prev, [activeSection]: plainTextToHtml(outlineSection(pursuit, section)) }));
-      }
-      const message = err instanceof Error ? err.message : "Unable to generate draft";
-      setMessages(prev => [...prev, { role: "system", text: message }]);
-      toast(message, "warning");
-    } finally {
-      setGenerating(false);
+  function requestRfiPackage() {
+    const ctx = generationContext();
+    const redo = sections.some(section => !isEmptyRichText(drafts[section.id]));
+    launch("package", `${redo ? "Regenerating" : "Drafting"} the ${packageLabel}`, () => runPackageJob(ctx));
+  }
+
+  function requestSectionDraft(options: { regenerate: boolean }) {
+    const section = sections.find(item => item.id === activeSection);
+    if (!section) return;
+    const ctx = generationContext();
+    const fallbackText = pursuit.id === "OPP-2219" && section.id === "mgmt"
+      ? generatedMgmtDraft
+      : outlineSection(pursuit, section);
+    launch(
+      "section",
+      `${options.regenerate ? "Regenerating" : "Drafting"} “${section.name}”`,
+      () => runSectionJob(ctx, { id: section.id, name: section.name, ref: section.ref }, { ...options, fallbackText }),
+      section.id,
+    );
+  }
+
+  function requestCoverLetter(force = false) {
+    const letter = pursuit.coverLetter;
+    if (!force && letter?.editedAt && (!letter.generatedAt || letter.editedAt > letter.generatedAt)) {
+      setConfirmCoverOpen(true);
+      return;
     }
+    setConfirmCoverOpen(false);
+    const ctx = generationContext();
+    launch("cover_letter", letter?.generatedAt ? "Regenerating the cover letter" : "Drafting the cover letter", () => runCoverLetterJob(ctx), COVER_LETTER_ID);
   }
 
   function handleGenerateDraft() {
-    void requestSectionDraft({ regenerate: false });
+    requestSectionDraft({ regenerate: false });
   }
 
   function handleRegenerate() {
-    void requestSectionDraft({ regenerate: true });
+    requestSectionDraft({ regenerate: true });
   }
 
   function handleCheckAssertions() {
@@ -576,15 +455,11 @@ export function ResponseBuilderView({
     if (!insertName.trim()) return;
     const newId = `custom-${Date.now()}`;
     const newSection: SectionMeta = { id: newId, name: insertName.trim(), ref: "Custom", trace: "none", tracePct: "Not started", mandatory: false };
-    setSections(prev => {
-      if (!insertAfter) return [...prev, newSection];
-      const idx = prev.findIndex(s => s.id === insertAfter);
-      if (idx < 0) return [...prev, newSection];
-      const next = [...prev];
-      next.splice(idx + 1, 0, newSection);
-      return next;
-    });
+    const idx = insertAfter ? sections.findIndex(s => s.id === insertAfter) : -1;
+    const next = idx < 0 ? [...sections, newSection] : [...sections.slice(0, idx + 1), newSection, ...sections.slice(idx + 1)];
+    setSections(next);
     setDrafts(prev => ({ ...prev, [newId]: "" }));
+    onUpdatePursuit(pursuit.id, { complianceMatrix: next.map(s => ({ ref: s.ref, title: s.name, sectionId: s.id })) });
     toast(`Section "${insertName.trim()}" inserted`, "success");
     setInsertOpen(false);
     setInsertName("");
@@ -598,11 +473,14 @@ export function ResponseBuilderView({
           : ""
       }${rfiPacket.strategicNotes.trim() ? `<h2>Strategic notes</h2><p>${escapeHtml(rfiPacket.strategicNotes)}</p>` : ""}`
       : "";
-    const gapTable = rfiPacket
-      ? `<h1>Gap log</h1><table border="1" cellpadding="6" cellspacing="0"><tr><th>ID</th><th>Location</th><th>Type</th><th>Description</th><th>Owner</th><th>Priority</th><th>Due</th><th>Status</th></tr>${
-        rfiPacket.gaps.map(gap => `<tr><td>${escapeHtml(gap.id)}</td><td>${escapeHtml(gap.location)}</td><td>${escapeHtml(gap.gapType)}</td><td>${escapeHtml(gap.description)}</td><td>${escapeHtml(gap.owner)}</td><td>${escapeHtml(gap.priority)}</td><td>${escapeHtml(gap.dueAt)}</td><td>${escapeHtml(gap.status)}</td></tr>`).join("")
+    const gapTable = logRows.length
+      ? `<h1>Gap Log - Action Items</h1><table border="1" cellpadding="6" cellspacing="0"><tr><th>ID</th><th>Location</th><th>Type</th><th>Description</th><th>Owner</th><th>Priority</th><th>Due</th><th>Status</th></tr>${
+        logRows.map(row => `<tr><td>${escapeHtml(row.id)}</td><td>${escapeHtml(row.location)}</td><td>${escapeHtml(GAP_TYPE_LABELS[row.type] ?? row.type)}</td><td>${escapeHtml(row.description)}</td><td>${escapeHtml(row.owner)}</td><td>${escapeHtml(row.priority)}</td><td>${escapeHtml(row.dueAt)}</td><td>${escapeHtml(row.status)}</td></tr>`).join("")
       }</table>`
       : "";
+    const letter = isEmptyRichText(coverDraft)
+      ? ""
+      : `<h1>Cover Letter</h1>${sanitizeRichText(coverDraft)}<br style="page-break-before:always">`;
     const body = sections.map(s => {
       const content = isEmptyRichText(drafts[s.id])
         ? "<p><em>Not drafted</em></p>"
@@ -611,7 +489,7 @@ export function ResponseBuilderView({
     }).join("");
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(pursuit.name)} — Response Draft</title>
 <style>body{font-family:Georgia,serif;max-width:720px;margin:40px auto;line-height:1.65;color:#111}h1{font-family:Calibri,sans-serif;font-size:20px;margin:28px 0 8px}h2{font-size:16px}ul,ol{padding-left:1.4em}</style>
-</head><body><p style="color:#555;font-size:13px">${escapeHtml(pursuit.solicitationRef || pursuit.typeLabel)}</p><h1>${escapeHtml(pursuit.name)} — Response Draft</h1>${summary}${body}${gapTable}</body></html>`;
+</head><body><p style="color:#555;font-size:13px">${escapeHtml(pursuit.solicitationRef || pursuit.typeLabel)}</p><h1>${escapeHtml(pursuit.name)} — Response Draft</h1>${summary}${letter}${body}${gapTable}</body></html>`;
     const blob = new Blob(["\ufeff", html], { type: "application/msword" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -640,9 +518,20 @@ export function ResponseBuilderView({
 
   const quickPrompts = ["Strengthen the fraud analytics paragraph", "Add a risk mitigation section", "Which claims aren't source-traced?"];
 
-  const isKeyPersonnel = activeSection === "pers";
+  const isCover = activeSection === COVER_LETTER_ID;
+  const isKeyPersonnel = !isCover && activeSection === "pers";
   const activeMeta = sections.find(s => s.id === activeSection);
-  const hasDraft = !isEmptyRichText(drafts[activeSection]);
+  const hasDraft = !isCover && !isEmptyRichText(drafts[activeSection]);
+  const draftedCount = sections.filter(s => !isEmptyRichText(drafts[s.id])).length;
+  const coverLetter: PursuitCoverLetter | undefined = pursuit.coverLetter;
+  const coverHasText = !isEmptyRichText(coverDraft);
+  const coverStale = Boolean(
+    coverLetter?.generatedAt && coverLetter.sourceSignature && coverLetter.sourceSignature !== responseSignature(sections, drafts),
+  );
+  const coverWords = htmlToPlainText(coverDraft).split(/\s+/).filter(Boolean).length;
+  const coverConstraint = coverLetterConstraint(pursuit);
+  const coverStatus = !coverHasText ? "Not drafted" : coverStale ? "Update" : coverLetter?.editedAt ? "Edited" : "Drafted";
+  const editorBusy = Boolean(job && (job.kind === "package" ? !isCover : job.sectionId === activeSection));
   const allPeople = (people ?? []).filter(person => person.status !== "Archived");
   const roleNames = Object.keys(personnelAssignments);
   const referencedPeople = Object.values(personnelAssignments)
@@ -685,10 +574,17 @@ export function ResponseBuilderView({
       {rfiPacket && (
         <RfiResponsePackagePanel
           packet={rfiPacket}
+          logRows={logRows}
           projectType={pursuit.projectType ?? "rfp"}
-          onOpenGap={id => {
+        />
+      )}
+
+      {logRows.length > 0 && (
+        <GapLogActionItems
+          rows={logRows}
+          onOpen={id => {
             const existing = (pursuit.responseActionItems ?? []).find(item => item.id === id);
-            const gap = rfiPacket.gaps.find(item => item.id === id);
+            const gap = rfiPacket?.gaps.find(item => item.id === id);
             setActionItem(existing ?? (gap ? gapsToActionItems([gap], partners)[0] ?? null : null));
           }}
         />
@@ -702,6 +598,22 @@ export function ResponseBuilderView({
             <button onClick={() => setInsertOpen(true)} className="text-primary font-semibold cursor-pointer hover:underline">+ Insert</button>
           </div>
           <div className="flex xl:flex-col overflow-x-auto oe-touch-scroll xl:overflow-visible">
+            <button
+              onClick={() => { setActiveSection(COVER_LETTER_ID); setAssertionResults(null); }}
+              className={cn(
+                "flex justify-between items-center gap-2 w-full px-4 py-3 border-b xl:border-b border-r xl:border-r-0 border-border cursor-pointer text-left text-xs transition-all min-w-[11.5rem] xl:min-w-0",
+                "hover:bg-muted/20",
+                isCover ? "bg-accent border-l-[3px] border-l-primary" : "bg-muted/10 border-l-[3px] border-l-transparent",
+              )}
+            >
+              <div className="min-w-0">
+                <span className="block font-mono text-[9px] text-muted-foreground uppercase tracking-wider">Cover</span>
+                <span className="font-semibold text-foreground">Cover Letter</span>
+              </div>
+              <span className={cn("font-mono text-[10px] px-1.5 py-0.5 rounded-md shrink-0 font-semibold",
+                coverStatus === "Not drafted" ? "oe-status-pending" : coverStatus === "Update" ? "oe-status-cond" : "oe-status-trace",
+              )}>{coverStatus === "Update" ? "Update ↻" : coverStatus}</span>
+            </button>
             {sections.map(s => (
               <button
                 key={s.id}
@@ -783,7 +695,7 @@ export function ResponseBuilderView({
           )}
 
           {/* Personnel ribbon (non-personnel sections) */}
-          {!isKeyPersonnel && (
+          {!isKeyPersonnel && !isCover && (
             <div className="bg-card rounded-xl border shadow-sm px-5 py-3 flex items-center gap-3 flex-wrap">
               <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Referenced personnel</span>
               {referencedPeople.map(person => (
@@ -797,29 +709,83 @@ export function ResponseBuilderView({
             </div>
           )}
 
+          {/* Cover letter guidance */}
+          {isCover && (
+            <div className="bg-card rounded-xl border shadow-sm px-5 py-3.5 space-y-2 text-xs">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Cover letter</span>
+                {coverHasText && (
+                  <span className={cn("font-mono text-[11px]", coverWords > COVER_LETTER_MAX_WORDS ? "text-cond font-semibold" : "text-muted-foreground")}>
+                    {coverWords} words · {coverWords > COVER_LETTER_MAX_WORDS ? `over one page — trim to ${COVER_LETTER_MAX_WORDS}` : "fits on one page"}
+                  </span>
+                )}
+                {coverLetter?.generatedAt && (
+                  <span className="text-[11px] text-muted-foreground">
+                    {coverLetter.provider === "template" ? "Template" : "Drafted"} {new Date(coverLetter.generatedAt).toLocaleString()}
+                    {coverLetter.editedAt && coverLetter.editedAt > coverLetter.generatedAt ? " · edited since" : ""}
+                  </span>
+                )}
+              </div>
+              {!coverHasText && (
+                <p className="text-muted-foreground">
+                  {draftedCount
+                    ? `Draft a one-page letter that expresses interest, summarizes the response, and says what makes this team uniquely positioned. It is written from the ${draftedCount} drafted section${draftedCount === 1 ? "" : "s"}.`
+                    : `Draft the response sections first — the cover letter summarizes them.`}
+                </p>
+              )}
+              {coverStale && (
+                <p className="text-cond">
+                  The response has changed since this letter was drafted. Regenerate it to reflect the current sections, or edit it by hand.
+                </p>
+              )}
+              {coverHasText && draftedCount < sections.length && (
+                <p className="text-muted-foreground">
+                  {sections.length - draftedCount} of {sections.length} sections are not drafted yet; the letter only reflects drafted sections.
+                </p>
+              )}
+              {coverConstraint && (
+                <p className="text-nogo">Check the response instructions before including a cover letter: “{coverConstraint}”</p>
+              )}
+            </div>
+          )}
+
           {/* Document editor */}
           <div className="bg-card rounded-xl border shadow-sm overflow-hidden relative">
-            <RichTextEditor
-              key={activeSection}
-              value={drafts[activeSection] ?? ""}
-              onChange={html => setDrafts(prev => ({ ...prev, [activeSection]: html }))}
-              disabled={generating}
-              label={activeMeta?.name}
-              required={activeMeta?.mandatory}
-              placeholder={`Write the ${activeMeta?.name ?? "section"}, or generate a grounded first pass.`}
-            />
-            {generating && (
-              <div className="absolute inset-0 bg-card/80 backdrop-blur-[1px] flex items-center justify-center z-10">
+            {isCover ? (
+              <RichTextEditor
+                key={COVER_LETTER_ID}
+                value={coverDraft}
+                onChange={handleCoverChange}
+                disabled={editorBusy}
+                label="Cover Letter"
+                placeholder="Write the cover letter, or draft it from the response sections."
+              />
+            ) : (
+              <RichTextEditor
+                key={activeSection}
+                value={drafts[activeSection] ?? ""}
+                onChange={html => handleDraftChange(activeSection, html)}
+                disabled={editorBusy}
+                label={activeMeta?.name}
+                required={activeMeta?.mandatory}
+                placeholder={`Write the ${activeMeta?.name ?? "section"}, or generate a grounded first pass.`}
+              />
+            )}
+            {editorBusy && job && (
+              <div className="absolute inset-0 bg-card/80 backdrop-blur-[1px] flex items-center justify-center z-10 px-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                  <span className="text-sm text-muted-foreground">{`Drafting the ${packageLabel}, gap log, and reviewer summary…`}</span>
+                  <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
+                  <span className="text-sm text-muted-foreground">
+                    {job.kind === "package" ? `Drafting the ${packageLabel}, Gap Log - Action Items, and reviewer summary…` : `${job.label}…`}
+                    <span className="block text-[11px]">You can leave this page — the draft keeps running and is saved when it finishes.</span>
+                  </span>
                 </div>
               </div>
             )}
           </div>
 
           {/* Assertion check results */}
-          {assertionResults && (
+          {assertionResults && !isCover && (
             <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
               <div className="px-5 py-3 border-b border-border flex items-center justify-between">
                 <h4 className="text-xs font-semibold text-foreground">Assertion Trace Results</h4>
@@ -837,15 +803,28 @@ export function ResponseBuilderView({
           )}
 
           {/* Actions */}
-          <div className="flex gap-2.5 flex-wrap">
-            <button onClick={() => void requestRfiPackage()} disabled={generating} className="text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm disabled:opacity-50">
-              {generating ? "Drafting…" : sections.some(section => !isEmptyRichText(drafts[section.id])) ? `Regenerate ${packageLabel}` : `Generate ${packageLabel}`}
+          <div className="flex gap-2.5 flex-wrap items-center">
+            <button onClick={requestRfiPackage} disabled={generating} className="text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm disabled:opacity-50">
+              {job?.kind === "package" ? "Drafting…" : draftedCount ? `Regenerate ${packageLabel}` : `Generate ${packageLabel}`}
             </button>
-            {!isRfi && !hasDraft && (
+            {isCover && (
+              <button
+                onClick={() => requestCoverLetter()}
+                disabled={generating || draftedCount === 0}
+                title={draftedCount === 0 ? "Draft the response sections first" : undefined}
+                className={cn(
+                  "text-xs font-medium px-4 py-2 rounded-md border cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed",
+                  coverStale ? "border-cond text-cond bg-card hover:bg-cond-soft" : "border-input bg-card text-foreground hover:bg-secondary",
+                )}
+              >
+                {job?.kind === "cover_letter" ? "Drafting letter…" : coverHasText ? "Regenerate cover letter" : "Draft cover letter"}
+              </button>
+            )}
+            {!isCover && !isRfi && !hasDraft && (
               <button onClick={handleGenerateDraft} disabled={generating} className="text-xs font-medium px-4 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary disabled:opacity-50">Draft this section only</button>
             )}
             {hasDraft && (
-              <button onClick={handleRegenerate} disabled={generating} className="text-xs font-medium px-4 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary disabled:opacity-50">{generating ? "Regenerating…" : "Regenerate section"}</button>
+              <button onClick={handleRegenerate} disabled={generating} className="text-xs font-medium px-4 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary disabled:opacity-50">{job?.kind === "section" && job.sectionId === activeSection ? "Regenerating…" : "Regenerate section"}</button>
             )}
             {hasDraft && (
               <button onClick={handleCheckAssertions} disabled={checking} className="text-xs font-medium px-4 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary disabled:opacity-50">{checking ? "Checking…" : "Check assertions"}</button>
@@ -853,52 +832,16 @@ export function ResponseBuilderView({
             {hasDraft && !reviewedSections.has(activeSection) && (
               <button onClick={handleMarkReviewed} className="text-xs font-semibold px-4 py-2 rounded-md bg-go text-white cursor-pointer transition-all hover:opacity-90 shadow-sm">Mark as reviewed</button>
             )}
-            {reviewedSections.has(activeSection) && (
+            {!isCover && reviewedSections.has(activeSection) && (
               <span className="text-xs font-semibold px-4 py-2 rounded-md bg-[hsl(var(--status-go-soft))] text-[hsl(var(--status-go))]">✓ Reviewed</span>
             )}
+            {job && !editorBusy && (
+              <span className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                {job.label}…
+              </span>
+            )}
           </div>
-
-          {/* Action items panel */}
-          {!rfiPacket && pursuit.responseActionItems && pursuit.responseActionItems.length > 0 && (
-            <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
-                <h3 className="oe-card-title">Outstanding Action Items</h3>
-                <span className="text-xs font-mono">
-                  <span className="text-cond font-semibold">{pursuit.responseActionItems.filter(r => r.status === "Open").length}</span> open
-                </span>
-              </div>
-              <div className="overflow-x-auto oe-touch-scroll">
-                <table className="w-full text-xs min-w-[640px]">
-                  <thead>
-                    <tr className="oe-table-header">
-                      <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Description</th>
-                      <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Assigned</th>
-                      <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Due Date</th>
-                      <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Status</th>
-                      <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Gates</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pursuit.responseActionItems.map(item => (
-                      <tr
-                        key={item.id}
-                        className="oe-table-row border-b border-border last:border-b-0 cursor-pointer"
-                        onClick={() => setActionItem(item)}
-                      >
-                        <td className="px-4 py-3 text-foreground">{item.description}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{item.assignedPartnerId ? getPartner(item.assignedPartnerId, partners)?.name : item.assignedInternal}</td>
-                        <td className="px-4 py-3 text-muted-foreground font-mono">{item.dueAt}</td>
-                        <td className="px-4 py-3">
-                          <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-md", item.status === "Open" ? "oe-status-cond" : "oe-status-go")}>{item.status}</span>
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">{item.gates.join(", ")}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Copilot panel */}
@@ -955,6 +898,14 @@ export function ResponseBuilderView({
       {/* Full Preview Modal */}
       <Modal open={previewOpen} onClose={() => setPreviewOpen(false)} title="Full Response Preview" wide>
         <div className="max-h-[70vh] overflow-y-auto space-y-6 p-2">
+          {coverHasText && (
+            <div>
+              <h3 className="text-sm font-bold text-foreground mb-2 border-b border-border pb-2">Cover Letter</h3>
+              <div className="text-sm text-foreground leading-relaxed">
+                <RichTextHtml html={coverDraft} />
+              </div>
+            </div>
+          )}
           {sections.map(s => (
             <div key={s.id}>
               <h3 className="text-sm font-bold text-foreground mb-2 border-b border-border pb-2">
@@ -1034,34 +985,24 @@ export function ResponseBuilderView({
         onClose={() => setActionItem(null)}
         onSave={updates => {
           if (!actionItem) return;
-          const listed = pursuit.responseActionItems ?? [];
-          const fromPacket = gapsToActionItems(rfiPacket?.gaps ?? [], partners)
-            .filter(item => !listed.some(existing => existing.id === item.id));
-          const baseItems = listed.some(item => item.id === actionItem.id) ? listed : [...listed, ...fromPacket];
-          const nextItems = baseItems.map(item =>
-            item.id === actionItem.id ? { ...item, ...updates } : item
-          );
-          const resolved = updates.status === "Done" || updates.status === "Resolved";
-          const nextPacket = rfiPacket
-            ? {
-              ...rfiPacket,
-              gaps: rfiPacket.gaps.map(gap => gap.id === actionItem.id
-                ? {
-                  ...gap,
-                  notes: updates.responseContent ?? gap.notes,
-                  status: resolved ? "Resolved" as const : gap.status,
-                }
-                : gap),
-            }
-            : rfiPacket;
-          if (nextPacket) setRfiPacket(nextPacket);
-          onUpdatePursuit(pursuit.id, {
-            responseActionItems: nextItems,
-            ...(nextPacket ? { rfiResponse: nextPacket } : {}),
-          });
-          toast("Action item updated", "success");
+          const id = actionItem.id;
+          const resolved = isResolvedStatus(updates.status);
+          onApplyToPursuit(pursuit.id, p => applyActionItemUpdate(p, id, updates, partners));
+          toast(resolved ? `${id} resolved — it will be used the next time the response is regenerated` : "Action item updated", "success");
         }}
       />
+
+      <Modal open={confirmCoverOpen} onClose={() => setConfirmCoverOpen(false)} title="Regenerate Cover Letter?">
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            This cover letter was edited after it was drafted. Regenerating replaces those edits with a new letter written from the current response sections.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <SecondaryButton onClick={() => setConfirmCoverOpen(false)}>Keep my edits</SecondaryButton>
+            <PrimaryButton onClick={() => { setConfirmCoverOpen(false); requestCoverLetter(true); }}>Regenerate</PrimaryButton>
+          </div>
+        </div>
+      </Modal>
 
       {/* Upload Final Modal */}
       <Modal open={uploadFinalOpen} onClose={() => setUploadFinalOpen(false)} title="Upload Final Submitted Document">
