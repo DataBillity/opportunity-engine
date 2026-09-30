@@ -3,6 +3,36 @@
  * Every intake boundary and every model output is parsed, not trusted.
  */
 import { z } from "zod";
+import { RfpGoNoGoAssessment } from "./rfp-gonogo";
+
+export {
+  parseRfpGoNoGo,
+  GoNoGoDecisionLabel,
+  GoNoGoConfidenceLabel,
+  GoNoGoRecommendation,
+  GoNoGoOpportunity,
+  GoNoGoGate,
+  GoNoGoScoreRow,
+  GoNoGoCriterion,
+  GoNoGoDocument,
+  GoNoGoRisk,
+  GoNoGoTeaming,
+  GoNoGoGap,
+  GoNoGoQuestion,
+  GoNoGoLotAssessment,
+  GoNoGoCondition,
+  GoNoGoKeyDate,
+  RfpGoNoGoAssessment,
+} from "./rfp-gonogo";
+export type {
+  GoNoGoDecisionLabel as GoNoGoDecision,
+  GoNoGoConfidenceLabel as GoNoGoConfidence,
+  GoNoGoRecommendation as GoNoGoRecommendationFields,
+  GoNoGoOpportunity as GoNoGoOpportunityFields,
+  GoNoGoGate as GoNoGoGateFields,
+  GoNoGoScoreRow as GoNoGoScoreRowFields,
+  RfpGoNoGoAssessment as RfpGoNoGoAssessmentFields,
+} from "./rfp-gonogo";
 
 // Scoring weights (40/35/25 for Opportunity Alignment)
 export const OpportunityAlignmentWeights = z.object({
@@ -481,6 +511,7 @@ export const PursuitIngestResult = z.object({
   usedModel: z.boolean(),
   warning: z.string().optional(),
   summarySource: ScopeSummarySource.optional(),
+  goNoGo: RfpGoNoGoAssessment.optional(),
 });
 
 export type OpportunityAlignmentWeights = z.infer<typeof OpportunityAlignmentWeights>;

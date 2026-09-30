@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { PursuitIngestResult, type ScopeSummarySource } from "@opportunity-engine/contracts";
+import { PursuitIngestResult, type RfpGoNoGoAssessment, type ScopeSummarySource } from "@opportunity-engine/contracts";
 import {
+  applyGoNoGoToTriage,
   capSourceText,
   combineSolicitationDocuments,
+  enforceGoNoGoRules,
   orderSolicitationDocuments,
   extractSolicitationHeuristic,
   mergeSolicitationExtractions,
@@ -11,11 +13,13 @@ import {
   scorePursuitTriage,
 } from "@opportunity-engine/core";
 import {
+  assessRfpGoNoGo,
   extractSolicitationWithModel,
   getAvailableProviders,
   describeMissingKeys,
   ModelGatewayError,
 } from "@opportunity-engine/ai";
+import { buildGoNoGoSources } from "@/lib/gonogo-sources";
 import {
   extractDocumentText,
   kindForLane,
@@ -124,6 +128,10 @@ export async function POST(request: Request) {
   let usedModel = false;
   let warning: string | undefined;
   let summarySource: ScopeSummarySource = { engine: "heuristic" };
+  let goNoGo: RfpGoNoGoAssessment | undefined;
+  let enforcedGoNoGo: ReturnType<typeof enforceGoNoGoRules> | undefined;
+  let goNoGoModel: { provider: "claude" | "gemini"; modelVersion: string } | undefined;
+  const workspace = await readSharedWorkspace().catch(() => null);
 
   if (!capped.text) {
     warning = extracted.length
@@ -132,16 +140,42 @@ export async function POST(request: Request) {
   } else {
     const providers = getAvailableProviders();
     if (providers.claude || providers.gemini) {
-      try {
-        const model = await extractSolicitationWithModel({
+      const documentNames = ordered.map(doc => doc.name);
+      const goNoGoSources = projectType === "rfp"
+        ? buildGoNoGoSources({
+          documentText: capped.text,
+          documentNames,
+          organizationName,
+          partners: workspace?.partners ?? [],
+          graph: workspace?.graph ?? { capabilities: [], experience: [], credentials: [], people: [] },
+          pursuits: workspace?.pursuits,
+          organizations: workspace?.organizations,
+        })
+        : null;
+      const [modelOutcome, goNoGoOutcome] = await Promise.all([
+        extractSolicitationWithModel({
           filename: primaryName,
           lane,
           projectType,
           organizationName,
           organizationIndustry,
           documentText: capped.text,
-          documentNames: ordered.map(doc => doc.name),
-        });
+          documentNames,
+        }).then(model => ({ ok: true as const, model }), err => ({ ok: false as const, err })),
+        goNoGoSources
+          ? assessRfpGoNoGo(goNoGoSources).then(
+            result => ({
+              ok: true as const,
+              enforced: enforceGoNoGoRules(result.assessment),
+              provider: result.provider,
+              modelVersion: result.modelVersion,
+            }),
+            err => ({ ok: false as const, err }),
+          )
+          : Promise.resolve(null),
+      ]);
+      if (modelOutcome.ok) {
+        const model = modelOutcome.model;
         extraction = mergeSolicitationExtractions(heuristic, model.extraction, {
           trustOverlayScope: projectType === "rfi" && model.summaryFromModel,
         });
@@ -161,11 +195,23 @@ export async function POST(request: Request) {
           warning = `The model summary failed (${model.summaryError ?? "unknown error"}). The Scope Summary came from the text parser.`;
           summarySource = { engine: "heuristic", note: warning };
         }
-      } catch (err) {
+      } else {
+        const err = modelOutcome.err;
         warning = err instanceof ModelGatewayError
           ? `Model extraction unavailable (${err.message}). Used the heuristic parser.`
           : "Model extraction failed. Used the heuristic parser.";
         summarySource = { engine: "heuristic", note: warning };
+      }
+      if (goNoGoOutcome?.ok) {
+        enforcedGoNoGo = goNoGoOutcome.enforced;
+        goNoGo = enforcedGoNoGo.assessment;
+        goNoGoModel = { provider: goNoGoOutcome.provider, modelVersion: goNoGoOutcome.modelVersion };
+        usedModel = true;
+      } else if (goNoGoOutcome && !goNoGoOutcome.ok) {
+        const err = goNoGoOutcome.err;
+        const detail = err instanceof Error ? err.message : "unknown error";
+        const note = `Go/No-Go assessment unavailable (${detail}). The recommendation uses requirement coverage.`;
+        warning = warning ? `${warning} ${note}` : note;
       }
     } else {
       summarySource = { engine: "heuristic", note: "No model API keys are configured." };
@@ -183,12 +229,11 @@ export async function POST(request: Request) {
     };
   }
 
-  const workspace = await readSharedWorkspace().catch(() => null);
   const capabilityCatalog = (workspace?.graph.capabilities ?? [])
     .filter(item => item.status !== "Archived")
     .map(item => ({ name: item.name }));
 
-  const triage = scorePursuitTriage({
+  const coverage = scorePursuitTriage({
     extraction,
     sourceText: capped.text,
     lane,
@@ -204,6 +249,8 @@ export async function POST(request: Request) {
     modelVersion,
     capabilityCatalog,
   });
+  const assessed = enforcedGoNoGo ? applyGoNoGoToTriage(coverage, enforcedGoNoGo) : coverage;
+  const triage = goNoGoModel ? { ...assessed, provider: goNoGoModel.provider, modelVersion: goNoGoModel.modelVersion } : assessed;
 
   const payload = PursuitIngestResult.parse({
     documents: extracted.map(doc => ({
@@ -221,6 +268,7 @@ export async function POST(request: Request) {
     usedModel,
     warning,
     summarySource,
+    goNoGo,
   });
 
   return NextResponse.json(payload);

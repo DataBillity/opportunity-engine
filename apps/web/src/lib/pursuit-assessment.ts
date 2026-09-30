@@ -1,4 +1,4 @@
-import { PARTNER_COVERAGE_NODE, reassessPursuit, recDecisionLabel, type ReassessResult } from "@opportunity-engine/core";
+import { PARTNER_COVERAGE_NODE, reassessPursuit, recDecisionLabel, type GoNoGoFields, type ReassessResult } from "@opportunity-engine/core";
 import type {
   GraphData,
   Partner,
@@ -49,7 +49,7 @@ export function platformRecommendation(pursuit: Pursuit): PursuitRecommendation 
   };
 }
 
-/** A decision disagrees with the platform when it is Go against No-Go, or No-Go against Go / Go with conditions. */
+/** A decision disagrees with the platform when it is Go against No-Go, or No-Go against Go / Conditional Go. */
 export function isOverride(value: PursuitDecision["value"], platformRec: Pursuit["rec"]): boolean {
   return value === "go" ? platformRec === "nogo" : platformRec === "go" || platformRec === "cond";
 }
@@ -282,6 +282,64 @@ export function reassessForTeam(input: {
           recRule: result.recRule,
         }
         : undefined,
+      assessments: [assessment, ...(pursuit.assessments ?? [])].slice(0, MAX_ASSESSMENTS),
+    },
+  };
+}
+
+/** Replace the platform recommendation with a fresh RFP Go/No-Go packet. A recorded decision is kept. */
+export function applyGoNoGoRerun(input: {
+  pursuit: Pursuit;
+  teamIds: string[];
+  trigger: PursuitAssessment["trigger"];
+  partnerName?: string;
+  result: GoNoGoFields;
+}): AssessmentOutcome {
+  const { pursuit, teamIds, trigger, partnerName, result } = input;
+  const projectType = projectTypeOf(pursuit);
+  const platform = platformRecommendation(pursuit);
+  const decision = decisionOf(pursuit);
+  const scoreMoved = result.score !== platform.score;
+  const recMoved = result.rec !== platform.rec;
+  const lead = trigger === "partner_added"
+    ? `Added ${partnerName ?? "partner"}.`
+    : trigger === "partner_removed"
+      ? `Removed ${partnerName ?? "partner"}.`
+      : "Reran the Go/No-Go assessment against the current team and Capability Sources.";
+  const parts = [
+    lead,
+    recMoved
+      ? `Recommendation ${recLabel(platform.rec, projectType)} → ${recLabel(result.rec, projectType)} (${platform.score} → ${result.score}). ${result.recRule}`
+      : `Recommendation stays ${recLabel(result.rec, projectType)}${scoreMoved ? ` (score ${platform.score} → ${result.score})` : ""}.`,
+  ];
+  if (decision && isOverride(decision.value, result.rec)) {
+    parts.push(`Your ${recLabel(decision.value, projectType)} decision stands and now differs from the platform recommendation.`);
+  }
+  const summary = parts.join(" ");
+  const at = nowIso();
+  const priorMapped = pursuit.reqmap.filter(row => row.status === "mapped").length;
+  const assessment: PursuitAssessment = {
+    at,
+    trigger,
+    summary,
+    from: { score: platform.score, rec: platform.rec, mapped: priorMapped, total: pursuit.reqmap.length },
+    to: { score: result.score, rec: result.rec, mapped: priorMapped, total: pursuit.reqmap.length },
+  };
+  return {
+    changed: recMoved || scoreMoved,
+    assessable: true,
+    summary,
+    updates: {
+      includedPartnerIds: teamIds,
+      goNoGo: result.assessment,
+      score: result.score,
+      confidence: result.confidence,
+      confidenceNote: result.confidenceNote,
+      rationale: result.rationale,
+      platformRec: { rec: result.rec, score: result.score, confidence: result.confidence, reason: result.recRule, at },
+      rec: decision ? decision.value : result.rec,
+      status: decision || pursuit.closed ? pursuit.status : "Go/No-Go assessment complete",
+      scoreBreakdown: pursuit.scoreBreakdown ? { ...pursuit.scoreBreakdown, recRule: result.recRule } : undefined,
       assessments: [assessment, ...(pursuit.assessments ?? [])].slice(0, MAX_ASSESSMENTS),
     },
   };

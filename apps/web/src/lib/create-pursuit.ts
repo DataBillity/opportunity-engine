@@ -154,6 +154,7 @@ export function applyIngestToPursuit(
     sourceText: result.sourceText,
     sourceTextTruncated: result.sourceTextTruncated,
     triageMode: result.usedModel ? "model" : result.sourceText ? "heuristic" : "pending",
+    goNoGo: result.goNoGo,
     decisionRecord: {
       ...pursuit.decisionRecord,
       type: projectType === "rfi"

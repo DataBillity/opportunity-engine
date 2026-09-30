@@ -78,7 +78,7 @@ export function recDecisionLabel(
   if (projectType === "rfi") {
     return { go: "Respond", nogo: "Pass", cond: "Respond with caveats", pending: "Pending" }[rec];
   }
-  return { go: "Go", nogo: "No-Go", cond: "Go with conditions", pending: "Pending" }[rec];
+  return { go: "Go", nogo: "No-Go", cond: "Conditional Go", pending: "Pending" }[rec];
 }
 
 export function recShortLabel(
@@ -88,7 +88,7 @@ export function recShortLabel(
   if (projectType === "rfi") {
     return { go: "RESPOND", nogo: "PASS", cond: "CAVEATS", pending: "PENDING" }[rec];
   }
-  return { go: "GO", nogo: "NO-GO", cond: "CONDITIONS", pending: "PENDING" }[rec];
+  return { go: "GO", nogo: "NO-GO", cond: "CONDITIONAL GO", pending: "PENDING" }[rec];
 }
 
 export function isRfiDocument(text: string, filename = ""): boolean {

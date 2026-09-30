@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/toast";
 import { OutreachComposer } from "@/components/outreach/outreach-composer";
 import { DocumentDropzone } from "@/components/pursuit/document-dropzone";
 import { RfiScopeSummaryBody } from "./rfi-scope-summary";
+import { RfpGoNoGoAssessmentView } from "./rfp-gonogo-assessment";
 import { applyIngestToPursuit, ingestPursuitDocuments, recLabel } from "@/lib/create-pursuit";
 import { recShortLabel } from "@opportunity-engine/core";
 import { useOperator } from "@/components/auth/operator-provider";
@@ -21,9 +22,11 @@ import {
   partnerComposition as buildPartnerComposition,
   platformRecommendation,
   projectTypeOf,
+  applyGoNoGoRerun,
   reassessForTeam,
   teamIdsFor,
 } from "@/lib/pursuit-assessment";
+import { requestGoNoGoAssessment } from "@/lib/gonogo-client";
 import { gapForRequirement } from "@opportunity-engine/core";
 import { GapLogActionItems } from "@/components/action-items/gap-log-action-items";
 import { applyActionItemUpdate, gapLogRows, gapsToActionItems, isResolvedStatus } from "@/lib/gap-log";
@@ -121,8 +124,9 @@ export function OpportunityView({
   const partnerComposition = buildPartnerComposition(pursuit, allPartners, graph);
   const teamIds = teamIdsFor(pursuit, allPartners, graph);
   const [addPartnerToOppOpen, setAddPartnerToOppOpen] = useState(false);
+  const [assessing, setAssessing] = useState(false);
 
-  function reassess(nextTeam: string[], trigger: "partner_added" | "partner_removed" | "rerun", partner?: Partner) {
+  function reassessCoverage(nextTeam: string[], trigger: "partner_added" | "partner_removed" | "rerun", partner?: Partner) {
     if (!graph) {
       onUpdatePursuit(pursuit.id, { includedPartnerIds: nextTeam });
       return;
@@ -138,6 +142,48 @@ export function OpportunityView({
     onUpdatePursuit(pursuit.id, outcome.updates);
     const worse = outcome.updates.score !== undefined && outcome.updates.score < pursuit.score;
     toast(outcome.summary, worse ? "warning" : "success");
+  }
+
+  async function reassess(nextTeam: string[], trigger: "partner_added" | "partner_removed" | "rerun", partner?: Partner) {
+    if (pursuit.goNoGo && projectTypeOf(pursuit) === "rfp" && !pursuit.sourceText?.trim()) {
+      onUpdatePursuit(pursuit.id, { includedPartnerIds: nextTeam });
+      toast("The RFP text is no longer available, so the Go/No-Go recommendation was left as it is.", "warning");
+      return;
+    }
+    const rerunModel = projectTypeOf(pursuit) === "rfp" && Boolean(pursuit.sourceText?.trim()) && (pursuit.goNoGo || trigger === "rerun");
+    if (!rerunModel) {
+      reassessCoverage(nextTeam, trigger, partner);
+      return;
+    }
+    if (assessing) return;
+    setAssessing(true);
+    try {
+      const result = await requestGoNoGoAssessment({
+        sourceText: pursuit.sourceText ?? "",
+        documentNames: pursuit.documents.map(doc => doc.name),
+        organizationName: org.name,
+        teamPartnerIds: nextTeam,
+      });
+      const outcome = applyGoNoGoRerun({
+        pursuit,
+        teamIds: nextTeam,
+        trigger,
+        partnerName: partner?.name,
+        result,
+      });
+      onUpdatePursuit(pursuit.id, outcome.updates);
+      const worse = outcome.updates.score !== undefined && outcome.updates.score < pursuit.score;
+      toast(outcome.summary, worse ? "warning" : "success");
+    } catch (err) {
+      if (pursuit.goNoGo) {
+        onUpdatePursuit(pursuit.id, { includedPartnerIds: nextTeam });
+        toast(err instanceof Error ? err.message : "The Go/No-Go assessment could not be rerun. The previous recommendation is unchanged.", "warning");
+      } else {
+        reassessCoverage(nextTeam, trigger, partner);
+      }
+    } finally {
+      setAssessing(false);
+    }
   }
 
   function handleRemovePartnerFromOpp(partnerId: string) {
@@ -273,11 +319,15 @@ export function OpportunityView({
               </button>
               <button
                 onClick={handleRerunAssessment}
-                disabled={!graph || pursuit.closed}
-                title="Re-score coverage, score, and recommendation using the current partners and Capability Sources"
+                disabled={!graph || pursuit.closed || assessing}
+                title={projectType === "rfp"
+                  ? "Re-score the Go/No-Go assessment using the current partners and Capability Sources"
+                  : projectType === "rfi"
+                    ? "Re-score topic coverage using the current partners and Capability Sources"
+                    : "Re-score coverage using the current partners and Capability Sources"}
                 className="text-xs font-medium px-3.5 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Rerun Assessment
+                {assessing ? "Assessing…" : "Rerun Assessment"}
               </button>
               <button
                 onClick={() => setDeleteOpen(true)}
@@ -302,7 +352,12 @@ export function OpportunityView({
               </div>
             )}
             <div className="text-[11px] text-muted-foreground mt-1">
-              Confidence: <span className="font-mono font-semibold text-foreground">{pursuit.confidence}%</span>
+              Confidence:{" "}
+              {pursuit.goNoGo ? (
+                <span className="font-semibold text-foreground">{pursuit.goNoGo.recommendation.confidence}</span>
+              ) : (
+                <span className="font-mono font-semibold text-foreground">{pursuit.confidence}%</span>
+              )}
             </div>
           </div>
         </div>
@@ -398,30 +453,53 @@ export function OpportunityView({
         <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
             <h3 className="oe-card-title">How this was scored</h3>
-            <span className="text-[11px] text-muted-foreground font-mono">{isRfi ? "RFI" : "RFP-03"}</span>
+            <span className="text-[11px] text-muted-foreground font-mono">{isRfi ? "RFI" : pursuit.goNoGo ? "Go/No-Go" : "RFP-03"}</span>
           </div>
           <div className="p-5 space-y-3 text-sm text-foreground">
-            <p>
-              <strong>Score ({pursuit.score}/100)</strong> is opportunity alignment:
-              {" "}40% capability, 35% intent/timing, 25% account value
-              {breakdown ? ` — capability ${breakdown.capabilityAlignment}, intent ${breakdown.intentTiming}, account ${breakdown.accountValueFit}${breakdown.inboundIntentUplift ? `, inbound +${breakdown.inboundIntentUplift}` : ""}` : ""}.
-              It is not a {isRfi ? "Respond" : "Go"} cutoff.
-            </p>
-            <p>
-              <strong>Confidence ({pursuit.confidence}%)</strong>{" "}
-              {pursuit.confidenceNote
-                ?? "is extraction and mapping certainty, not the opportunity score. Thin requirement mapping keeps confidence near 50% even when intent and account value lift the score."}
-            </p>
-            <p>
-              <strong>Platform recommendation ({recLabel(platform.rec, projectType)})</strong>{" "}
-              {isRfi
-                ? "uses the purpose, challenges, and likely services — not page limits or the questions in the response worksheet."
-                : `uses coverage gates, not “score ≥ 75”. ${recLabel("go", projectType)} needs ≥ ${breakdown?.goCoverageFloor ?? 75}% requirement coverage and score ≥ ${breakdown?.goScoreFloor ?? 68}.`}
-              {breakdown && !isRfi && (
-                <> Coverage here is {breakdown.mappedCount} of {breakdown.totalRequirements} ({breakdown.coveragePct}%).{breakdown.passFailBlocked ? " An unmapped pass/fail requirement also blocks Go." : ""}{breakdown.documentOverlapCount > 0 ? ` Document language overlap (${breakdown.documentOverlapCount} topics) can lift the score without counting as mapped requirements.` : ""}</>
-              )}
-              {breakdown?.recRule ? ` ${breakdown.recRule}` : ""}
-            </p>
+            {pursuit.goNoGo ? (
+              <>
+                <p>
+                  <strong>Score ({pursuit.goNoGo.recommendation.score}/100)</strong> is the weighted average of the factor scores, times 20.
+                  {" "}<span className="font-mono text-xs">{pursuit.goNoGo.recommendation.scoreMath}</span>
+                </p>
+                <p>
+                  <strong>Recommendation ({pursuit.goNoGo.recommendation.decision})</strong>{" "}
+                  Go requires 70 or higher and every gate at Pass. Conditional Go is 55 through 69, and also when any gate is Curable or Unknown. No-Go is below 55, and when any gate is Fail. A contract-and-delivery score of 1 cannot be a Go. A capability score of 1 is No-Go unless a registered Partner covers the gap. People confirm the decision.
+                </p>
+                <p>
+                  <strong>Confidence ({pursuit.goNoGo.recommendation.confidence})</strong>{" "}
+                  {pursuit.confidenceNote}
+                </p>
+                {pursuit.goNoGo.recommendation.decideBy && (
+                  <p><strong>Decide by</strong> {pursuit.goNoGo.recommendation.decideBy}.</p>
+                )}
+                {pursuit.goNoGo.recommendation.upside && <p>{pursuit.goNoGo.recommendation.upside}</p>}
+              </>
+            ) : (
+              <>
+                <p>
+                  <strong>Score ({pursuit.score}/100)</strong> is opportunity alignment:
+                  {" "}40% capability, 35% intent/timing, 25% account value
+                  {breakdown ? ` — capability ${breakdown.capabilityAlignment}, intent ${breakdown.intentTiming}, account ${breakdown.accountValueFit}${breakdown.inboundIntentUplift ? `, inbound +${breakdown.inboundIntentUplift}` : ""}` : ""}.
+                  It is not a {isRfi ? "Respond" : "Go"} cutoff.
+                </p>
+                <p>
+                  <strong>Confidence ({pursuit.confidence}%)</strong>{" "}
+                  {pursuit.confidenceNote
+                    ?? "is extraction and mapping certainty, not the opportunity score. Thin requirement mapping keeps confidence near 50% even when intent and account value lift the score."}
+                </p>
+                <p>
+                  <strong>Platform recommendation ({recLabel(platform.rec, projectType)})</strong>{" "}
+                  {isRfi
+                    ? "uses the purpose, challenges, and likely services — not page limits or the questions in the response worksheet."
+                    : `uses coverage gates. ${recLabel("go", projectType)} needs ≥ ${breakdown?.goCoverageFloor ?? 75}% requirement coverage and score ≥ ${breakdown?.goScoreFloor ?? 68}.`}
+                  {breakdown && !isRfi && (
+                    <> Coverage here is {breakdown.mappedCount} of {breakdown.totalRequirements} ({breakdown.coveragePct}%).{breakdown.passFailBlocked ? " An unmapped pass/fail requirement also blocks Go." : ""}{breakdown.documentOverlapCount > 0 ? ` Document language overlap (${breakdown.documentOverlapCount} topics) can lift the score without counting as mapped requirements.` : ""}</>
+                  )}
+                  {breakdown?.recRule ? ` ${breakdown.recRule}` : ""}
+                </p>
+              </>
+            )}
           </div>
         </div>
 
@@ -437,6 +515,8 @@ export function OpportunityView({
             </ul>
           </div>
         </div>
+
+        {pursuit.goNoGo && <RfpGoNoGoAssessmentView assessment={pursuit.goNoGo} />}
 
         {/* Partner composition card */}
         {allPartners.length > 0 && (

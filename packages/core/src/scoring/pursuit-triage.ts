@@ -306,7 +306,7 @@ export function recommendFromCoverage(input: {
     return { rec: "go", recRule: `Go requires ≥ ${Math.round(thresholds.goCoverage * 100)}% requirement coverage and score ≥ ${thresholds.goScore}.` };
   }
   if (coverage >= thresholds.condCoverage && score >= thresholds.condScore) {
-    return { rec: "cond", recRule: `Go with conditions: coverage ≥ ${Math.round(thresholds.condCoverage * 100)}% and score ≥ ${thresholds.condScore}.` };
+    return { rec: "cond", recRule: `Conditional Go: coverage ≥ ${Math.round(thresholds.condCoverage * 100)}% and score ≥ ${thresholds.condScore}.` };
   }
   return {
     rec: "nogo",

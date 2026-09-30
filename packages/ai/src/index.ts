@@ -42,4 +42,11 @@ export {
   COVER_LETTER_MAX_WORDS,
   COVER_LETTER_PROMPT_VERSION,
 } from "./cover-letter";
+export {
+  assessRfpGoNoGo,
+  buildRfpGoNoGoUserPrompt,
+  RFP_GONOGO_PROMPT,
+  RFP_GONOGO_PROMPT_VERSION,
+} from "./rfp-gonogo";
+export type { RfpGoNoGoSources, RfpGoNoGoModelResult } from "./rfp-gonogo";
 export type { CoverLetterDraft } from "./cover-letter";

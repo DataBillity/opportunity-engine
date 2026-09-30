@@ -1,4 +1,15 @@
 export { computeOpportunityAlignment, computeCapabilityAlignment } from "./scoring/opportunity-alignment";
+export {
+  applyGoNoGoToTriage,
+  enforceGoNoGoRules,
+  goNoGoFields,
+  partnerCoversCapabilityGap,
+  recFromDecision,
+  confidencePercent,
+  GONOGO_GO_SCORE,
+  GONOGO_CONDITIONAL_SCORE,
+} from "./scoring/rfp-gonogo";
+export type { EnforcedGoNoGo, GoNoGoFields } from "./scoring/rfp-gonogo";
 export { reassessPursuit, gapForRequirement, PARTNER_COVERAGE_NODE } from "./scoring/reassess";
 export type {
   ReassessInput,

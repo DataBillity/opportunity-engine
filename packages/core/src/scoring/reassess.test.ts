@@ -44,8 +44,8 @@ describe("reassessPursuit", () => {
     });
     expect(result.changes).toHaveLength(1);
     expect(result.changes[0]).toMatchObject({ to: "unmapped", partners: ["Uplift Partners"] });
-    expect(result.reqmap[1].status).toBe("mapped");
-    expect(result.reqmap[3].status).toBe("mapped");
+    expect(result.reqmap[1]?.status).toBe("mapped");
+    expect(result.reqmap[3]?.status).toBe("mapped");
     expect(result.gaps.map(gap => gap.id)).toEqual(["GAP-122", "GAP-121"]);
     expect(result.score).toBeLessThan(70);
   });
@@ -71,7 +71,7 @@ describe("reassessPursuit", () => {
     expect(added.reqmap[2]).toMatchObject({ status: "mapped", node: "Partner coverage: Xavier Labs", gapId: "GAP-121" });
 
     const removed = reassessPursuit({ ...base, reqmap: added.reqmap, gaps: added.gaps });
-    expect(removed.reqmap[2].status).toBe("unmapped");
+    expect(removed.reqmap[2]?.status).toBe("unmapped");
     expect(removed.gaps.map(gap => gap.id)).toEqual(["GAP-121"]);
   });
 

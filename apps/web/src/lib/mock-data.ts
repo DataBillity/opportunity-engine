@@ -2,7 +2,7 @@
  * Mock data layer — mirrors the UI POV's demonstration dataset.
  * Will be replaced by real DB queries as phases complete.
  */
-import type { RfiScopeSummary, ScopeSummarySource } from "@opportunity-engine/contracts";
+import type { RfiScopeSummary, RfpGoNoGoAssessment, ScopeSummarySource } from "@opportunity-engine/contracts";
 
 export interface Organization {
   id: string;
@@ -137,6 +137,8 @@ export interface Pursuit {
   /** Response Builder section drafts, keyed by section id (HTML). */
   responseDrafts?: Record<string, string>;
   coverLetter?: PursuitCoverLetter;
+  /** Model Go/No-Go packet for an RFP. Score and recommendation follow its rules. */
+  goNoGo?: RfpGoNoGoAssessment;
 }
 
 export interface PursuitRecommendation {
