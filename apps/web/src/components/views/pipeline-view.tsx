@@ -2,8 +2,10 @@
 
 import { useState, useMemo } from "react";
 import type { Organization, Pursuit } from "@/lib/mock-data";
-import { Modal } from "@/components/ui/modal";
+import { isDemonstrationOrg } from "@/lib/mock-data";
+import { Modal, FormField, TextArea, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { applyScoreOverride } from "@/lib/discovery-score";
 import { OutreachComposer } from "@/components/outreach/outreach-composer";
 import { AddPursuitForm } from "@/components/pursuit/add-pursuit-form";
 import { createPursuitFromForm, recLabel } from "@/lib/create-pursuit";
@@ -56,6 +58,7 @@ export function PipelineView({
   onAddPursuit,
   onArchiveOrg,
   onRefreshAllScores,
+  onUpdateOrg,
 }: {
   laneFilter: string;
   onOrgSelect: (id: string) => void;
@@ -64,6 +67,7 @@ export function PipelineView({
   onAddPursuit: (pursuit: Pursuit) => void;
   onArchiveOrg?: (orgId: string) => void;
   onRefreshAllScores?: () => void;
+  onUpdateOrg?: (orgId: string, updates: Partial<Organization>) => void;
 }) {
   const { toast } = useToast();
 
@@ -75,6 +79,10 @@ export function PipelineView({
 
   const [sortCol, setSortCol] = useState<SortColumn>("score");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [hideDemonstration, setHideDemonstration] = useState(true);
+  const [overrideOrg, setOverrideOrg] = useState<Organization | null>(null);
+  const [overrideScore, setOverrideScore] = useState("");
+  const [overrideNote, setOverrideNote] = useState("");
 
   const [filterCol, setFilterCol] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
@@ -88,7 +96,8 @@ export function PipelineView({
     }
   }
 
-  const visibleOrgs = orgs.filter(o => !o.archived);
+  const visibleOrgs = orgs.filter(o => !o.archived && (!hideDemonstration || !isDemonstrationOrg(o)));
+  const demonstrationCount = orgs.filter(o => !o.archived && isDemonstrationOrg(o)).length;
 
   let rows = visibleOrgs;
   if (laneFilter && laneFilter !== "all") {
@@ -165,8 +174,27 @@ export function PipelineView({
   function handleRefreshAll() {
     if (onRefreshAllScores) {
       onRefreshAllScores();
-      toast("Refreshing scores for all pipeline leads…", "info");
+      toast("Re-scored the pipeline against the current capability graph", "success");
     }
+  }
+
+  function saveOverride() {
+    if (!overrideOrg || !onUpdateOrg) return;
+    const score = Number(overrideScore);
+    if (!Number.isFinite(score) || !overrideNote.trim()) {
+      toast("Enter a score and the reason for the override.", "warning");
+      return;
+    }
+    const next = applyScoreOverride(overrideOrg, score, overrideNote);
+    onUpdateOrg(overrideOrg.id, {
+      score: next.score,
+      scoreOverride: next.scoreOverride,
+      scoreHistory: next.scoreHistory,
+    });
+    toast(`Score for ${overrideOrg.name} set to ${next.score}`, "success");
+    setOverrideOrg(null);
+    setOverrideNote("");
+    setOverrideScore("");
   }
 
   function handleArchive(e: React.MouseEvent, orgId: string) {
@@ -193,7 +221,7 @@ export function PipelineView({
         <div>
           <h1 className="oe-page-title">Pipeline</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Every organization currently being worked — from search &amp; discovery, direct leads, or partner introductions.
+            One ranked board for outbound discovery, inbound inquiries, and partner introductions. Channel is an attribute, not a separate score.
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -233,6 +261,15 @@ export function PipelineView({
             Clear
           </button>
         )}
+        {demonstrationCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setHideDemonstration(value => !value)}
+            className="text-[11px] font-medium text-muted-foreground hover:text-foreground cursor-pointer"
+          >
+            {hideDemonstration ? `Show ${demonstrationCount} demonstration account${demonstrationCount === 1 ? "" : "s"}` : "Hide demonstration accounts"}
+          </button>
+        )}
       </div>
 
       {/* Table card */}
@@ -251,6 +288,7 @@ export function PipelineView({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-semibold text-foreground">{org.name}</div>
+                    <LeadMarks org={org} />
                     <div className="text-xs text-muted-foreground mt-0.5">
                       {org.industry || "—"} · {org.channel}{org.source ? ` · ${org.source}` : ""}
                     </div>
@@ -261,6 +299,11 @@ export function PipelineView({
                     </div>
                     <span className="font-mono font-bold text-foreground w-7 text-right">{score}</span>
                   </div>
+                  {org.scoreBreakdown && (
+                    <div className="text-[10px] font-mono text-muted-foreground text-right">
+                      {org.scoreBreakdown.capabilityAlignment} / {org.scoreBreakdown.intentTiming} / {org.scoreBreakdown.accountValueFit}
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-1.5 items-center flex-wrap">
                   {active.map(p => (
@@ -302,6 +345,18 @@ export function PipelineView({
                   >
                     Add Project
                   </button>
+                  {onUpdateOrg && (
+                    <button
+                      onClick={() => {
+                        setOverrideOrg(org);
+                        setOverrideScore(String(org.score));
+                        setOverrideNote("");
+                      }}
+                      className="text-xs font-medium px-3 py-1.5 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+                    >
+                      Override
+                    </button>
+                  )}
                   {onArchiveOrg && (
                     <button
                       onClick={e => handleArchive(e, org.id)}
@@ -314,6 +369,12 @@ export function PipelineView({
               </div>
             );
           })}
+          {sortedRows.length === 0 && (
+            <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+              No live accounts on this board. Run Search &amp; Discovery, add an inbound lead, or import a Connections.csv.
+              {hideDemonstration && demonstrationCount > 0 ? " Demonstration accounts are hidden." : ""}
+            </div>
+          )}
         </div>
 
         <div className="hidden lg:block overflow-x-auto oe-touch-scroll">
@@ -347,7 +408,10 @@ export function PipelineView({
                     className="oe-table-row cursor-pointer border-b border-border last:border-b-0"
                     onClick={() => onOrgSelect(org.id)}
                   >
-                    <td className="px-3 lg:px-4 py-3.5 font-semibold text-foreground">{org.name}</td>
+                    <td className="px-3 lg:px-4 py-3.5 font-semibold text-foreground">
+                      <div>{org.name}</div>
+                      <LeadMarks org={org} />
+                    </td>
                     <td className="px-3 lg:px-4 py-3.5 text-muted-foreground hidden lg:table-cell">{org.industry || "—"}</td>
                     <td className="px-3 lg:px-4 py-3.5 text-foreground">{org.channel}</td>
                     <td className="px-3 lg:px-4 py-3.5 text-muted-foreground">{org.source || "—"}</td>
@@ -361,6 +425,11 @@ export function PipelineView({
                         </div>
                         <span className="font-mono font-bold text-foreground w-7 text-right">{score}</span>
                       </div>
+                      {org.scoreBreakdown && (
+                        <div className="text-[10px] font-mono text-muted-foreground mt-1">
+                          {org.scoreBreakdown.capabilityAlignment} / {org.scoreBreakdown.intentTiming} / {org.scoreBreakdown.accountValueFit}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 lg:px-4 py-3.5">
                       <div className="flex gap-1.5 items-center flex-wrap">
@@ -405,6 +474,18 @@ export function PipelineView({
                         >
                           Add Project
                         </button>
+                        {onUpdateOrg && (
+                          <button
+                            onClick={() => {
+                              setOverrideOrg(org);
+                              setOverrideScore(String(org.score));
+                              setOverrideNote("");
+                            }}
+                            className="text-xs font-medium px-3 py-1.5 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+                          >
+                            Override
+                          </button>
+                        )}
                         {onArchiveOrg && (
                           <button
                             onClick={e => handleArchive(e, org.id)}
@@ -419,6 +500,13 @@ export function PipelineView({
                   </tr>
                 );
               })}
+              {sortedRows.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                    No live accounts on this board. Run Search &amp; Discovery or add an inbound lead.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -450,6 +538,42 @@ export function PipelineView({
           onSubmit={handleCreatePursuit}
         />
       </Modal>
+
+      <Modal open={Boolean(overrideOrg)} onClose={() => setOverrideOrg(null)} title={`Override score — ${overrideOrg?.name ?? ""}`}>
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            A recorded override replaces the automated score. The note stays on the score history.
+          </p>
+          <FormField label="Score">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={overrideScore}
+              onChange={e => setOverrideScore(e.target.value)}
+              className="oe-field text-xs w-24"
+            />
+          </FormField>
+          <FormField label="Why this score">
+            <TextArea value={overrideNote} onChange={setOverrideNote} rows={3} placeholder="What you know that the score does not" />
+          </FormField>
+          <div className="flex justify-end gap-2">
+            <SecondaryButton onClick={() => setOverrideOrg(null)}>Cancel</SecondaryButton>
+            <PrimaryButton onClick={saveOverride}>Save override</PrimaryButton>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+function LeadMarks({ org }: { org: Organization }) {
+  if (!org.hotLead && org.channelLens !== "channel" && !(org.screenFlags && org.screenFlags.length > 0)) return null;
+  return (
+    <div className="flex gap-1.5 flex-wrap mt-1">
+      {org.hotLead && <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Hot</span>}
+      {org.channelLens === "channel" && <span className="text-[10px] text-muted-foreground">Channel</span>}
+      {org.screenFlags && org.screenFlags.length > 0 && <span className="text-[10px] text-amber-700">Review</span>}
     </div>
   );
 }

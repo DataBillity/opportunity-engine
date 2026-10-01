@@ -306,6 +306,12 @@ export function OrgDetailView({
         </div>
         <div className="p-4 sm:p-5 text-sm text-foreground">
           {org.summary || <span className="text-muted-foreground italic">No summary yet.</span>}
+          {org.screenFlags && org.screenFlags.length > 0 && (
+            <ul className="mt-3 text-xs text-amber-800 space-y-1">
+              {org.screenFlags.map(flag => <li key={flag}>{flag}</li>)}
+            </ul>
+          )}
+          {org.hotLead && <p className="mt-3 text-xs font-semibold text-amber-700">Hot lead — this account outranked the previous top of the board.</p>}
         </div>
       </div>
 
@@ -320,6 +326,36 @@ export function OrgDetailView({
             <ul className="list-disc pl-4 text-sm space-y-2 text-foreground">
               {org.scoreFactors.map((f, i) => <li key={i}>{f}</li>)}
             </ul>
+            {org.scoreBreakdown && (
+              <p className="mt-3 text-[11px] font-mono text-muted-foreground">
+                Capability {org.scoreBreakdown.capabilityAlignment} · Timing {org.scoreBreakdown.intentTiming} · Account value {org.scoreBreakdown.accountValueFit}
+                {org.scoreBreakdown.inboundIntentUplift ? ` · Inbound +${org.scoreBreakdown.inboundIntentUplift}` : ""}
+                {" · "}{org.scoreBreakdown.modelVersion} / {org.scoreBreakdown.graphVersion}
+              </p>
+            )}
+            {org.scoreOverride && (
+              <p className="mt-2 text-xs text-foreground">Override on {org.scoreOverride.at}: {org.scoreOverride.note}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {org.enrichment && org.enrichment.length > 0 && (
+        <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-border">
+            <h3 className="oe-card-title">Sourced fields</h3>
+          </div>
+          <div className="divide-y divide-border">
+            {org.enrichment.map((field, index) => (
+              <div key={`${field.field}-${index}`} className="px-5 py-3 text-xs space-y-1">
+                <div className="font-semibold text-foreground">{field.field}</div>
+                <p className="text-foreground">{field.value}</p>
+                <p className="text-muted-foreground">
+                  {field.source} · {field.capturedAt.slice(0, 10)}
+                  {field.sourceRef ? <> · <a className="underline" href={field.sourceRef} target="_blank" rel="noreferrer">source</a></> : null}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       )}

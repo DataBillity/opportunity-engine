@@ -105,5 +105,23 @@ export {
   WORDS_PER_PAGE,
 } from "./proposal/rfp-proposal";
 export type { ReconcileOptions, ReconcileReport } from "./proposal/rfp-proposal";
+export {
+  DISCOVERY_MODEL_VERSION,
+  DISCOVERY_PROMPT_VERSION,
+  FIELD_FRESHNESS_DAYS,
+  graphVersionOf,
+  isStaleCapture,
+  matchExistingAccount,
+  nextHotLeadId,
+  normalizeDomain,
+  scoreDiscoveredAccount,
+  screenInboundLead,
+} from "./discovery/account-discovery";
+export type {
+  DiscoveryAssessment,
+  DiscoveryField,
+  DiscoveryScoreInput,
+  GraphNodeRef,
+} from "./discovery/account-discovery";
 export { buildDecisionRecord, computeRowHash } from "./decision/envelope";
 export type { DecisionInput, DecisionOutput } from "./decision/envelope";

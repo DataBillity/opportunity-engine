@@ -28,6 +28,7 @@ import {
   type GraphData,
 } from "@/lib/mock-data";
 import { mergeLeadOrganizations, mergePipelineLeads } from "@/lib/create-lead";
+import { rescorePipeline } from "@/lib/discovery-score";
 import { applyDecision } from "@/lib/pursuit-assessment";
 import { ResponseJobsProvider } from "@/lib/response-jobs";
 
@@ -384,19 +385,7 @@ export default function CommandCenter() {
 
   const handleRefreshAllScores = useCallback(
     () => {
-      setOrgs(prev => prev.map(o => {
-        if (o.archived) return o;
-        const delta = Math.floor(Math.random() * 6) - 2;
-        const newScore = Math.max(0, Math.min(100, o.score + delta));
-        return {
-          ...o,
-          score: newScore,
-          scoreHistory: [
-            ...o.scoreHistory,
-            { score: newScore, at: new Date().toISOString().slice(0, 10), reason: "Batch score refresh." },
-          ],
-        };
-      }));
+      setOrgs(prev => rescorePipeline(prev, graphRef.current));
     },
     []
   );
@@ -478,6 +467,8 @@ export default function CommandCenter() {
             {activeView === "search" && (
               <SearchView
                 onAddOrg={handleAddOrg}
+                graph={graph}
+                pipelineOrgs={orgs}
               />
             )}
             {activeView === "pipeline" && (
@@ -489,6 +480,7 @@ export default function CommandCenter() {
                 onAddPursuit={handleAddPursuit}
                 onArchiveOrg={handleArchiveOrg}
                 onRefreshAllScores={handleRefreshAllScores}
+                onUpdateOrg={handleUpdateOrg}
               />
             )}
             {activeView === "org" && currentOrg && (

@@ -21,6 +21,34 @@ export interface Organization {
   notes: Note[];
   pursuits: string[];
   archived?: boolean;
+  demo?: boolean;
+  hotLead?: boolean;
+  channelLens?: "direct" | "channel";
+  screenFlags?: string[];
+  scoreBreakdown?: {
+    capabilityAlignment: number;
+    intentTiming: number;
+    accountValueFit: number;
+    inboundIntentUplift: number;
+    modelVersion: string;
+    promptVersion: string;
+    graphVersion: string;
+    runAt: string;
+  };
+  enrichment?: {
+    field: string;
+    value: string;
+    source: string;
+    sourceRef: string;
+    capturedAt: string;
+  }[];
+  scoreOverride?: { score: number; note: string; at: string } | null;
+}
+
+const DEMONSTRATION_ORG_IDS = new Set(["ORG-01", "ORG-02", "ORG-03", "ORG-04", "ORG-05", "ORG-06"]);
+
+export function isDemonstrationOrg(org: { id: string; demo?: boolean }): boolean {
+  return org.demo === true || DEMONSTRATION_ORG_IDS.has(org.id);
 }
 
 export interface Contact {
@@ -343,11 +371,16 @@ export interface SearchResult {
   source: string;
   score: number;
   updated: string;
+  domain?: string;
+  factors?: string[];
+  channelLens?: "direct" | "channel";
+  existingAccountId?: string;
+  existingReason?: string;
 }
 
 export const organizations: Organization[] = [
   {
-    id: "ORG-01", name: "Cascade Regional Transit Authority", industry: "Public Transit", channel: "Solicitation", score: 68,
+    id: "ORG-01", demo: true, name: "Cascade Regional Transit Authority", industry: "Public Transit", channel: "Solicitation", score: 68,
     domain: "cascadetransit.gov", registryId: "UEI: F4K9XCASC001",
     summary: "Regional transit authority operating bus and light rail across three counties; board approved a multi-year fare and payments modernization budget in Q2.",
     contacts: [{ name: "Elena Morais", title: "VP Technology", email: "emorais@cascadetransit.gov" }],
@@ -365,7 +398,7 @@ export const organizations: Organization[] = [
     pursuits: ["OPP-2201", "OPP-2150"],
   },
   {
-    id: "ORG-02", name: "Harborview Health Network", industry: "Healthcare", channel: "Direct inquiry", score: 84,
+    id: "ORG-02", demo: true, name: "Harborview Health Network", industry: "Healthcare", channel: "Direct inquiry", score: 84,
     domain: "harborview.org", registryId: "UEI: H8V2HARB014",
     summary: "Regional health network with three hospital campuses. Claims and adjudication modernization is the current priority.",
     contacts: [
@@ -386,7 +419,7 @@ export const organizations: Organization[] = [
     pursuits: ["OPP-2214", "OPP-2215"],
   },
   {
-    id: "ORG-03", name: "Meridian State Dept. of Labor", industry: "Government — Labor & Workforce", channel: "Solicitation", score: 91,
+    id: "ORG-03", demo: true, name: "Meridian State Dept. of Labor", industry: "Government — Labor & Workforce", channel: "Solicitation", score: 91,
     domain: "meridian.state.gov", registryId: "UEI: M3R1MERI077",
     summary: "State department of labor responsible for unemployment insurance administration statewide.",
     contacts: [{ name: "Renata Sung", title: "Director of IT Modernization", email: "rsung@meridian.state.gov" }],
@@ -404,17 +437,17 @@ export const organizations: Organization[] = [
     pursuits: ["OPP-2219"],
   },
   {
-    id: "ORG-04", name: "Northfield Logistics Group", industry: "Logistics & Transportation", channel: "Outbound", score: 74,
+    id: "ORG-04", demo: true, name: "Northfield Logistics Group", industry: "Logistics & Transportation", channel: "Outbound", score: 74,
     domain: "", registryId: "", summary: "", contacts: [], whyGoodFit: "",
     scoreFactors: [], scoreHistory: [{ score: 74, at: "2026-09-02", reason: "Initial discovery scoring." }], notes: [], pursuits: [],
   },
   {
-    id: "ORG-05", name: "BrightPath Underwriters", industry: "Insurance", channel: "Inbound", score: 61,
+    id: "ORG-05", demo: true, name: "BrightPath Underwriters", industry: "Insurance", channel: "Inbound", score: 61,
     domain: "", registryId: "", summary: "", contacts: [], whyGoodFit: "",
     scoreFactors: [], scoreHistory: [{ score: 61, at: "2026-09-05", reason: "Initial scoring on inbound enquiry." }], notes: [], pursuits: [],
   },
   {
-    id: "ORG-06", name: "Anchor Peak Credit Union", industry: "Financial Services", channel: "Partner", score: 79,
+    id: "ORG-06", demo: true, name: "Anchor Peak Credit Union", industry: "Financial Services", channel: "Partner", score: 79,
     domain: "", registryId: "", summary: "", contacts: [],
     whyGoodFit: "Introduced by NorthPeak Transit Systems; adjacent core-banking integration need.",
     scoreFactors: [], scoreHistory: [{ score: 79, at: "2026-09-08", reason: "Initial scoring on partner introduction." }], notes: [], pursuits: [],
@@ -565,13 +598,6 @@ export const graphData: GraphData = {
     { id: "PPL-120", name: "Marcus Webb", partner: "PTR-U", role: "QA & Compliance Lead", roles: ["QA & Compliance Lead"], skills: ["Test automation", "Compliance validation"], technologies: ["Selenium", "WCAG tooling"], expertise: "Led certification testing for production release on the Commonwealth engagement.", industries: ["Government"], projectHistory: ["EXP-0512"], status: "Verified", updated: "2026-06-20", resumeFileName: "Marcus_Webb_Resume.pdf", resumeText: "Marcus Webb\nQA & Compliance Lead\nLed certification testing for production release on the Commonwealth engagement.\nRoles: QA & Compliance Lead.\nExpertise: test automation, compliance validation, WCAG accessibility.\nIndustries: Government." },
   ],
 };
-
-export const searchResults: SearchResult[] = [
-  { id: "sr1", org: "Alder Bay Transit Authority", industry: "Public Transit", signal: "RFI issued for fare-collection modernization, response due in 6 weeks", source: "Agency procurement portal", score: 71, updated: "2 hours ago" },
-  { id: "sr2", org: "Fenwick Mutual Insurance", industry: "Insurance", signal: '10-K flags "legacy claims infrastructure" as a strategic risk factor', source: "SEC 10-K filing", score: 66, updated: "1 day ago" },
-  { id: "sr3", org: "Solari Health Partners", industry: "Healthcare", signal: "CTO LinkedIn post: actively scoping claims adjudication stack replacement", source: "LinkedIn post", score: 79, updated: "3 hours ago" },
-  { id: "sr4", org: "Kestrel Grid Utilities", industry: "Utilities", signal: "Press release announcing $40M grid-modernization initiative", source: "Press release", score: 58, updated: "6 hours ago" },
-];
 
 export function getPartner(id: string, partners: Partner[] = partnerDirectory): Partner | undefined {
   return partners.find(p => p.id === id);

@@ -1,9 +1,13 @@
 import {
   evaluateLinkedInBatch,
+  graphVersionOf,
   parseLinkedInConnectionsCsv,
+  scoreDiscoveredAccount,
+  screenInboundLead,
   type LinkedInBatchResult,
 } from "@opportunity-engine/core";
 import type { Organization } from "./mock-data";
+import { organizationFromDiscovery } from "./discovery-score";
 
 export const LEAD_CHANNELS = [
   { value: "Direct inquiry", label: "Direct inquiry" },
@@ -29,34 +33,38 @@ export interface SalesLeadInput {
 
 export function createSalesLead(input: SalesLeadInput): Organization {
   const name = input.name.trim();
-  const id = `ORG-${Date.now().toString().slice(-4)}${input.suffix ? `-${input.suffix}` : ""}`;
-  const contactName = input.contactName?.trim() ?? "";
-  const contactEmail = input.contactEmail?.trim() ?? "";
-  const score = input.score ?? 50;
-
-  return {
-    id,
+  const channel = input.channel?.trim() || "Outbound";
+  const inbound = channel === "Inbound" || channel === "Direct inquiry" || channel === "Referral" || channel === "Event";
+  const assessment = scoreDiscoveredAccount({
     name,
-    industry: input.industry?.trim() ?? "",
-    channel: input.channel?.trim() || "Outbound",
+    text: [input.summary, input.industry, input.contactTitle].filter(Boolean).join("\n"),
+    industryHint: input.industry,
+    isInbound: inbound,
+    priorRelationship: channel === "Partner",
+    graph: [],
+    graphVersion: graphVersionOf([]),
+  });
+  const screened = inbound
+    ? screenInboundLead({ name, email: input.contactEmail, summary: input.summary })
+    : { flags: [] as string[] };
+  const org = organizationFromDiscovery({
+    id: `ORG-${Date.now().toString().slice(-4)}${input.suffix ? `-${input.suffix}` : ""}`,
+    name,
+    channel,
     source: input.source?.trim() || undefined,
-    score,
-    domain: "",
-    registryId: "",
-    summary: input.summary?.trim() ?? "",
-    contacts: contactName
-      ? [{ name: contactName, title: input.contactTitle?.trim() ?? "", email: contactEmail }]
-      : [],
-    whyGoodFit: "",
-    scoreFactors: [],
-    scoreHistory: [{
-      score,
-      at: new Date().toISOString().slice(0, 10),
-      reason: "Added as a sales lead.",
-    }],
-    notes: [],
-    pursuits: [],
-  };
+    summary: input.summary,
+    contactName: input.contactName,
+    contactEmail: input.contactEmail,
+    contactTitle: input.contactTitle,
+    assessment,
+    screenFlags: screened.flags,
+  });
+  if (input.score != null) {
+    const today = new Date().toISOString().slice(0, 10);
+    org.score = input.score;
+    org.scoreHistory = [{ score: input.score, at: today, reason: "Added as a sales lead." }];
+  }
+  return org;
 }
 
 const HEADER_CELL_RE = /^(company|organization|org|name|lead|account|industry|contact|email)$/i;

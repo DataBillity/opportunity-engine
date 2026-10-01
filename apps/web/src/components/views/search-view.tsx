@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { searchResults as searchCatalog, type Organization } from "@/lib/mock-data";
+import { ICP_VERTICALS, graphVersionOf, matchExistingAccount, scoreDiscoveredAccount, screenInboundLead, type DiscoveryAssessment, type DiscoveryField } from "@opportunity-engine/core";
+import type { GraphData, Organization } from "@/lib/mock-data";
 import { Modal, FormField, TextArea, SelectInput, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
 import { parseBulkLeads, LEAD_CHANNELS } from "@/lib/create-lead";
+import { graphNodesFrom, organizationFromDiscovery } from "@/lib/discovery-score";
 import { useToast } from "@/components/ui/toast";
 import { useOperator } from "@/components/auth/operator-provider";
 import {
@@ -13,10 +15,16 @@ import {
 } from "@/lib/search-candidates";
 import { cn } from "@/lib/cn";
 
+const SOURCE_OPTIONS = ["Company website", "SEC filings"] as const;
+
 export function SearchView({
   onAddOrg,
+  graph,
+  pipelineOrgs,
 }: {
   onAddOrg: (org: Organization) => void;
+  graph: GraphData;
+  pipelineOrgs: Organization[];
   onAddOrgs?: (orgs: Organization[]) => void;
   onImportedLeads?: () => void;
 }) {
@@ -25,9 +33,13 @@ export function SearchView({
   const operatorEmail = profile?.email ?? "";
 
   const [industry, setIndustry] = useState("all");
+  const [company, setCompany] = useState("");
+  const [domain, setDomain] = useState("");
   const [keyword, setKeyword] = useState("");
   const [minScore, setMinScore] = useState("");
-  const [activeSources, setActiveSources] = useState<Set<string>>(new Set(["Firmographic", "Filings", "Press", "LinkedIn"]));
+  const [activeSources, setActiveSources] = useState<Set<string>>(new Set(SOURCE_OPTIONS));
+  const [searching, setSearching] = useState(false);
+  const [searchNotes, setSearchNotes] = useState<string[]>([]);
   const [results, setResults] = useState<DiscoveryCandidate[]>([]);
   const [refreshing, setRefreshing] = useState<Set<string>>(new Set());
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
@@ -40,6 +52,13 @@ export function SearchView({
   const [bulkMinScore, setBulkMinScore] = useState("");
   const [bulkSelected, setBulkSelected] = useState<Set<number>>(new Set());
   const [hasSearched, setHasSearched] = useState(false);
+  const [inboundOpen, setInboundOpen] = useState(false);
+  const [inboundName, setInboundName] = useState("");
+  const [inboundEmail, setInboundEmail] = useState("");
+  const [inboundContact, setInboundContact] = useState("");
+  const [inboundChannel, setInboundChannel] = useState("Inbound");
+  const [inboundSummary, setInboundSummary] = useState("");
+  const [inboundFlags, setInboundFlags] = useState<string[]>([]);
   const bulkFileRef = useRef<HTMLInputElement>(null);
   const parsedBulk = useMemo(() => parseBulkLeads(bulkText, bulkChannel), [bulkText, bulkChannel]);
 
@@ -51,14 +70,6 @@ export function SearchView({
   useMemo(() => {
     setBulkSelected(new Set(filteredBulkOrgs.map(f => f.idx)));
   }, [filteredBulkOrgs.length]);
-
-  const allSources = ["Firmographic", "Filings", "Press", "LinkedIn"];
-  const sourceMap: Record<string, string> = {
-    "Agency procurement portal": "Firmographic",
-    "SEC 10-K filing": "Filings",
-    "Press release": "Press",
-    "LinkedIn post": "LinkedIn",
-  };
 
   const persistSession = useCallback((candidates: DiscoveryCandidate[], added: Set<string>) => {
     if (!operatorEmail) return;
@@ -101,45 +112,103 @@ export function SearchView({
     });
   }
 
-  function handleRunSearch() {
-    const next: DiscoveryCandidate[] = searchCatalog.filter(r => {
-      if (industry !== "all" && r.industry !== industry) return false;
-      if (keyword.trim() && !r.signal.toLowerCase().includes(keyword.toLowerCase()) && !r.org.toLowerCase().includes(keyword.toLowerCase())) return false;
-      if (minScore && r.score < Number(minScore)) return false;
-      const rSource = sourceMap[r.source] ?? "";
-      if (!activeSources.has(rSource)) return false;
-      return true;
-    }).map(r => ({
-      ...r,
-      id: `${r.id}-${Date.now()}`,
-      updated: "just now",
-    }));
-    replaceCandidates(next);
-    toast(`Search complete — ${next.length} candidate${next.length === 1 ? "" : "s"} found`, "info");
+  async function runDiscovery(input: { company: string; domain: string; keyword: string }) {
+    const response = await fetch("/api/discovery/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        company: input.company,
+        domain: input.domain,
+        keyword: input.keyword,
+        industry,
+        minScore: minScore ? Number(minScore) : 0,
+        website: activeSources.has("Company website"),
+        filings: activeSources.has("SEC filings"),
+        graph: graphNodesFrom(graph),
+        accounts: pipelineOrgs.map(org => ({ id: org.id, name: org.name, domain: org.domain })),
+      }),
+    });
+    const data = await response.json() as {
+      error?: string;
+      notes?: string[];
+      candidates?: Array<DiscoveryCandidate & {
+        fields?: DiscoveryField[];
+        assessment?: DiscoveryAssessment;
+      }>;
+    };
+    if (!response.ok) throw new Error(data.error || "Discovery search failed.");
+    const next: DiscoveryCandidate[] = (data.candidates ?? []).map(candidate => {
+      const assessment = candidate.assessment;
+      const leadDraft = assessment
+        ? organizationFromDiscovery({
+          id: candidate.id,
+          name: candidate.org,
+          domain: candidate.domain,
+          channel: assessment.channelLens === "channel" ? "Partner" : "Outbound",
+          source: candidate.source,
+          summary: candidate.signal,
+          assessment,
+          fields: candidate.fields,
+        })
+        : undefined;
+      return { ...candidate, leadDraft };
+    });
+    return { next, notes: data.notes ?? [] };
   }
 
-  function handleRefresh(id: string) {
+  async function handleRunSearch() {
+    if (!company.trim() && !domain.trim() && !keyword.trim()) {
+      toast("Enter a company, a domain, or a signal keyword.", "warning");
+      return;
+    }
+    setSearching(true);
+    try {
+      const { next, notes } = await runDiscovery({ company, domain, keyword });
+      setSearchNotes(notes);
+      replaceCandidates(next);
+      toast(`Search complete — ${next.length} candidate${next.length === 1 ? "" : "s"} found`, "info");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Discovery search failed.", "error");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function handleRefresh(id: string) {
+    const current = results.find(result => result.id === id);
+    if (!current) return;
     setRefreshing(prev => new Set(prev).add(id));
-    setTimeout(() => {
-      setResults(prev => {
-        const next = prev.map(r =>
-          r.id === id
-            ? { ...r, score: Math.min(100, r.score + Math.floor(Math.random() * 8) - 2), updated: "just now" }
-            : r
-        );
-        persistSession(next, addedIds);
-        return next;
+    try {
+      const { next } = await runDiscovery({
+        company: current.org,
+        domain: current.domain ?? "",
+        keyword: "",
       });
+      const refreshed = next[0];
+      setResults(prev => {
+        const updated = prev.map(result => result.id === id && refreshed
+          ? { ...refreshed, id: result.id }
+          : result);
+        persistSession(updated, addedIds);
+        return updated;
+      });
+      toast(refreshed ? "Enrichment refreshed from public sources" : "No public source returned new text", refreshed ? "success" : "warning");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Refresh failed.", "error");
+    } finally {
       setRefreshing(prev => {
         const next = new Set(prev);
         next.delete(id);
         return next;
       });
-      toast("Enrichment refreshed — score updated", "success");
-    }, 1200);
+    }
   }
 
   function handleAdd(r: DiscoveryCandidate) {
+    if (r.existingAccountId) {
+      toast(r.existingReason || `${r.org} is already in the pipeline`, "warning");
+      return;
+    }
     const newOrg: Organization = r.leadDraft ?? {
       id: `ORG-${Date.now().toString().slice(-4)}`,
       name: r.org,
@@ -212,26 +281,44 @@ export function SearchView({
       <div>
         <h1 className="oe-page-title">Search & Discovery</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Candidate organizations sourced from firmographic feeds and public signal harvesting (DISC-01 through DISC-04).
-          Drafts and extraction run through one gateway on Claude.
+          Looks up a company website and recent SEC filings, then scores fit against the capability graph. LinkedIn stays a manual Connections.csv import.
         </p>
       </div>
 
       {/* Search bar card */}
       <div className="bg-card rounded-xl border shadow-sm p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 items-stretch sm:items-end">
+          <div className="flex flex-col gap-1.5 w-full sm:flex-1 sm:min-w-[180px]">
+            <label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Company</label>
+            <input
+              type="text"
+              value={company}
+              onChange={e => setCompany(e.target.value)}
+              placeholder="e.g. Alaska Airlines"
+              className="oe-field w-full"
+              onKeyDown={e => e.key === "Enter" && void handleRunSearch()}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5 w-full sm:w-[180px]">
+            <label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Domain</label>
+            <input
+              type="text"
+              value={domain}
+              onChange={e => setDomain(e.target.value)}
+              placeholder="alaskaair.com"
+              className="oe-field w-full"
+              onKeyDown={e => e.key === "Enter" && void handleRunSearch()}
+            />
+          </div>
           <div className="flex flex-col gap-1.5 w-full xs:w-auto xs:flex-1 sm:flex-none">
             <label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Industry</label>
             <SelectInput
               value={industry}
               onChange={setIndustry}
-              className="w-full sm:min-w-[160px]"
+              className="w-full sm:min-w-[180px]"
               options={[
                 { value: "all", label: "All industries" },
-                { value: "Public Transit", label: "Public Transit" },
-                { value: "Insurance", label: "Insurance" },
-                { value: "Healthcare", label: "Healthcare" },
-                { value: "Utilities", label: "Utilities" },
+                ...ICP_VERTICALS.map(vertical => ({ value: vertical.industry, label: vertical.industry })),
               ]}
             />
           </div>
@@ -241,9 +328,9 @@ export function SearchView({
               type="text"
               value={keyword}
               onChange={e => setKeyword(e.target.value)}
-              placeholder="e.g. legacy, modernization"
-              className="oe-field w-full sm:min-w-[180px]"
-              onKeyDown={e => e.key === "Enter" && handleRunSearch()}
+              placeholder="e.g. loyalty platform"
+              className="oe-field w-full sm:min-w-[160px]"
+              onKeyDown={e => e.key === "Enter" && void handleRunSearch()}
             />
           </div>
           <div className="flex flex-col gap-1.5 w-full xs:w-auto">
@@ -259,7 +346,7 @@ export function SearchView({
           <div className="flex flex-col gap-1.5 w-full lg:w-auto">
             <label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Sources</label>
             <div className="flex gap-1.5 flex-wrap">
-              {allSources.map(s => (
+              {SOURCE_OPTIONS.map(s => (
                 <button
                   key={s}
                   onClick={() => toggleSource(s)}
@@ -277,10 +364,17 @@ export function SearchView({
           </div>
           <div className="flex flex-col xs:flex-row gap-2 w-full lg:w-auto lg:ml-auto">
             <button
-              onClick={handleRunSearch}
-              className="text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm"
+              onClick={() => void handleRunSearch()}
+              disabled={searching}
+              className="text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm disabled:opacity-50"
             >
-              Run search
+              {searching ? "Searching…" : "Run search"}
+            </button>
+            <button
+              onClick={() => { setInboundFlags([]); setInboundOpen(true); }}
+              className="text-xs font-medium px-4 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary"
+            >
+              Inbound lead
             </button>
             <button
               onClick={() => setBulkOpen(true)}
@@ -291,6 +385,12 @@ export function SearchView({
           </div>
         </div>
       </div>
+
+      {searchNotes.length > 0 && (
+        <div className="text-xs text-muted-foreground bg-card border border-border rounded-lg px-4 py-3 space-y-1">
+          {searchNotes.map(note => <p key={note}>{note}</p>)}
+        </div>
+      )}
 
       {/* Results card */}
       <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
@@ -329,7 +429,7 @@ export function SearchView({
                   </button>
                   <button
                     onClick={() => handleAdd(r)}
-                    disabled={addedIds.has(r.id)}
+                    disabled={addedIds.has(r.id) || Boolean(r.existingAccountId)}
                     className={cn(
                       "text-xs font-semibold px-3 py-1.5 rounded-md shadow-sm cursor-pointer transition-all",
                       addedIds.has(r.id)
@@ -337,7 +437,7 @@ export function SearchView({
                         : "bg-primary text-primary-foreground hover:bg-primary/90"
                     )}
                   >
-                    {addedIds.has(r.id) ? "Added ✓" : "Add"}
+                    {addedIds.has(r.id) ? "Added ✓" : r.existingAccountId ? "In pipeline" : "Add"}
                   </button>
                 </div>
               </div>
@@ -395,7 +495,7 @@ export function SearchView({
                       </button>
                       <button
                         onClick={() => handleAdd(r)}
-                        disabled={addedIds.has(r.id)}
+                        disabled={addedIds.has(r.id) || Boolean(r.existingAccountId)}
                         className={cn(
                           "text-xs font-semibold px-3 py-1.5 rounded-md shadow-sm cursor-pointer transition-all",
                           addedIds.has(r.id)
@@ -403,7 +503,7 @@ export function SearchView({
                             : "bg-primary text-primary-foreground hover:bg-primary/90"
                         )}
                       >
-                        {addedIds.has(r.id) ? "Added ✓" : "Add"}
+                        {addedIds.has(r.id) ? "Added ✓" : r.existingAccountId ? "In pipeline" : "Add"}
                       </button>
                     </div>
                   </td>
@@ -427,7 +527,7 @@ export function SearchView({
       <div className="flex items-start gap-2.5 text-xs text-muted-foreground bg-card border border-border rounded-lg px-4 py-3 shadow-sm">
         <div className="w-1 self-stretch bg-primary rounded-full shrink-0" />
         <p>
-          Refreshing re-runs enrichment and re-scores against the current graph. A new search or bulk import replaces this candidate list for your account only; candidates not added as leads are not retained after that.
+          Refreshing re-reads the company website and latest SEC filing, then re-scores against the current graph. A filed fact keeps its source and timestamp. LinkedIn connections are imported from your own export, not scraped.
         </p>
       </div>
 
@@ -569,6 +669,135 @@ export function SearchView({
           </div>
         </div>
       </Modal>
+
+      <Modal open={inboundOpen} onClose={() => setInboundOpen(false)} title="Inbound lead">
+        <InboundLeadForm
+          name={inboundName}
+          email={inboundEmail}
+          contact={inboundContact}
+          channel={inboundChannel}
+          summary={inboundSummary}
+          flags={inboundFlags}
+          onName={setInboundName}
+          onEmail={setInboundEmail}
+          onContact={setInboundContact}
+          onChannel={setInboundChannel}
+          onSummary={setInboundSummary}
+          onFlags={setInboundFlags}
+          onClose={() => setInboundOpen(false)}
+          onAdd={(org, message) => {
+            const existing = matchExistingAccount(
+              { name: org.name, domain: org.domain },
+              pipelineOrgs.map(item => ({ id: item.id, name: item.name, domain: item.domain })),
+            );
+            if (existing) {
+              toast(`${existing.name} is already in the pipeline. ${existing.reason}.`, "warning");
+              return;
+            }
+            onAddOrg(org);
+            toast(message, org.screenFlags?.length ? "warning" : "success");
+            setInboundOpen(false);
+            setInboundName("");
+            setInboundEmail("");
+            setInboundContact("");
+            setInboundSummary("");
+            setInboundFlags([]);
+          }}
+          graph={graph}
+        />
+      </Modal>
+    </div>
+  );
+}
+
+function InboundLeadForm({
+  name, email, contact, channel, summary, flags,
+  onName, onEmail, onContact, onChannel, onSummary, onFlags, onClose, onAdd, graph,
+}: {
+  name: string;
+  email: string;
+  contact: string;
+  channel: string;
+  summary: string;
+  flags: string[];
+  onName: (value: string) => void;
+  onEmail: (value: string) => void;
+  onContact: (value: string) => void;
+  onChannel: (value: string) => void;
+  onSummary: (value: string) => void;
+  onFlags: (flags: string[]) => void;
+  onClose: () => void;
+  onAdd: (org: Organization, message: string) => void;
+  graph: GraphData;
+}) {
+  function submit() {
+    const screened = screenInboundLead({ name, email, summary });
+    onFlags(screened.flags);
+    if (!name.trim()) return;
+    const nodes = graphNodesFrom(graph);
+    const assessment = scoreDiscoveredAccount({
+      name: name.trim(),
+      text: summary,
+      isInbound: true,
+      priorRelationship: false,
+      graph: nodes,
+      graphVersion: graphVersionOf(nodes),
+    });
+    const org = organizationFromDiscovery({
+      name: name.trim(),
+      channel,
+      source: "Inbound intake",
+      summary,
+      contactName: contact,
+      contactEmail: email,
+      assessment,
+      screenFlags: screened.flags,
+    });
+    const message = screened.flags.length
+      ? `${org.name} added for review — automated screening did not decline it.`
+      : `${org.name} scored ${org.score} and added to the pipeline.`;
+    onAdd(org, message);
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">
+        Web, email, referral, event, and partner inquiries land on the same ranked board. Screening flags a weak submission for you to review. It does not reject the lead.
+      </p>
+      <FormField label="Company">
+        <input value={name} onChange={e => onName(e.target.value)} className="oe-field text-xs" placeholder="Company name" />
+      </FormField>
+      <FormField label="Contact">
+        <input value={contact} onChange={e => onContact(e.target.value)} className="oe-field text-xs" placeholder="Name" />
+      </FormField>
+      <FormField label="Email">
+        <input value={email} onChange={e => onEmail(e.target.value)} className="oe-field text-xs" placeholder="name@company.com" />
+      </FormField>
+      <FormField label="Channel">
+        <SelectInput
+          value={channel}
+          onChange={onChannel}
+          options={[
+            { value: "Inbound", label: "Web or inbox" },
+            { value: "Referral", label: "Referral" },
+            { value: "Event", label: "Event" },
+            { value: "Partner", label: "Partner introduction" },
+            { value: "Direct inquiry", label: "Direct inquiry" },
+          ]}
+        />
+      </FormField>
+      <FormField label="What they asked">
+        <TextArea value={summary} onChange={onSummary} rows={4} placeholder="The inquiry, in their words" />
+      </FormField>
+      {flags.length > 0 && (
+        <ul className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 space-y-1">
+          {flags.map(flag => <li key={flag}>{flag}</li>)}
+        </ul>
+      )}
+      <div className="flex justify-end gap-2">
+        <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
+        <PrimaryButton onClick={submit} disabled={!name.trim()}>Add to pipeline</PrimaryButton>
+      </div>
     </div>
   );
 }
