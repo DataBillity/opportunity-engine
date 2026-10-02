@@ -18,7 +18,8 @@ import { ArchiveView } from "@/components/views/archive-view";
 import { OperatorProvider } from "@/components/auth/operator-provider";
 import { useToast } from "@/components/ui/toast";
 import { applyPartnerArchive, applyPartnerReinstate, computeSharedIds, setPartnerArchived } from "@/lib/partner-archive";
-import { mergeWorkspace, sameWorkspace, type SharedWorkspace, type WorkspaceState } from "@/lib/shared-workspace";
+import { mergeWorkspace, sameWorkspace, type LeadImportBatch, type SharedWorkspace, type WorkspaceState } from "@/lib/shared-workspace";
+import type { DiscoveryCandidate } from "@/lib/search-candidates";
 import {
   type Organization,
   type Pursuit,
@@ -59,8 +60,10 @@ function workspaceFrom(
   partners: Partner[],
   graph: GraphData,
   plays: Play[] = [],
+  leadImports: LeadImportBatch[] = [],
+  discovery: DiscoveryCandidate[] = [],
 ): WorkspaceState {
-  return { organizations, pursuits, partners, graph, plays };
+  return { organizations, pursuits, partners, graph, plays, leadImports, discovery };
 }
 
 function playBuilderInput(partners: Partner[], graph: GraphData): PlayBuilderInput {
@@ -97,6 +100,8 @@ export default function CommandCenter() {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [graph, setGraph] = useState<GraphData>(emptyGraph);
   const [storedPlays, setStoredPlays] = useState<Play[]>([]);
+  const [leadImports, setLeadImports] = useState<LeadImportBatch[]>([]);
+  const [discovery, setDiscovery] = useState<DiscoveryCandidate[]>([]);
 
   const revisionRef = useRef(0);
   const baselineRef = useRef<WorkspaceState | null>(null);
@@ -121,6 +126,8 @@ export default function CommandCenter() {
     setPartners(next.partners);
     setGraph(next.graph);
     setStoredPlays(next.plays ?? []);
+    setLeadImports(next.leadImports ?? []);
+    setDiscovery(next.discovery ?? []);
     setCurrentOrgId(prev => {
       if (next.organizations.some(org => org.id === prev)) return prev;
       if (next.organizations.some(org => org.id === "ORG-01")) return "ORG-01";
@@ -137,7 +144,15 @@ export default function CommandCenter() {
       })
       .then((data) => {
         if (cancelled) return;
-        const loaded = workspaceFrom(data.organizations, data.pursuits, data.partners, data.graph, data.plays ?? []);
+        const loaded = workspaceFrom(
+          data.organizations,
+          data.pursuits,
+          data.partners,
+          data.graph,
+          data.plays ?? [],
+          data.leadImports ?? [],
+          data.discovery ?? [],
+        );
         applyWorkspace(loaded, data.revision, loaded);
         setReady(true);
         try {
@@ -156,7 +171,7 @@ export default function CommandCenter() {
   }, [toast]);
 
   useEffect(() => {
-    const current = workspaceFrom(orgs, allPursuits, partners, graph, storedPlays);
+    const current = workspaceFrom(orgs, allPursuits, partners, graph, storedPlays, leadImports, discovery);
     stateRef.current = current;
     if (!ready) return;
     if (baselineRef.current && sameWorkspace(current, baselineRef.current)) return;
@@ -166,7 +181,7 @@ export default function CommandCenter() {
       void flushWorkspace(gen);
     }, 500);
     return () => clearTimeout(timer);
-  }, [ready, orgs, allPursuits, partners, graph, storedPlays]);
+  }, [ready, orgs, allPursuits, partners, graph, storedPlays, leadImports, discovery]);
 
   async function flushWorkspace(gen: number, isRetry = false) {
     const sent = stateRef.current;
@@ -188,7 +203,15 @@ export default function CommandCenter() {
 
     if (res.status === 409 && !isRetry) {
       const server = await res.json() as SharedWorkspace;
-      const serverState = workspaceFrom(server.organizations, server.pursuits, server.partners, server.graph, server.plays ?? []);
+      const serverState = workspaceFrom(
+        server.organizations,
+        server.pursuits,
+        server.partners,
+        server.graph,
+        server.plays ?? [],
+        server.leadImports ?? [],
+        server.discovery ?? [],
+      );
       const merged = mergeWorkspace(sent, baselineRef.current ?? sent, serverState);
       revisionRef.current = server.revision;
       baselineRef.current = serverState;
@@ -564,6 +587,7 @@ export default function CommandCenter() {
                 pipelineOrgs={orgs}
                 partners={partners}
                 plays={consortiumPlays}
+                initialCandidates={discovery}
               />
             )}
             {activeView === "pipeline" && (

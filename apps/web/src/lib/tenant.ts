@@ -109,6 +109,14 @@ async function ensureTenantSchema(): Promise<void> {
     ADD COLUMN IF NOT EXISTS plays jsonb NOT NULL DEFAULT '[]'::jsonb
   `;
   await sql`
+    ALTER TABLE shared_workspace
+    ADD COLUMN IF NOT EXISTS lead_imports jsonb NOT NULL DEFAULT '[]'::jsonb
+  `;
+  await sql`
+    ALTER TABLE shared_workspace
+    ADD COLUMN IF NOT EXISTS discovery jsonb NOT NULL DEFAULT '[]'::jsonb
+  `;
+  await sql`
     UPDATE shared_workspace
     SET id = ${DATABILLITY_ORG_ID}
     WHERE id = ${LEGACY_WORKSPACE_ID}

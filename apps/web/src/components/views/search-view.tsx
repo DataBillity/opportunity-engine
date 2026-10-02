@@ -48,6 +48,8 @@ const SOURCE_OPTIONS = ["Company website", "SEC filings"] as const;
 
 type ImportStep = "upload" | "map" | "review";
 
+const NO_CANDIDATES: DiscoveryCandidate[] = [];
+
 const STATUS_COLORS: Record<LeadStatus, string> = {
   Imported: "bg-slate-100 text-slate-700",
   Identified: "bg-blue-100 text-blue-700",
@@ -62,12 +64,15 @@ export function SearchView({
   pipelineOrgs,
   partners,
   plays,
+  initialCandidates = NO_CANDIDATES,
 }: {
   onAddOrg: (org: Organization) => void;
   graph: GraphData;
   pipelineOrgs: Organization[];
   partners?: Partner[];
   plays: Play[];
+  /** Organization workspace candidates. Used only when this operator has no private session. */
+  initialCandidates?: DiscoveryCandidate[];
   onAddOrgs?: (orgs: Organization[]) => void;
   onImportedLeads?: () => void;
 }) {
@@ -149,12 +154,19 @@ export function SearchView({
       setResults(stored.candidates);
       setAddedIds(new Set(stored.addedIds));
       setHasSearched(true);
-    } else {
-      setResults([]);
-      setAddedIds(new Set());
-      setHasSearched(false);
+      return;
     }
-  }, [operatorEmail, organizationId]);
+    // Show the organization's seeded list without copying it into this operator's private session.
+    if (initialCandidates.length > 0) {
+      setResults(initialCandidates);
+      setAddedIds(new Set());
+      setHasSearched(true);
+      return;
+    }
+    setResults([]);
+    setAddedIds(new Set());
+    setHasSearched(false);
+  }, [operatorEmail, organizationId, initialCandidates]);
 
   function replaceCandidates(next: DiscoveryCandidate[]) {
     setResults(next);
@@ -724,7 +736,7 @@ export function SearchView({
                     </div>
                   </td>
                   <td className="px-3 lg:px-4 py-3 hidden xl:table-cell">
-                    <span className="font-mono text-muted-foreground">—</span>
+                    <span className="font-mono text-muted-foreground">{r.opportunityScore ?? "—"}</span>
                   </td>
                   <td className="px-3 lg:px-4 py-3 text-[11px] text-muted-foreground hidden xl:table-cell">{r.updated}</td>
                   <td className="px-3 lg:px-4 py-3">

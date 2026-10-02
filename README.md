@@ -57,12 +57,13 @@ pnpm install
 Copy-Item .env.example .env.local
 ```
 
-Fill in at least `DATABASE_URL`. Then push the schema and optionally seed:
+Fill in at least `DATABASE_URL`. Then push the schema:
 
 ```powershell
 pnpm db:push
-pnpm db:seed
 ```
+
+Sign-up copies demonstration records into the new organization's own workspace: Search & Discovery (plays, a scored lead list, and candidates), Pipeline, the Partner network, opportunities (RFP, RFI, and SOW), capability sources, the archive, and Response Builder. DataBillity, the platform owner organization, does not receive that copy. `TENANT_ID=operator` is the legacy id for DataBillity, not a second tenant. `TENANT_ID` and `TENANT_NAME` with `pnpm db:seed` copy the demonstration set into a different organization and create that organization row; signing in still requires a member. An existing workspace is left as it is. Workspace reads and writes use the signed-in organization id.
 
 ### Run locally
 
@@ -102,7 +103,7 @@ Open [http://localhost:3100](http://localhost:3100). Canonical local ports: fron
 | `pnpm db:generate` | Generate Drizzle migrations |
 | `pnpm db:migrate` | Apply migrations |
 | `pnpm db:push` | Push schema to Postgres |
-| `pnpm db:seed` | Seed the database |
+| `pnpm db:seed` | Copy demonstration data into a new organization. DataBillity is skipped |
 | `pnpm ingest:linkedin` | Evaluate a LinkedIn connections export |
 
 ## Environment
@@ -112,6 +113,7 @@ Copy `.env.example` to `.env.local`. The launcher will create `.env.local` from 
 | Variable | Required for | Notes |
 | --- | --- | --- |
 | `DATABASE_URL` | Web, worker, Drizzle | Neon connection string |
+| `TENANT_ID` / `TENANT_NAME` | `pnpm db:seed` | Organization to seed. `operator` and DataBillity are skipped. Any other id receives its own demonstration workspace |
 | `REDIS_URL` | Worker | Local default `redis://localhost:6379` |
 | `ANTHROPIC_API_KEY` | AI outreach, extraction, and drafting | Claude Sonnet 5.5 |
 | `AUTH_USERNAME` / `AUTH_PASSWORD` / `AUTH_SECRET` | `/login` | Shared operator gate |
