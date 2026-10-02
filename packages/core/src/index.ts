@@ -125,3 +125,26 @@ export type {
 } from "./discovery/account-discovery";
 export { buildDecisionRecord, computeRowHash } from "./decision/envelope";
 export type { DecisionInput, DecisionOutput } from "./decision/envelope";
+export {
+  buildPlaysFromPartners,
+  scoreFitAgainstPlays,
+  computeOpportunityScore,
+} from "./plays";
+export type {
+  Play,
+  PlaySignal,
+  PlayPartnerRef,
+  PlayTargetOrganizations,
+  PlaySolicitation,
+  PlayCoverageGap,
+  PlayStrength,
+  PlayBuilderInput,
+  PlayMatchResult,
+  FitScoreBreakdown,
+  FitScoreInput,
+  OpportunityScoreInput,
+  OpportunityScoreResult,
+  RelationshipLevel,
+  ExperienceCloseness,
+  PartnerSummary,
+} from "./plays";

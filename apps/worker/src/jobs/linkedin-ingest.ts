@@ -189,7 +189,7 @@ async function persistBatch(
         `;
         leadsInserted++;
 
-        const envelope = buildDecisionRecord(
+        const envelope: ReturnType<typeof buildDecisionRecord> = buildDecisionRecord(
           {
             decisionType: DECISION_POINT,
             subjectRef: leadId,

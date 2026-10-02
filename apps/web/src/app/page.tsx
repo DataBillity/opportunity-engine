@@ -469,6 +469,7 @@ export default function CommandCenter() {
                 onAddOrg={handleAddOrg}
                 graph={graph}
                 pipelineOrgs={orgs}
+                partners={partners}
               />
             )}
             {activeView === "pipeline" && (

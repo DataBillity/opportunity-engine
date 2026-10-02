@@ -378,6 +378,8 @@ export interface SearchResult {
   existingReason?: string;
 }
 
+export type { Play } from "@opportunity-engine/core";
+
 export const organizations: Organization[] = [
   {
     id: "ORG-01", demo: true, name: "Cascade Regional Transit Authority", industry: "Public Transit", channel: "Solicitation", score: 68,

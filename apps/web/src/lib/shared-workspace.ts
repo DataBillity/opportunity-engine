@@ -1,4 +1,6 @@
+import type { Play } from "@opportunity-engine/core";
 import type { GraphData, Organization, Partner, Pursuit } from "@/lib/mock-data";
+import type { ImportedLead, ListSettings } from "@/lib/lead-import";
 
 /** Leads, their opportunities, partners, and the graph those partners contribute to. */
 export type WorkspaceState = {
@@ -6,7 +8,18 @@ export type WorkspaceState = {
   pursuits: Record<string, Pursuit>;
   partners: Partner[];
   graph: GraphData;
+  plays?: Play[];
+  leadImports?: LeadImportBatch[];
 };
+
+export interface LeadImportBatch {
+  id: string;
+  name: string;
+  settings: ListSettings;
+  leads: ImportedLead[];
+  createdAt: string;
+  updatedAt: string;
+}
 
 export type SharedWorkspace = WorkspaceState & {
   revision: number;
@@ -80,8 +93,35 @@ function mergeRecord<T>(
   return merged;
 }
 
+function mergeByKey<T>(local: T[], baseline: T[], server: T[], keyFn: (item: T) => string): T[] {
+  const baselineByKey = new Map(baseline.map(item => [keyFn(item), item]));
+  const serverByKey = new Map(server.map(item => [keyFn(item), item]));
+  const seen = new Set<string>();
+  const merged: T[] = [];
+
+  for (const item of local) {
+    const k = keyFn(item);
+    seen.add(k);
+    const chosen = pick(item, baselineByKey.get(k), serverByKey.get(k));
+    if (chosen) merged.push(chosen);
+  }
+  for (const item of server) {
+    const k = keyFn(item);
+    if (seen.has(k)) continue;
+    const chosen = pick(undefined, baselineByKey.get(k), item);
+    if (chosen) merged.push(chosen);
+  }
+  return merged;
+}
+
 /** Keep this operator's edits and fold in records another operator saved first. */
 export function mergeWorkspace(local: WorkspaceState, baseline: WorkspaceState, server: WorkspaceState): WorkspaceState {
+  const mergedPlays = mergeByKey(
+    local.plays ?? [],
+    baseline.plays ?? [],
+    server.plays ?? [],
+    p => p.playId,
+  );
   return {
     organizations: mergeById(local.organizations, baseline.organizations, server.organizations),
     pursuits: mergeRecord(local.pursuits, baseline.pursuits, server.pursuits),
@@ -92,5 +132,11 @@ export function mergeWorkspace(local: WorkspaceState, baseline: WorkspaceState, 
       credentials: mergeById(local.graph.credentials, baseline.graph.credentials, server.graph.credentials),
       people: mergeById(local.graph.people, baseline.graph.people, server.graph.people),
     },
+    plays: mergedPlays.length ? mergedPlays : undefined,
+    leadImports: mergeById(
+      local.leadImports ?? [],
+      baseline.leadImports ?? [],
+      server.leadImports ?? [],
+    ),
   };
 }
