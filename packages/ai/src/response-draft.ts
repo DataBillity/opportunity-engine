@@ -221,7 +221,7 @@ export function buildResponseDraftPrompt(
       "- Resolved action items (facts starting \"Resolved action item\") are closed. Write the owner's response into the draft as fact and never reuse their ids.",
       "- Open action items keep their existing id when they still apply. Drop one only when the facts now answer it.",
       "- New gaps get ids after the highest EXISTING GAP id.",
-      "- Capability, partner, people, and experience facts reflect the current Capability Sources. Prefer them over the previous draft.",
+      "- Capability, partner, people, and experience facts reflect the current Partner Network. Prefer them over the previous draft.",
     );
   }
 

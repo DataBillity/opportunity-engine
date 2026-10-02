@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { buildPlaysFromPartners, type Play } from "@opportunity-engine/core";
 import {
   type GraphCapability,
   type GraphCredential,
@@ -27,7 +28,7 @@ import {
   type PartnerIngestResult,
 } from "@/lib/partner-ingest";
 
-type TabId = "capabilities" | "experience" | "credentials" | "people" | "partners";
+type TabId = "partners" | "capabilities" | "experience" | "credentials" | "people" | "plays";
 
 const PARTNER_TYPES = [
   { value: "Prime", label: "Prime" },
@@ -407,7 +408,7 @@ export function SourcesView({
   onReinstatePartner?: (partnerId: string) => void;
 }) {
   const { toast } = useToast();
-  const [tab, setTab] = useState<TabId>("capabilities");
+  const [tab, setTab] = useState<TabId>("partners");
   const [searchQ, setSearchQ] = useState("");
   const [showArchived, setShowArchived] = useState(false);
 
@@ -519,6 +520,8 @@ export function SourcesView({
   const [credSort, setCredSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
   const [peopleSort, setPeopleSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
   const [partnerSort, setPartnerSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
+  const [playSort, setPlaySort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
+  const [detailPlay, setDetailPlay] = useState<Play | null>(null);
   const [capFilters, setCapFilters] = useState<Record<string, string>>({});
   const [expFilters, setExpFilters] = useState<Record<string, string>>({});
   const [credFilters, setCredFilters] = useState<Record<string, string>>({});
@@ -533,12 +536,24 @@ export function SourcesView({
   const [credDocFiles, setCredDocFiles] = useState<File[]>([]);
 
   const isActive = (status: string) => status !== "Archived";
+  const plays = useMemo(() => {
+    if (!capabilities.length && !experience.length) return [];
+    return buildPlaysFromPartners({
+      partners: partners.map(p => ({ id: p.id, name: p.name, type: p.type })),
+      capabilities,
+      experiences: experience,
+      credentials,
+      people,
+    });
+  }, [partners, capabilities, experience, credentials, people]);
+
   const tabs: { id: TabId; label: string; count: number }[] = [
+    { id: "partners", label: "Partners", count: partners.filter(p => showArchived || isActive(p.status)).length },
     { id: "capabilities", label: "Capabilities", count: capabilities.filter(c => isActive(c.status)).length },
     { id: "experience", label: "Experience", count: experience.filter(e => isActive(e.status)).length },
     { id: "credentials", label: "Credentials", count: credentials.filter(c => isActive(c.status)).length },
     { id: "people", label: "People", count: people.filter(p => isActive(p.status)).length },
-    { id: "partners", label: "Partners", count: partners.filter(p => showArchived || isActive(p.status)).length },
+    { id: "plays", label: "Plays", count: plays.length },
   ];
 
   const activePartners = partners.filter(p => p.status !== "Archived");
@@ -1134,6 +1149,34 @@ export function SourcesView({
     return cmp(a.name, b.name, dir);
   });
 
+  function playPartners(play: Play): string[] {
+    const names = new Set<string>();
+    for (const ref of [...play.capabilities, ...play.experiences, ...play.credentials, ...play.people]) {
+      if (ref.partner) names.add(ref.partner);
+    }
+    return [...names];
+  }
+
+  const visiblePlays = plays.filter(play =>
+    matchesSearch([
+      play.name,
+      play.problem,
+      play.proven ? "proven" : "unproven",
+      ...playPartners(play),
+      ...play.targetOrganizations.sectors,
+      ...play.targetOrganizations.types,
+    ])
+  ).sort((a, b) => {
+    const { field, dir } = playSort;
+    if (field === "proven") return cmp(a.proven ? "proven" : "unproven", b.proven ? "proven" : "unproven", dir);
+    if (field === "partners") return cmp(playPartners(a).join(", "), playPartners(b).join(", "), dir);
+    if (field === "experience") {
+      const delta = a.strength.experienceCount - b.strength.experienceCount;
+      return dir === "asc" ? delta : -delta;
+    }
+    return cmp(a.name, b.name, dir);
+  });
+
   const partnerOpenActions = detailPartner
     ? Object.values(allPursuits).flatMap(pursuit =>
         (pursuit.responseActionItems ?? [])
@@ -1145,7 +1188,7 @@ export function SourcesView({
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="oe-page-title">Capability Sources</h1>
+        <h1 className="oe-page-title">Partner Network</h1>
         <p className="text-sm text-muted-foreground mt-1">
           The Capability & Experience Graph — the single source of truth for what the consortium can deliver (I1, CEG-04).
         </p>
@@ -1176,7 +1219,7 @@ export function SourcesView({
               type="text"
               value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
-              placeholder={tab === "partners" ? "Search partners…" : "Search…"}
+              placeholder={tab === "partners" ? "Search partners…" : tab === "plays" ? "Search plays…" : "Search…"}
               className="oe-field text-xs w-full sm:w-56"
             />
             {tab === "partners" && (
@@ -1185,18 +1228,20 @@ export function SourcesView({
                 Show archived
               </label>
             )}
-            <button
-              onClick={() => {
-                if (tab === "capabilities") setAddCapOpen(true);
-                else if (tab === "experience") setAddExpOpen(true);
-                else if (tab === "credentials") setAddCredOpen(true);
-                else if (tab === "people") setAddPersonOpen(true);
-                else if (tab === "partners") setAddPartnerOpen(true);
-              }}
-              className="shrink-0 text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm whitespace-nowrap"
-            >
-              + Add {tab === "capabilities" ? "Capability" : tab === "experience" ? "Experience" : tab === "credentials" ? "Credential" : tab === "people" ? "Person" : "Partner"}
-            </button>
+            {tab !== "plays" && (
+              <button
+                onClick={() => {
+                  if (tab === "capabilities") setAddCapOpen(true);
+                  else if (tab === "experience") setAddExpOpen(true);
+                  else if (tab === "credentials") setAddCredOpen(true);
+                  else if (tab === "people") setAddPersonOpen(true);
+                  else if (tab === "partners") setAddPartnerOpen(true);
+                }}
+                className="shrink-0 text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm whitespace-nowrap"
+              >
+                + Add {tab === "capabilities" ? "Capability" : tab === "experience" ? "Experience" : tab === "credentials" ? "Credential" : tab === "people" ? "Person" : "Partner"}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1386,6 +1431,99 @@ export function SourcesView({
           </div>
         </div>
       )}
+
+      {tab === "plays" && (
+        <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Consortium Plays</h3>
+            <span className="text-xs text-muted-foreground">
+              <span className="font-mono font-semibold text-foreground">{plays.length}</span>
+              {" "}play{plays.length === 1 ? "" : "s"} built from Partner records
+            </span>
+          </div>
+          <div className="overflow-x-auto oe-touch-scroll">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead>
+                <tr className="oe-table-header">
+                  <SortableHeader label="Play" field="name" current={playSort} onClick={() => setPlaySort(s => toggleSort(s, "name"))} />
+                  <SortableHeader label="Status" field="proven" current={playSort} onClick={() => setPlaySort(s => toggleSort(s, "proven"))} />
+                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Problem</th>
+                  <SortableHeader label="Experience" field="experience" current={playSort} onClick={() => setPlaySort(s => toggleSort(s, "experience"))} />
+                  <SortableHeader label="Partners" field="partners" current={playSort} onClick={() => setPlaySort(s => toggleSort(s, "partners"))} />
+                </tr>
+              </thead>
+              <tbody>
+                {visiblePlays.map(play => (
+                  <tr key={play.playId} className="oe-table-row border-b border-border last:border-b-0 cursor-pointer" onClick={() => setDetailPlay(play)}>
+                    <td className="px-4 py-3 font-semibold text-foreground">{play.name}</td>
+                    <td className="px-4 py-3">
+                      <span className={cn(
+                        "inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md",
+                        play.proven ? "oe-status-go" : "oe-status-cond"
+                      )}>
+                        {play.proven ? "Proven" : "Unproven"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground max-w-[420px] truncate">{play.problem || "—"}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground font-mono">{play.strength.experienceCount}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{playPartners(play).join(", ") || "—"}</td>
+                  </tr>
+                ))}
+                {visiblePlays.length === 0 && (
+                  <EmptyFilterRow colSpan={5} noun="plays" filtered={Boolean(searchQ)} />
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <Modal open={detailPlay !== null} onClose={() => setDetailPlay(null)} title={detailPlay?.name ?? "Play"} wide>
+        {detailPlay && (
+          <div className="space-y-4 text-xs">
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                "inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md",
+                detailPlay.proven ? "oe-status-go" : "oe-status-cond"
+              )}>
+                {detailPlay.proven ? "Proven" : "Unproven"}
+              </span>
+              <span className="text-muted-foreground">
+                {detailPlay.strength.experienceCount} experience · {detailPlay.strength.partnerCount} partner{detailPlay.strength.partnerCount === 1 ? "" : "s"}
+              </span>
+            </div>
+            {detailPlay.problem && (
+              <div>
+                <h4 className="text-xs font-semibold mb-1">Problem</h4>
+                <p className="text-muted-foreground">{detailPlay.problem}</p>
+              </div>
+            )}
+            <div>
+              <h4 className="text-xs font-semibold mb-1">Partners</h4>
+              <p className="text-muted-foreground">{playPartners(detailPlay).join(", ") || "—"}</p>
+            </div>
+            {detailPlay.targetOrganizations.sectors.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold mb-1">Target sectors</h4>
+                <p className="text-muted-foreground">{detailPlay.targetOrganizations.sectors.join(", ")}</p>
+              </div>
+            )}
+            {detailPlay.experiences.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold mb-1">Experience</h4>
+                <ul className="space-y-1 text-muted-foreground">
+                  {detailPlay.experiences.map((ref, index) => (
+                    <li key={`${ref.recordId}-${ref.partner}-${index}`}>{ref.summary} — {ref.partner}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {detailPlay.strength.notes && (
+              <p className="text-muted-foreground">{detailPlay.strength.notes}</p>
+            )}
+          </div>
+        )}
+      </Modal>
 
       <Modal open={detailPartner !== null} onClose={() => setDetailPartnerId(null)} title={detailPartner?.name ?? "Partner Details"} wide>
         {detailPartner && (

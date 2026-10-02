@@ -187,7 +187,7 @@ export function reassessForTeam(input: {
     ? `Added ${partnerName ?? "partner"}.`
     : trigger === "partner_removed"
       ? `Removed ${partnerName ?? "partner"}.`
-      : "Reran the assessment against the current team and Capability Sources.";
+      : "Reran the assessment against the current team and Partner Network.";
 
   if (!result.assessable) {
     return {
@@ -305,7 +305,7 @@ export function applyGoNoGoRerun(input: {
     ? `Added ${partnerName ?? "partner"}.`
     : trigger === "partner_removed"
       ? `Removed ${partnerName ?? "partner"}.`
-      : "Reran the Go/No-Go assessment against the current team and Capability Sources.";
+      : "Reran the Go/No-Go assessment against the current team and Partner Network.";
   const parts = [
     lead,
     recMoved

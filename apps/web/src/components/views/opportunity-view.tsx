@@ -104,7 +104,7 @@ export function OpportunityView({
         if (gaps.length > 0) {
           response = "Based on the gap analysis, the ideal partner(s) would provide:\n\n";
           for (const g of gaps) response += `- ${g.title}: Look for a partner with ${g.closure}\n`;
-          response += "\nConsider reaching out to partners in the Capability Sources graph who cover these gap areas.";
+          response += "\nConsider reaching out to partners in the Partner Network who cover these gap areas.";
         } else {
           response = "All requirements are currently mapped to consortium capabilities. No additional partner coverage is needed for this opportunity.";
         }
@@ -321,10 +321,10 @@ export function OpportunityView({
                 onClick={handleRerunAssessment}
                 disabled={!graph || pursuit.closed || assessing}
                 title={projectType === "rfp"
-                  ? "Re-score the Go/No-Go assessment using the current partners and Capability Sources"
+                  ? "Re-score the Go/No-Go assessment using the current partners and Partner Network"
                   : projectType === "rfi"
-                    ? "Re-score topic coverage using the current partners and Capability Sources"
-                    : "Re-score coverage using the current partners and Capability Sources"}
+                    ? "Re-score topic coverage using the current partners and Partner Network"
+                    : "Re-score coverage using the current partners and Partner Network"}
                 className="text-xs font-medium px-3.5 py-2 rounded-md border border-input bg-card text-foreground cursor-pointer transition-all hover:bg-secondary disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {assessing ? "Assessing…" : "Rerun Assessment"}

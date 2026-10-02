@@ -644,31 +644,6 @@ export function SearchView({
         </div>
       </div>
 
-      {/* Plays summary */}
-      {plays.length > 0 && (
-        <div className="bg-card rounded-xl border shadow-sm px-4 sm:px-5 py-3">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Consortium Plays</h3>
-            <span className="text-xs text-muted-foreground"><span className="font-mono font-semibold text-foreground">{plays.length}</span> plays built from Partner records</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {plays.map(play => (
-              <div key={play.playId} className={cn(
-                "text-[11px] px-2.5 py-1.5 rounded-md border",
-                play.proven
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                  : "border-amber-200 bg-amber-50 text-amber-800"
-              )}>
-                <span className="font-semibold">{play.name}</span>
-                <span className="ml-1.5 text-[10px] opacity-70">
-                  {play.proven ? "✓ proven" : "○ unproven"} · {play.strength.experienceCount} exp · {play.strength.partnerCount} partner{play.strength.partnerCount !== 1 ? "s" : ""}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {searchNotes.length > 0 && (
         <div className="text-xs text-muted-foreground bg-card border border-border rounded-lg px-4 py-3 space-y-1">
           {searchNotes.map(note => <p key={note}>{note}</p>)}
