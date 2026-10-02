@@ -13,6 +13,8 @@ export function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
+  const [organizationId, setOrganizationId] = useState("");
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,12 +28,24 @@ export function SignInForm() {
         body: JSON.stringify({
           username,
           password,
+          organizationId: organizationId || undefined,
           from: safeReturnPath(searchParams.get("from")),
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as { error?: string; redirectTo?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        redirectTo?: string;
+        chooseOrganization?: boolean;
+        organizations?: { id: string; name: string }[];
+      };
       if (!res.ok) {
         setError(data.error || "Unable to sign in. Try again.");
+        return;
+      }
+      if (data.chooseOrganization && data.organizations?.length) {
+        setOrganizations(data.organizations);
+        setOrganizationId(data.organizations[0]?.id ?? "");
+        setError("Choose the organization to open.");
         return;
       }
       router.replace(data.redirectTo || "/");
@@ -105,6 +119,24 @@ export function SignInForm() {
           </button>
         </div>
       </div>
+
+      {organizations.length > 1 && (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="organization" className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
+            Organization
+          </label>
+          <select
+            id="organization"
+            value={organizationId}
+            onChange={event => setOrganizationId(event.target.value)}
+            className="oe-field text-sm py-2.5"
+          >
+            {organizations.map(org => (
+              <option key={org.id} value={org.id}>{org.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {error && (
         <p role="alert" className="text-xs text-destructive bg-[hsl(var(--status-nogo-soft))] border border-destructive/10 rounded-md px-3 py-2">

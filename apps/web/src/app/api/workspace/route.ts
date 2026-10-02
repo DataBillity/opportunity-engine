@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { COOKIE_NAME, readSessionToken } from "@/lib/auth";
 import { requestIsSameOrigin } from "@/lib/auth-shared";
+import type { Play } from "@opportunity-engine/core";
 import type { GraphData, Organization, Partner, Pursuit } from "@/lib/mock-data";
 import { readSharedWorkspace, writeSharedWorkspace } from "@/lib/shared-workspace-store";
 import type { WorkspaceState } from "@/lib/shared-workspace";
@@ -44,7 +45,7 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
 
   try {
-    const workspace = await readSharedWorkspace();
+    const workspace = await readSharedWorkspace(session.organizationId);
     if (!workspace) {
       return NextResponse.json({ error: "Shared workspace storage is not configured." }, { status: 503 });
     }
@@ -72,13 +73,13 @@ export async function PUT(request: Request) {
     pursuits: body.pursuits as Record<string, Pursuit>,
     partners: body.partners as Partner[],
     graph: body.graph as GraphData,
-    plays: body.plays,
+    plays: Array.isArray(body.plays) ? body.plays as Play[] : undefined,
     leadImports: body.leadImports,
     discovery: body.discovery,
   };
 
   try {
-    const result = await writeSharedWorkspace(next, body.revision);
+    const result = await writeSharedWorkspace(session.organizationId, next, body.revision);
     if (!result) {
       return NextResponse.json({ error: "Shared workspace storage is not configured." }, { status: 503 });
     }

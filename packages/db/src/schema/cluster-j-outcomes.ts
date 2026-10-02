@@ -10,6 +10,7 @@ import { decision } from "./cluster-g-governance";
 // Append-only — re-scores are appended, never overwritten (SCORE-08)
 export const scoreRun = pgTable("score_run", {
   id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: text("organization_id"),
   subjectType: text("subject_type").notNull(), // lead | account
   subjectId: uuid("subject_id").notNull(),
   decisionId: uuid("decision_id"),

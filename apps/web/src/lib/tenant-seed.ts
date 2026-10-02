@@ -1,7 +1,8 @@
 /**
- * Demonstration workspace copied onto every new tenant.
+ * Demonstration workspace copied into one organization's workspace row.
  * Search & Discovery, pipeline, the Partner network, opportunities,
  * capability sources, and the archive each receive sample records.
+ * Callers insert the copy once; they do not share the row across organizations.
  */
 import {
   buildPlaysFromPartners,

@@ -7,7 +7,6 @@ import {
   matchExistingAccount,
   scoreDiscoveredAccount,
   screenInboundLead,
-  buildPlaysFromPartners,
   scoreFitAgainstPlays,
   type DiscoveryAssessment,
   type DiscoveryField,
@@ -49,6 +48,8 @@ const SOURCE_OPTIONS = ["Company website", "SEC filings"] as const;
 
 type ImportStep = "upload" | "map" | "review";
 
+const NO_CANDIDATES: DiscoveryCandidate[] = [];
+
 const STATUS_COLORS: Record<LeadStatus, string> = {
   Imported: "bg-slate-100 text-slate-700",
   Identified: "bg-blue-100 text-blue-700",
@@ -62,21 +63,23 @@ export function SearchView({
   graph,
   pipelineOrgs,
   partners,
-  seededPlays,
-  seededDiscovery,
+  plays,
+  initialCandidates = NO_CANDIDATES,
 }: {
   onAddOrg: (org: Organization) => void;
   graph: GraphData;
   pipelineOrgs: Organization[];
   partners?: Partner[];
-  seededPlays?: Play[];
-  seededDiscovery?: DiscoveryCandidate[];
+  plays: Play[];
+  /** Organization workspace candidates. Used only when this operator has no private session. */
+  initialCandidates?: DiscoveryCandidate[];
   onAddOrgs?: (orgs: Organization[]) => void;
   onImportedLeads?: () => void;
 }) {
   const { toast } = useToast();
   const { profile } = useOperator();
   const operatorEmail = profile?.email ?? "";
+  const organizationId = profile?.organizationId ?? "";
 
   /* ---- Search state ---- */
   const [industry, setIndustry] = useState("all");
@@ -87,10 +90,10 @@ export function SearchView({
   const [activeSources, setActiveSources] = useState<Set<string>>(new Set(SOURCE_OPTIONS));
   const [searching, setSearching] = useState(false);
   const [searchNotes, setSearchNotes] = useState<string[]>([]);
-  const [results, setResults] = useState<DiscoveryCandidate[]>(() => seededDiscovery ?? []);
+  const [results, setResults] = useState<DiscoveryCandidate[]>([]);
   const [refreshing, setRefreshing] = useState<Set<string>>(new Set());
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
-  const [hasSearched, setHasSearched] = useState(() => (seededDiscovery?.length ?? 0) > 0);
+  const [hasSearched, setHasSearched] = useState(false);
 
   /* ---- Bulk import state ---- */
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -120,9 +123,6 @@ export function SearchView({
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [expandedLead, setExpandedLead] = useState<string | null>(null);
 
-  /* ---- Plays ---- */
-  const [plays, setPlays] = useState<Play[]>(() => seededPlays ?? []);
-
   /* ---- Inbound state ---- */
   const [inboundOpen, setInboundOpen] = useState(false);
   const [inboundName, setInboundName] = useState("");
@@ -132,26 +132,6 @@ export function SearchView({
   const [inboundSummary, setInboundSummary] = useState("");
   const [inboundFlags, setInboundFlags] = useState<string[]>([]);
 
-  /* ---- Plays: use the tenant seed, otherwise build from Partner data ---- */
-  useEffect(() => {
-    if (seededPlays && seededPlays.length > 0) {
-      setPlays(seededPlays);
-      return;
-    }
-    const partnerList = partners ?? [];
-    if (!graph.capabilities.length && !graph.experience.length) {
-      setPlays([]);
-      return;
-    }
-    setPlays(buildPlaysFromPartners({
-      partners: partnerList.map(p => ({ id: p.id, name: p.name, type: p.type })),
-      capabilities: graph.capabilities,
-      experiences: graph.experience,
-      credentials: graph.credentials,
-      people: graph.people,
-    }));
-  }, [graph, partners, seededPlays]);
-
   const csvHeaders = useMemo(() => {
     if (!bulkText.trim()) return [];
     return extractCsvHeaders(bulkText);
@@ -160,24 +140,25 @@ export function SearchView({
   const rowCount = useMemo(() => csvRowCount(bulkText), [bulkText]);
 
   const persistSession = useCallback((candidates: DiscoveryCandidate[], added: Set<string>) => {
-    if (!operatorEmail) return;
-    saveSearchCandidates(operatorEmail, {
+    if (!operatorEmail || !organizationId) return;
+    saveSearchCandidates(organizationId, operatorEmail, {
       candidates,
       addedIds: Array.from(added),
     });
-  }, [operatorEmail]);
+  }, [operatorEmail, organizationId]);
 
   useEffect(() => {
-    if (!operatorEmail) return;
-    const stored = loadSearchCandidates(operatorEmail);
+    if (!operatorEmail || !organizationId) return;
+    const stored = loadSearchCandidates(organizationId, operatorEmail);
     if (stored) {
       setResults(stored.candidates);
       setAddedIds(new Set(stored.addedIds));
       setHasSearched(true);
       return;
     }
-    if (seededDiscovery && seededDiscovery.length > 0) {
-      setResults(seededDiscovery);
+    // Show the organization's seeded list without copying it into this operator's private session.
+    if (initialCandidates.length > 0) {
+      setResults(initialCandidates);
       setAddedIds(new Set());
       setHasSearched(true);
       return;
@@ -185,7 +166,7 @@ export function SearchView({
     setResults([]);
     setAddedIds(new Set());
     setHasSearched(false);
-  }, [operatorEmail, seededDiscovery]);
+  }, [operatorEmail, organizationId, initialCandidates]);
 
   function replaceCandidates(next: DiscoveryCandidate[]) {
     setResults(next);
@@ -657,31 +638,6 @@ export function SearchView({
         </div>
       </div>
 
-      {/* Plays summary */}
-      {plays.length > 0 && (
-        <div className="bg-card rounded-xl border shadow-sm px-4 sm:px-5 py-3">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Consortium Plays</h3>
-            <span className="text-xs text-muted-foreground"><span className="font-mono font-semibold text-foreground">{plays.length}</span> plays built from Partner records</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {plays.map(play => (
-              <div key={play.playId} className={cn(
-                "text-[11px] px-2.5 py-1.5 rounded-md border",
-                play.proven
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                  : "border-amber-200 bg-amber-50 text-amber-800"
-              )}>
-                <span className="font-semibold">{play.name}</span>
-                <span className="ml-1.5 text-[10px] opacity-70">
-                  {play.proven ? "✓ proven" : "○ unproven"} · {play.strength.experienceCount} exp · {play.strength.partnerCount} partner{play.strength.partnerCount !== 1 ? "s" : ""}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {searchNotes.length > 0 && (
         <div className="text-xs text-muted-foreground bg-card border border-border rounded-lg px-4 py-3 space-y-1">
           {searchNotes.map(note => <p key={note}>{note}</p>)}
@@ -838,7 +794,7 @@ export function SearchView({
         {importStep === "upload" && (
           <div className="space-y-4">
             <p className="text-xs text-muted-foreground">
-              Upload a CSV lead list or paste it directly. The list needs at least an organization name column. Optional columns: contact name, title, website, email, profile URL, notes, and date of last contact.
+              Upload a CSV lead list or paste it directly. The list needs at least an organization name column. A contact can be one Name column, or separate First Name and Last Name columns. Other optional columns: title, website, email, profile URL, notes, and date of last contact.
             </p>
             <div
               onDragOver={e => { e.preventDefault(); setBulkDragOver(true); }}

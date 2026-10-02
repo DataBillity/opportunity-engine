@@ -25,6 +25,7 @@ export const retentionClassEnum = pgEnum("retention_class", [
 // The one identity (I2) — every lead, opportunity, and solicitation resolves here
 export const account = pgTable("account", {
   id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: text("organization_id"),
   normalizedDomain: text("normalized_domain"),
   legalName: text("legal_name").notNull(),
   registryId: text("registry_id"),
@@ -67,6 +68,7 @@ export const accountMerge = pgTable("account_merge", {
 // Personal data — minimized at capture (GOV-08)
 export const contact = pgTable("contact", {
   id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: text("organization_id"),
   accountId: uuid("account_id").notNull().references(() => account.id),
   fullName: text("full_name").notNull(),
   roleTitle: text("role_title"),
@@ -87,6 +89,7 @@ export const contact = pgTable("contact", {
 // One board for every channel (I3, SCORE-06)
 export const lead = pgTable("lead", {
   id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: text("organization_id"),
   accountId: uuid("account_id").notNull().references(() => account.id),
   channel: channelEnum("channel").notNull(),
   provenance: jsonb("provenance"),
@@ -145,6 +148,7 @@ export const enrichedField = pgTable("enriched_field", {
 // Bulk list evaluation (DISC-13, Amendment 2)
 export const sourceBatch = pgTable("source_batch", {
   id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: text("organization_id"),
   label: text("label").notNull(),
   fileRef: uuid("file_ref"),
   rowCount: integer("row_count").notNull(),

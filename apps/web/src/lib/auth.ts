@@ -5,6 +5,7 @@ export { COOKIE_NAME, SESSION_MAX_AGE_SEC };
 
 export type Session = {
   email: string;
+  organizationId: string;
 };
 
 function encoder() {
@@ -98,11 +99,17 @@ export function credentialsMatch(username: string, password: string): boolean {
   return userOk && passOk;
 }
 
-export async function createSessionToken(email: string): Promise<string> {
+export async function createSessionToken(email: string, organizationId: string): Promise<string> {
   const secret = getAuthSecret();
   if (!secret) throw new Error("AUTH_SECRET is not set");
+  const org = organizationId.trim();
+  if (!org) throw new Error("organizationId is required");
   const payload = bytesToBase64Url(
-    encoder().encode(JSON.stringify({ e: email.trim().toLowerCase(), exp: Date.now() + SESSION_MAX_AGE_SEC * 1000 })),
+    encoder().encode(JSON.stringify({
+      e: email.trim().toLowerCase(),
+      o: org,
+      exp: Date.now() + SESSION_MAX_AGE_SEC * 1000,
+    })),
   );
   const signature = await hmacSign(secret, payload);
   return `${payload}.${signature}`;
@@ -119,9 +126,9 @@ export async function readSessionToken(token: string | undefined | null): Promis
   const expected = await hmacSign(secret, payload);
   if (!timingSafeEqual(signature, expected)) return null;
   try {
-    const parsed = JSON.parse(decoder().decode(base64UrlToBytes(payload))) as { e?: string; exp?: number };
-    if (!parsed.e || typeof parsed.exp !== "number" || parsed.exp < Date.now()) return null;
-    return { email: parsed.e };
+    const parsed = JSON.parse(decoder().decode(base64UrlToBytes(payload))) as { e?: string; o?: string; exp?: number };
+    if (!parsed.e || !parsed.o || typeof parsed.exp !== "number" || parsed.exp < Date.now()) return null;
+    return { email: parsed.e, organizationId: parsed.o };
   } catch {
     return null;
   }

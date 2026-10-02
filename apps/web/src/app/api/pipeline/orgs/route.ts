@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createSql } from "@opportunity-engine/db";
 import type { Organization } from "@/lib/mock-data";
+import { readRequestSession } from "@/lib/org-model";
+import { ensureTenantReady } from "@/lib/tenant";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +22,10 @@ type LeadRow = {
 };
 
 export async function GET() {
+  const session = await readRequestSession();
+  if (!session) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+  await ensureTenantReady();
+
   const url = process.env.DATABASE_URL;
   if (!url) {
     return NextResponse.json({ organizations: [], imported: 0, reason: "DATABASE_URL is not set" });
@@ -43,6 +49,7 @@ export async function GET() {
     JOIN account a ON a.id = l.account_id
     WHERE l.channel = 'bulk_list'
       AND l.routing_outcome = 'pipeline'
+      AND l.organization_id = ${session.organizationId}
     ORDER BY l.current_score DESC NULLS LAST, a.legal_name ASC
   ` as LeadRow[];
 

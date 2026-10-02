@@ -129,6 +129,12 @@ export {
   buildPlaysFromPartners,
   scoreFitAgainstPlays,
   computeOpportunityScore,
+  industryMatchKind,
+  assessProposedPlay,
+  composeConsortiumPlays,
+  applySolicitationUpdate,
+  storeUpdatedPlay,
+  approveProposedPlay,
 } from "./plays";
 export type {
   Play,
@@ -147,4 +153,9 @@ export type {
   RelationshipLevel,
   ExperienceCloseness,
   PartnerSummary,
+  PlayExperienceCredit,
+  PlayAssessment,
+  PlayProposal,
+  PlayProposalInput,
+  SolicitationPlayEvent,
 } from "./plays";

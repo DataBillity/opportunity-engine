@@ -11,6 +11,7 @@ import {
   buildDecisionRecord,
 } from "@opportunity-engine/core";
 import type { LinkedInBatchResult, EvaluatedLead, ResolvedAccount } from "@opportunity-engine/core";
+import { DATABILLITY_ORG_ID } from "@opportunity-engine/db";
 import { computeSubmissionKey } from "../runtime/idempotency";
 import { logger } from "../runtime/logger";
 
@@ -95,10 +96,16 @@ async function persistBatch(
   const now = new Date();
   const accountIdByKey = new Map<string, string>();
 
+  await sql`ALTER TABLE account ADD COLUMN IF NOT EXISTS organization_id text`;
+  await sql`ALTER TABLE lead ADD COLUMN IF NOT EXISTS organization_id text`;
+  await sql`ALTER TABLE contact ADD COLUMN IF NOT EXISTS organization_id text`;
+  await sql`ALTER TABLE source_batch ADD COLUMN IF NOT EXISTS organization_id text`;
+  await sql`ALTER TABLE score_run ADD COLUMN IF NOT EXISTS organization_id text`;
+
   await sql.begin(async (tx) => {
     await tx`
-      INSERT INTO source_batch (id, label, row_count, evaluated_count, uploaded_at)
-      VALUES (${batchId}, ${BATCH_LABEL}, ${batch.rowCount}, ${batch.evaluated}, ${now})
+      INSERT INTO source_batch (id, organization_id, label, row_count, evaluated_count, uploaded_at)
+      VALUES (${batchId}, ${DATABILLITY_ORG_ID}, ${BATCH_LABEL}, ${batch.rowCount}, ${batch.evaluated}, ${now})
     `;
 
     for (const chunk of chunks(batch.accounts, 100)) {
@@ -107,9 +114,9 @@ async function persistBatch(
         accountIdByKey.set(account.key, id);
         await tx`
           INSERT INTO account (
-            id, legal_name, sector, size_band, summary, classification, retention_class, created_at, updated_at
+            id, organization_id, legal_name, sector, size_band, summary, classification, retention_class, created_at, updated_at
           ) VALUES (
-            ${id}, ${account.legalName}, ${account.sector}, ${account.sizeBand},
+            ${id}, ${DATABILLITY_ORG_ID}, ${account.legalName}, ${account.sector}, ${account.sizeBand},
             ${account.leads[0]?.whyGoodFit ?? null},
             'internal', 'standard', ${now}, ${now}
           )
@@ -138,10 +145,10 @@ async function persistBatch(
 
         await tx`
           INSERT INTO contact (
-            id, account_id, full_name, role_title, seniority_band, email, source_ref,
+            id, organization_id, account_id, full_name, role_title, seniority_band, email, source_ref,
             lawful_basis, purpose_tags, classification, retention_class, created_at, updated_at
           ) VALUES (
-            ${contactId}, ${accountId}, ${lead.fullName}, ${lead.position || null},
+            ${contactId}, ${DATABILLITY_ORG_ID}, ${accountId}, ${lead.fullName}, ${lead.position || null},
             ${lead.seniorityBand}, ${lead.email}, ${lead.url || `row:${lead.rowNumber}`},
             'legitimate_interests', ${tx.array(["b2b_sales", "relationship_network"])},
             ${lead.email ? "regulated" : "internal"}, 'standard', ${now}, ${now}
@@ -171,10 +178,10 @@ async function persistBatch(
 
         await tx`
           INSERT INTO lead (
-            id, account_id, channel, provenance, intent_evidence, current_score, current_score_run_id,
+            id, organization_id, account_id, channel, provenance, intent_evidence, current_score, current_score_run_id,
             routing_outcome, classification, retention_class, created_at, updated_at
           ) VALUES (
-            ${leadId}, ${accountId}, 'bulk_list', ${tx.json(provenance as never)},
+            ${leadId}, ${DATABILLITY_ORG_ID}, ${accountId}, 'bulk_list', ${tx.json(provenance as never)},
             ${tx.json({
               icpTags: lead.icpTags,
               icpVertical: lead.icpVertical,
@@ -223,11 +230,11 @@ async function persistBatch(
 
         await tx`
           INSERT INTO score_run (
-            id, subject_type, subject_id, decision_id, total,
+            id, organization_id, subject_type, subject_id, decision_id, total,
             capability_alignment, intent_timing, account_value_fit,
             weights_version, graph_version, evidence_refs, run_at, created_at
           ) VALUES (
-            ${scoreRunId}, 'lead', ${leadId}, ${decisionId}, ${lead.score},
+            ${scoreRunId}, ${DATABILLITY_ORG_ID}, 'lead', ${leadId}, ${decisionId}, ${lead.score},
             ${lead.scoreComponents.capabilityAlignment}, ${lead.scoreComponents.intentTiming},
             ${lead.scoreComponents.accountValueFit}, 'oa-40-35-25', 'bootstrap',
             ${tx.json([lead.url || `row:${lead.rowNumber}`] as never)}, ${now}, ${now}

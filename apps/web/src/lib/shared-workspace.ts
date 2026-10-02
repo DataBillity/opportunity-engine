@@ -11,7 +11,7 @@ export type WorkspaceState = {
   graph: GraphData;
   plays?: Play[];
   leadImports?: LeadImportBatch[];
-  /** Search & Discovery candidates seeded for a new tenant, until an operator replaces them. */
+  /** Organization-scoped demonstration candidates. An operator's later searches stay in browser storage. */
   discovery?: DiscoveryCandidate[];
 };
 

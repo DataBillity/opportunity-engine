@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { authIsConfigured, isAllowedUsername } from "@/lib/auth";
+import { authIsConfigured } from "@/lib/auth";
 import { requestIsSameOrigin } from "@/lib/auth-shared";
 import { clientKey, tooManyAttempts } from "@/lib/auth-rate-limit";
 import { mailIsConfigured, sendPasswordResetEmail } from "@/lib/mail";
-import { issuePasswordResetToken, operatorStoreConfigured } from "@/lib/operator-credentials";
+import { emailMayAuthenticate, issuePasswordResetToken, operatorStoreConfigured } from "@/lib/operator-credentials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
   }
 
-  if (!isAllowedUsername(email)) {
+  if (!(await emailMayAuthenticate(email))) {
     return NextResponse.json(GENERIC_OK);
   }
 

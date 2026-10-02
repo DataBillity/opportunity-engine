@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { TopBar } from "@/components/layout/top-bar";
 import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
@@ -11,14 +11,14 @@ import { SearchView } from "@/components/views/search-view";
 import { SourcesView } from "@/components/views/sources-view";
 import { ResponseBuilderEmptyState, ResponseBuilderView } from "@/components/views/response-builder-view";
 import { SettingsView } from "@/components/views/settings-view";
+import { TeamView } from "@/components/views/team-view";
+import { IntegrationsView } from "@/components/views/integrations-view";
 import { DashboardView } from "@/components/views/dashboard-view";
 import { ArchiveView } from "@/components/views/archive-view";
 import { OperatorProvider } from "@/components/auth/operator-provider";
 import { useToast } from "@/components/ui/toast";
 import { applyPartnerArchive, applyPartnerReinstate, computeSharedIds, setPartnerArchived } from "@/lib/partner-archive";
 import { mergeWorkspace, sameWorkspace, type LeadImportBatch, type SharedWorkspace, type WorkspaceState } from "@/lib/shared-workspace";
-import { buildTenantSeed } from "@/lib/tenant-seed";
-import type { Play } from "@opportunity-engine/core";
 import type { DiscoveryCandidate } from "@/lib/search-candidates";
 import {
   type Organization,
@@ -29,23 +29,50 @@ import {
 import { mergeLeadOrganizations, mergePipelineLeads } from "@/lib/create-lead";
 import { rescorePipeline } from "@/lib/discovery-score";
 import { applyDecision } from "@/lib/pursuit-assessment";
+import {
+  applySolicitationUpdate,
+  approveProposedPlay,
+  assessProposedPlay,
+  composeConsortiumPlays,
+  storeUpdatedPlay,
+  type Play,
+  type PlayBuilderInput,
+  type PlayProposalInput,
+  type SolicitationPlayEvent,
+} from "@opportunity-engine/core";
+import { solicitationEventFromPursuit, solicitationOutcomeFor } from "@/lib/play-updates";
 import { ResponseJobsProvider } from "@/lib/response-jobs";
 
-export type ViewId = "dashboard" | "search" | "pipeline" | "org" | "decision" | "draft" | "sources" | "archive" | "settings";
+export type ViewId = "dashboard" | "search" | "pipeline" | "org" | "decision" | "draft" | "sources" | "archive" | "settings" | "team" | "integrations";
 
 const LEGACY_BROWSER_KEYS = ["oe_orgs", "oe_pursuits", "oe_partners", "oe_graph"];
 
-const initialWorkspace = buildTenantSeed();
+const emptyGraph = (): GraphData => ({
+  capabilities: [],
+  experience: [],
+  credentials: [],
+  people: [],
+});
 
-function workspaceFrom(state: WorkspaceState): WorkspaceState {
+function workspaceFrom(
+  organizations: Organization[],
+  pursuits: Record<string, Pursuit>,
+  partners: Partner[],
+  graph: GraphData,
+  plays: Play[] = [],
+  leadImports: LeadImportBatch[] = [],
+  discovery: DiscoveryCandidate[] = [],
+): WorkspaceState {
+  return { organizations, pursuits, partners, graph, plays, leadImports, discovery };
+}
+
+function playBuilderInput(partners: Partner[], graph: GraphData): PlayBuilderInput {
   return {
-    organizations: state.organizations,
-    pursuits: state.pursuits,
-    partners: state.partners,
-    graph: state.graph,
-    plays: state.plays ?? [],
-    leadImports: state.leadImports ?? [],
-    discovery: state.discovery ?? [],
+    partners: partners.map(partner => ({ id: partner.id, name: partner.name, type: partner.type })),
+    capabilities: graph.capabilities,
+    experiences: graph.experience,
+    credentials: graph.credentials,
+    people: graph.people,
   };
 }
 
@@ -61,30 +88,34 @@ function orgPursuitsFromState(org: Organization | undefined, allPursuits: Record
 export default function CommandCenter() {
   const { toast } = useToast();
   const [activeView, setActiveView] = useState<ViewId>("pipeline");
-  const [currentOrgId, setCurrentOrgId] = useState("ORG-01");
+  const [currentOrgId, setCurrentOrgId] = useState("");
   const [currentPursuitId, setCurrentPursuitId] = useState<string | null>(null);
   const [leadReturnView, setLeadReturnView] = useState<"pipeline" | "archive">("pipeline");
   const [laneFilter, setLaneFilter] = useState("all");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const [ready, setReady] = useState(false);
-  const [orgs, setOrgs] = useState<Organization[]>(() => initialWorkspace.organizations);
-  const [allPursuits, setAllPursuits] = useState<Record<string, Pursuit>>(() => initialWorkspace.pursuits);
-  const [partners, setPartners] = useState<Partner[]>(() => initialWorkspace.partners);
-  const [graph, setGraph] = useState<GraphData>(() => initialWorkspace.graph);
-  const [plays, setPlays] = useState<Play[]>(() => initialWorkspace.plays ?? []);
-  const [leadImports, setLeadImports] = useState<LeadImportBatch[]>(() => initialWorkspace.leadImports ?? []);
-  const [discovery, setDiscovery] = useState<DiscoveryCandidate[]>(() => initialWorkspace.discovery ?? []);
+  const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [allPursuits, setAllPursuits] = useState<Record<string, Pursuit>>({});
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [graph, setGraph] = useState<GraphData>(emptyGraph);
+  const [storedPlays, setStoredPlays] = useState<Play[]>([]);
+  const [leadImports, setLeadImports] = useState<LeadImportBatch[]>([]);
+  const [discovery, setDiscovery] = useState<DiscoveryCandidate[]>([]);
 
   const revisionRef = useRef(0);
   const baselineRef = useRef<WorkspaceState | null>(null);
-  const stateRef = useRef<WorkspaceState>(initialWorkspace);
+  const stateRef = useRef<WorkspaceState>(workspaceFrom([], {}, [], emptyGraph()));
   const saveGen = useRef(0);
   const saveWarned = useRef(false);
   const graphRef = useRef(graph);
   graphRef.current = graph;
   const partnersRef = useRef(partners);
   partnersRef.current = partners;
+  const orgsRef = useRef(orgs);
+  orgsRef.current = orgs;
+  const playsRef = useRef(storedPlays);
+  playsRef.current = storedPlays;
 
   function applyWorkspace(next: WorkspaceState, revision: number, baseline: WorkspaceState) {
     revisionRef.current = revision;
@@ -94,9 +125,14 @@ export default function CommandCenter() {
     setAllPursuits(next.pursuits);
     setPartners(next.partners);
     setGraph(next.graph);
-    setPlays(next.plays ?? []);
+    setStoredPlays(next.plays ?? []);
     setLeadImports(next.leadImports ?? []);
     setDiscovery(next.discovery ?? []);
+    setCurrentOrgId(prev => {
+      if (next.organizations.some(org => org.id === prev)) return prev;
+      if (next.organizations.some(org => org.id === "ORG-01")) return "ORG-01";
+      return "";
+    });
   }
 
   useEffect(() => {
@@ -108,7 +144,15 @@ export default function CommandCenter() {
       })
       .then((data) => {
         if (cancelled) return;
-        const loaded = workspaceFrom(data);
+        const loaded = workspaceFrom(
+          data.organizations,
+          data.pursuits,
+          data.partners,
+          data.graph,
+          data.plays ?? [],
+          data.leadImports ?? [],
+          data.discovery ?? [],
+        );
         applyWorkspace(loaded, data.revision, loaded);
         setReady(true);
         try {
@@ -127,15 +171,7 @@ export default function CommandCenter() {
   }, [toast]);
 
   useEffect(() => {
-    const current = workspaceFrom({
-      organizations: orgs,
-      pursuits: allPursuits,
-      partners,
-      graph,
-      plays,
-      leadImports,
-      discovery,
-    });
+    const current = workspaceFrom(orgs, allPursuits, partners, graph, storedPlays, leadImports, discovery);
     stateRef.current = current;
     if (!ready) return;
     if (baselineRef.current && sameWorkspace(current, baselineRef.current)) return;
@@ -145,7 +181,7 @@ export default function CommandCenter() {
       void flushWorkspace(gen);
     }, 500);
     return () => clearTimeout(timer);
-  }, [ready, orgs, allPursuits, partners, graph, plays, leadImports, discovery]);
+  }, [ready, orgs, allPursuits, partners, graph, storedPlays, leadImports, discovery]);
 
   async function flushWorkspace(gen: number, isRetry = false) {
     const sent = stateRef.current;
@@ -167,7 +203,15 @@ export default function CommandCenter() {
 
     if (res.status === 409 && !isRetry) {
       const server = await res.json() as SharedWorkspace;
-      const serverState = workspaceFrom(server);
+      const serverState = workspaceFrom(
+        server.organizations,
+        server.pursuits,
+        server.partners,
+        server.graph,
+        server.plays ?? [],
+        server.leadImports ?? [],
+        server.discovery ?? [],
+      );
       const merged = mergeWorkspace(sent, baselineRef.current ?? sent, serverState);
       revisionRef.current = server.revision;
       baselineRef.current = serverState;
@@ -228,6 +272,33 @@ export default function CommandCenter() {
   const singlePursuitId = orgPursuits.length === 1 ? orgPursuits[0]!.id : null;
   const pursuitNavEnabled =
     orgPursuits.length === 1 || (orgPursuits.length > 1 && !!selectedPursuit);
+  const consortiumPlays = useMemo(
+    () => composeConsortiumPlays(playBuilderInput(partners, graph), storedPlays),
+    [partners, graph, storedPlays],
+  );
+
+  const handleProposePlay = useCallback((input: PlayProposalInput) => {
+    const assessed = assessProposedPlay(input, playBuilderInput(partnersRef.current, graphRef.current));
+    setStoredPlays(prev => {
+      let playId = assessed.playId;
+      let n = 2;
+      while (prev.some(play => play.playId === playId)) {
+        playId = `${assessed.playId}-${n}`;
+        n += 1;
+      }
+      return [...prev, { ...assessed, playId }];
+    });
+    const gapCount = assessed.coverageGaps.length;
+    toast(
+      `Proposed "${assessed.name}" — fit ${assessed.assessment?.fit ?? 0}${gapCount ? `, ${gapCount} coverage gap${gapCount === 1 ? "" : "s"}` : ""}.`,
+      "success",
+    );
+  }, [toast]);
+
+  const handleApprovePlay = useCallback((playId: string, approvedBy: string) => {
+    setStoredPlays(prev => approveProposedPlay(prev, playId, approvedBy));
+    toast("Play approved. It stays on the list when Partner records are rebuilt.", "success");
+  }, [toast]);
 
   useEffect(() => {
     if (singlePursuitId && currentPursuitId !== singlePursuitId) {
@@ -259,15 +330,44 @@ export default function CommandCenter() {
 
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
 
+  const recordSolicitation = useCallback((
+    pursuit: Pursuit,
+    outcome: SolicitationPlayEvent["outcome"],
+    reason?: string,
+  ) => {
+    const org = orgsRef.current.find(item => item.id === pursuit.orgId);
+    const event = solicitationEventFromPursuit(pursuit, org, outcome, reason);
+    const composed = composeConsortiumPlays(
+      playBuilderInput(partnersRef.current, graphRef.current),
+      playsRef.current,
+    );
+    const result = applySolicitationUpdate(composed, event);
+    if (!result.matchedPlayId) {
+      toast(`No consortium play matched "${pursuit.name}". The Plays list was left unchanged.`, "warning");
+      return;
+    }
+    const matched = result.plays.find(play => play.playId === result.matchedPlayId);
+    if (!matched) return;
+    setStoredPlays(prev => storeUpdatedPlay(prev, matched));
+    toast(`Updated play "${matched.name}" from ${pursuit.typeLabel} "${pursuit.name}" (${outcome}).`, "success");
+  }, [toast]);
+
   const handleConfirmDecision = useCallback(
     (pursuitId: string, decision: "go" | "nogo", meta: { reason: string; reviewer: string }) => {
+      const captured: { pursuit: Pursuit | null } = { pursuit: null };
       setAllPursuits(prev => {
         const p = prev[pursuitId];
         if (!p) return prev;
-        return { ...prev, [pursuitId]: { ...p, ...applyDecision(p, decision, meta) } };
+        const next = { ...p, ...applyDecision(p, decision, meta) };
+        captured.pursuit = next;
+        return { ...prev, [pursuitId]: next };
       });
+      const pursuit = captured.pursuit;
+      if (pursuit && decision === "nogo" && pursuit.draftStatus !== "Submitted" && !pursuit.outcome) {
+        recordSolicitation(pursuit, "no-bid", meta.reason);
+      }
     },
-    []
+    [recordSolicitation]
   );
 
   const handleAddPursuit = useCallback(
@@ -325,13 +425,21 @@ export default function CommandCenter() {
 
   const handleUpdatePursuit = useCallback(
     (pursuitId: string, updates: Partial<Pursuit>) => {
+      const captured: { pursuit: Pursuit | null; outcome: SolicitationPlayEvent["outcome"] | null } = {
+        pursuit: null,
+        outcome: null,
+      };
       setAllPursuits(prev => {
         const p = prev[pursuitId];
         if (!p) return prev;
-        return { ...prev, [pursuitId]: { ...p, ...updates } };
+        const next = { ...p, ...updates };
+        captured.pursuit = next;
+        captured.outcome = solicitationOutcomeFor(p, updates);
+        return { ...prev, [pursuitId]: next };
       });
+      if (captured.pursuit && captured.outcome) recordSolicitation(captured.pursuit, captured.outcome);
     },
-    []
+    [recordSolicitation]
   );
 
   const handleApplyToPursuit = useCallback(
@@ -478,8 +586,8 @@ export default function CommandCenter() {
                 graph={graph}
                 pipelineOrgs={orgs}
                 partners={partners}
-                seededPlays={plays}
-                seededDiscovery={discovery}
+                plays={consortiumPlays}
+                initialCandidates={discovery}
               />
             )}
             {activeView === "pipeline" && (
@@ -572,9 +680,12 @@ export default function CommandCenter() {
                 partners={partners}
                 graph={graph}
                 allPursuits={allPursuits}
+                plays={consortiumPlays}
                 onUpdatePartners={setPartners}
                 onUpdateGraph={setGraph}
                 onUpdatePursuit={handleUpdatePursuit}
+                onProposePlay={handleProposePlay}
+                onApprovePlay={handleApprovePlay}
                 onArchivePartner={handleArchivePartner}
                 onReinstatePartner={handleReinstatePartner}
               />
@@ -591,6 +702,8 @@ export default function CommandCenter() {
               />
             )}
             {activeView === "settings" && <SettingsView />}
+            {activeView === "team" && <TeamView />}
+            {activeView === "integrations" && <IntegrationsView />}
           </div>
         </main>
       </div>

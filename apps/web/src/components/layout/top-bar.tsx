@@ -42,9 +42,23 @@ function UserMenu({ onNav }: { onNav: (v: ViewId) => void }) {
   const items = [
     { label: "Settings", icon: "👤", action: () => onNav("settings") },
     { label: "Notification Preferences", icon: "🔔", action: () => toast("Notification preferences coming soon", "info") },
-    { label: "Team Management", icon: "👥", action: () => toast("Team management coming soon", "info") },
-    { label: "API & Integrations", icon: "🔗", action: () => toast("API settings coming soon", "info") },
+    { label: "Team Management", icon: "👥", action: () => onNav("team") },
+    { label: "API & Integrations", icon: "🔗", action: () => onNav("integrations") },
   ];
+
+  async function switchOrganization(organizationId: string) {
+    const res = await fetch("/api/auth/switch-organization", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ organizationId }),
+    });
+    if (!res.ok) {
+      toast("Unable to switch organization", "warning");
+      return;
+    }
+    window.location.assign("/");
+  }
 
   return (
     <div className="relative" ref={ref}>
@@ -62,8 +76,25 @@ function UserMenu({ onNav }: { onNav: (v: ViewId) => void }) {
         <div role="menu" className="absolute right-0 top-11 w-56 max-w-[calc(100vw-1.5rem)] bg-card rounded-xl border shadow-xl z-50 py-1.5 overflow-hidden">
           <div className="px-4 py-2.5 border-b border-border">
             <div className="text-xs font-semibold text-foreground">{profile ? operatorLabel(profile) : "Operator"}</div>
-            <div className="text-[11px] text-muted-foreground truncate">{email ?? "Databillity"}</div>
+            <div className="text-[11px] font-semibold text-foreground truncate">{profile?.organizationName ?? "Organization"}</div>
+            <div className="text-[11px] text-muted-foreground truncate">{email ?? ""}</div>
           </div>
+          {profile && profile.memberships.length > 1 && (
+            <div className="px-2 py-1.5 border-b border-border">
+              {profile.memberships.map(org => (
+                <button
+                  key={org.id}
+                  type="button"
+                  role="menuitem"
+                  disabled={org.id === profile.organizationId}
+                  onClick={() => { void switchOrganization(org.id); setOpen(false); }}
+                  className="w-full text-left px-2 py-1.5 text-xs text-foreground hover:bg-muted/40 rounded-md disabled:opacity-60 disabled:hover:bg-transparent"
+                >
+                  {org.name}{org.id === profile.organizationId ? " · current" : ""}
+                </button>
+              ))}
+            </div>
+          )}
           {items.map(item => (
             <button
               key={item.label}
@@ -152,6 +183,7 @@ export function TopBar({
   currentOrgId?: string;
   leadReturnView?: "pipeline" | "archive";
 }) {
+  const { profile } = useOperator();
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const newMenuRef = useRef<HTMLDivElement>(null);
   const [showNewPursuit, setShowNewPursuit] = useState(false);
@@ -251,8 +283,13 @@ export function TopBar({
         </button>
 
         {/* Brand — occupies the sidebar column so nav starts in the body */}
-        <div className="shrink-0 lg:w-[220px] xl:w-[260px]">
+        <div className="shrink-0 lg:w-[220px] xl:w-[260px] min-w-0 flex items-center gap-2">
           <BrandMark height={24} />
+          {profile?.organizationName && (
+            <span className="hidden md:block text-[11px] text-white/70 font-semibold truncate">
+              {profile.organizationName}
+            </span>
+          )}
         </div>
 
         {/* Navigation */}

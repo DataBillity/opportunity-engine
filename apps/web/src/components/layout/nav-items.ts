@@ -13,7 +13,7 @@ export const navItems: NavItem[] = [
   { id: "pipeline", label: "Pipeline", shortLabel: "Pipeline", group: 2 },
   { id: "decision", label: "Opportunity", shortLabel: "Opportunity", group: 3, requiresPursuit: true },
   { id: "draft", label: "Response Builder", shortLabel: "Response", group: 3, requiresPursuit: true },
-  { id: "sources", label: "Capability Sources", shortLabel: "Sources", group: 4 },
+  { id: "sources", label: "Partner Network", shortLabel: "Network", group: 4 },
 ];
 
 export const utilityNavItems: NavItem[] = [

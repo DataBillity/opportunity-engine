@@ -3,10 +3,10 @@ import { z } from "zod";
 import { OutreachBriefing } from "@opportunity-engine/contracts";
 import {
   generateOutreachDraft,
-  getAvailableProviders,
-  describeMissingKeys,
   ModelGatewayError,
+  runWithAnthropicKey,
 } from "@opportunity-engine/ai";
+import { resolveModelAccess } from "@/lib/org-model";
 
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 20;
@@ -36,11 +36,13 @@ function tooManyAttempts(key: string): boolean {
 }
 
 export async function GET() {
-  const providers = getAvailableProviders();
+  const resolved = await resolveModelAccess();
+  if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+  const ready = Boolean(resolved.access.apiKey);
   return NextResponse.json({
-    ready: providers.claude,
-    providers,
-    hint: providers.claude ? undefined : describeMissingKeys(),
+    ready,
+    providers: { claude: ready },
+    hint: ready ? undefined : resolved.access.missingMessage,
   });
 }
 
@@ -61,14 +63,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid outreach briefing", issues: parsed.error.flatten() }, { status: 400 });
   }
 
+  const resolved = await resolveModelAccess();
+  if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+  if (!resolved.access.apiKey) {
+    return NextResponse.json({ error: resolved.access.missingMessage, code: "keys_missing" }, { status: 503 });
+  }
+
   try {
-    const draft = await generateOutreachDraft(parsed.data.briefing);
+    const draft = await runWithAnthropicKey(resolved.access.apiKey, () => generateOutreachDraft(parsed.data.briefing));
     return NextResponse.json(draft);
   } catch (err) {
     if (err instanceof ModelGatewayError) {
       const status = err.code === "keys_missing" ? 503 : 502;
       return NextResponse.json(
-        { error: err.message, code: err.code, providers: getAvailableProviders() },
+        { error: err.message, code: err.code, providers: { claude: true } },
         { status },
       );
     }

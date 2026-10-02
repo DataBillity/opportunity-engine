@@ -19,12 +19,24 @@ export function OperatorProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       const res = await fetch("/api/auth/session", { credentials: "same-origin", cache: "no-store" });
-      const data = await res.json() as { email?: string; displayName?: string; title?: string };
-      if (res.ok && data.email) {
+      const data = await res.json() as {
+        email?: string;
+        displayName?: string;
+        title?: string;
+        organizationId?: string;
+        organizationName?: string;
+        role?: "owner" | "member";
+        memberships?: { id: string; name: string; role: "owner" | "member" }[];
+      };
+      if (res.ok && data.email && data.organizationId) {
         setProfile({
           email: data.email,
           displayName: data.displayName ?? "",
           title: data.title ?? "",
+          organizationId: data.organizationId,
+          organizationName: data.organizationName ?? "Organization",
+          role: data.role === "owner" ? "owner" : "member",
+          memberships: data.memberships ?? [],
         });
       }
     } catch {

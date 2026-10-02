@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { type Play, type PlayProposalInput } from "@opportunity-engine/core";
 import {
   type GraphCapability,
   type GraphCredential,
@@ -16,6 +17,7 @@ import { DateField, normalizeDateEntry } from "@/components/ui/date-field";
 import { DocumentDropzone } from "@/components/pursuit/document-dropzone";
 import { ActionItemResponseModal } from "@/components/action-items/action-item-response-modal";
 import { useToast } from "@/components/ui/toast";
+import { useOperator } from "@/components/auth/operator-provider";
 import { cn } from "@/lib/cn";
 import {
   applyPartnerIngest,
@@ -27,7 +29,7 @@ import {
   type PartnerIngestResult,
 } from "@/lib/partner-ingest";
 
-type TabId = "capabilities" | "experience" | "credentials" | "people" | "partners";
+type TabId = "partners" | "capabilities" | "experience" | "credentials" | "people" | "plays";
 
 const PARTNER_TYPES = [
   { value: "Prime", label: "Prime" },
@@ -391,23 +393,30 @@ export function SourcesView({
   partners,
   graph,
   allPursuits,
+  plays,
   onUpdatePartners,
   onUpdateGraph,
   onUpdatePursuit,
+  onProposePlay,
+  onApprovePlay,
   onArchivePartner,
   onReinstatePartner,
 }: {
   partners: Partner[];
   graph: GraphData;
   allPursuits: Record<string, Pursuit>;
+  plays: Play[];
   onUpdatePartners: (next: Partner[] | ((prev: Partner[]) => Partner[])) => void;
   onUpdateGraph: (next: GraphData | ((prev: GraphData) => GraphData)) => void;
   onUpdatePursuit: (pursuitId: string, updates: Partial<Pursuit>) => void;
+  onProposePlay: (input: PlayProposalInput) => void;
+  onApprovePlay: (playId: string, approvedBy: string) => void;
   onArchivePartner?: (partnerId: string) => void;
   onReinstatePartner?: (partnerId: string) => void;
 }) {
   const { toast } = useToast();
-  const [tab, setTab] = useState<TabId>("capabilities");
+  const { profile } = useOperator();
+  const [tab, setTab] = useState<TabId>("partners");
   const [searchQ, setSearchQ] = useState("");
   const [showArchived, setShowArchived] = useState(false);
 
@@ -519,6 +528,8 @@ export function SourcesView({
   const [credSort, setCredSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
   const [peopleSort, setPeopleSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
   const [partnerSort, setPartnerSort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
+  const [playSort, setPlaySort] = useState<{ field: string; dir: SortDir }>({ field: "name", dir: "asc" });
+  const [detailPlay, setDetailPlay] = useState<Play | null>(null);
   const [capFilters, setCapFilters] = useState<Record<string, string>>({});
   const [expFilters, setExpFilters] = useState<Record<string, string>>({});
   const [credFilters, setCredFilters] = useState<Record<string, string>>({});
@@ -533,12 +544,21 @@ export function SourcesView({
   const [credDocFiles, setCredDocFiles] = useState<File[]>([]);
 
   const isActive = (status: string) => status !== "Archived";
+
+  const [proposeOpen, setProposeOpen] = useState(false);
+  const [proposeName, setProposeName] = useState("");
+  const [proposeProblem, setProposeProblem] = useState("");
+  const [proposeSector, setProposeSector] = useState("");
+  const [proposeOrgType, setProposeOrgType] = useState("");
+  const [proposeServices, setProposeServices] = useState("");
+
   const tabs: { id: TabId; label: string; count: number }[] = [
+    { id: "partners", label: "Partners", count: partners.filter(p => showArchived || isActive(p.status)).length },
     { id: "capabilities", label: "Capabilities", count: capabilities.filter(c => isActive(c.status)).length },
     { id: "experience", label: "Experience", count: experience.filter(e => isActive(e.status)).length },
     { id: "credentials", label: "Credentials", count: credentials.filter(c => isActive(c.status)).length },
     { id: "people", label: "People", count: people.filter(p => isActive(p.status)).length },
-    { id: "partners", label: "Partners", count: partners.filter(p => showArchived || isActive(p.status)).length },
+    { id: "plays", label: "Plays", count: plays.length },
   ];
 
   const activePartners = partners.filter(p => p.status !== "Archived");
@@ -1134,6 +1154,66 @@ export function SourcesView({
     return cmp(a.name, b.name, dir);
   });
 
+  function playPartners(play: Play): string[] {
+    const names = new Set<string>();
+    for (const ref of [...play.capabilities, ...play.experiences, ...play.credentials, ...play.people]) {
+      if (ref.partner) names.add(ref.partner);
+    }
+    return [...names];
+  }
+
+  function playStatusLabel(play: Play): string {
+    if (play.origin === "proposed" && play.status !== "active") return "Proposed";
+    if (play.origin === "proposed") return play.proven ? "Approved · Proven" : "Approved · Unproven";
+    return play.proven ? "Proven" : "Unproven";
+  }
+
+  function submitProposal() {
+    const name = proposeName.trim();
+    const problem = proposeProblem.trim();
+    if (!name || !problem) return;
+    onProposePlay({
+      name,
+      problem,
+      sector: proposeSector.trim(),
+      orgType: proposeOrgType.trim(),
+      services: proposeServices.split(",").map(service => service.trim()).filter(Boolean),
+    });
+    setProposeName("");
+    setProposeProblem("");
+    setProposeSector("");
+    setProposeOrgType("");
+    setProposeServices("");
+    setProposeOpen(false);
+  }
+
+  const visiblePlays = plays.filter(play =>
+    matchesSearch([
+      play.name,
+      play.problem,
+      playStatusLabel(play),
+      play.origin === "proposed" ? "proposed" : "",
+      String(play.assessment?.fit ?? ""),
+      ...play.coverageGaps.map(gap => gap.service),
+      ...playPartners(play),
+      ...play.targetOrganizations.sectors,
+      ...play.targetOrganizations.types,
+    ])
+  ).sort((a, b) => {
+    const { field, dir } = playSort;
+    if (field === "proven") return cmp(playStatusLabel(a), playStatusLabel(b), dir);
+    if (field === "fit") {
+      const delta = (a.assessment?.fit ?? -1) - (b.assessment?.fit ?? -1);
+      return dir === "asc" ? delta : -delta;
+    }
+    if (field === "partners") return cmp(playPartners(a).join(", "), playPartners(b).join(", "), dir);
+    if (field === "experience") {
+      const delta = a.strength.experienceCount - b.strength.experienceCount;
+      return dir === "asc" ? delta : -delta;
+    }
+    return cmp(a.name, b.name, dir);
+  });
+
   const partnerOpenActions = detailPartner
     ? Object.values(allPursuits).flatMap(pursuit =>
         (pursuit.responseActionItems ?? [])
@@ -1145,7 +1225,7 @@ export function SourcesView({
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="oe-page-title">Capability Sources</h1>
+        <h1 className="oe-page-title">Partner Network</h1>
         <p className="text-sm text-muted-foreground mt-1">
           The Capability & Experience Graph — the single source of truth for what the consortium can deliver (I1, CEG-04).
         </p>
@@ -1176,7 +1256,7 @@ export function SourcesView({
               type="text"
               value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
-              placeholder={tab === "partners" ? "Search partners…" : "Search…"}
+              placeholder={tab === "partners" ? "Search partners…" : tab === "plays" ? "Search plays…" : "Search…"}
               className="oe-field text-xs w-full sm:w-56"
             />
             {tab === "partners" && (
@@ -1185,18 +1265,28 @@ export function SourcesView({
                 Show archived
               </label>
             )}
-            <button
-              onClick={() => {
-                if (tab === "capabilities") setAddCapOpen(true);
-                else if (tab === "experience") setAddExpOpen(true);
-                else if (tab === "credentials") setAddCredOpen(true);
-                else if (tab === "people") setAddPersonOpen(true);
-                else if (tab === "partners") setAddPartnerOpen(true);
-              }}
-              className="shrink-0 text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm whitespace-nowrap"
-            >
-              + Add {tab === "capabilities" ? "Capability" : tab === "experience" ? "Experience" : tab === "credentials" ? "Credential" : tab === "people" ? "Person" : "Partner"}
-            </button>
+            {tab === "plays" && (
+              <button
+                onClick={() => setProposeOpen(true)}
+                className="shrink-0 text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm whitespace-nowrap"
+              >
+                + Propose a play
+              </button>
+            )}
+            {tab !== "plays" && (
+              <button
+                onClick={() => {
+                  if (tab === "capabilities") setAddCapOpen(true);
+                  else if (tab === "experience") setAddExpOpen(true);
+                  else if (tab === "credentials") setAddCredOpen(true);
+                  else if (tab === "people") setAddPersonOpen(true);
+                  else if (tab === "partners") setAddPartnerOpen(true);
+                }}
+                className="shrink-0 text-xs font-semibold px-4 py-2 rounded-md bg-primary text-primary-foreground cursor-pointer transition-all hover:bg-primary/90 shadow-sm whitespace-nowrap"
+              >
+                + Add {tab === "capabilities" ? "Capability" : tab === "experience" ? "Experience" : tab === "credentials" ? "Credential" : tab === "people" ? "Person" : "Partner"}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1386,6 +1476,207 @@ export function SourcesView({
           </div>
         </div>
       )}
+
+      {tab === "plays" && (
+        <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Consortium Plays</h3>
+            <span className="text-xs text-muted-foreground">
+              <span className="font-mono font-semibold text-foreground">{visiblePlays.length}</span>
+              {" "}play{visiblePlays.length === 1 ? "" : "s"} from Partner records and proposals
+            </span>
+          </div>
+          <div className="overflow-x-auto oe-touch-scroll">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead>
+                <tr className="oe-table-header">
+                  <SortableHeader label="Play" field="name" current={playSort} onClick={() => setPlaySort(s => toggleSort(s, "name"))} />
+                  <SortableHeader label="Status" field="proven" current={playSort} onClick={() => setPlaySort(s => toggleSort(s, "proven"))} />
+                  <th className="text-left text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-4 py-2.5">Problem</th>
+                  <SortableHeader label="Experience" field="experience" current={playSort} onClick={() => setPlaySort(s => toggleSort(s, "experience"))} />
+                  <SortableHeader label="Partners" field="partners" current={playSort} onClick={() => setPlaySort(s => toggleSort(s, "partners"))} />
+                  <SortableHeader label="Fit" field="fit" current={playSort} onClick={() => setPlaySort(s => toggleSort(s, "fit"))} />
+                </tr>
+              </thead>
+              <tbody>
+                {visiblePlays.map(play => (
+                  <tr key={play.playId} className="oe-table-row border-b border-border last:border-b-0 cursor-pointer" onClick={() => setDetailPlay(play)}>
+                    <td className="px-4 py-3 font-semibold text-foreground">{play.name}</td>
+                    <td className="px-4 py-3">
+                      <span className={cn(
+                        "inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md",
+                        play.origin === "proposed" && play.status !== "active"
+                          ? "oe-status-cond"
+                          : play.proven ? "oe-status-go" : "oe-status-cond"
+                      )}>
+                        {playStatusLabel(play)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground max-w-[420px] truncate">{play.problem || "—"}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground font-mono">{play.strength.experienceCount}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{playPartners(play).join(", ") || "—"}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground font-mono">
+                      {play.origin === "proposed" ? play.assessment?.fit ?? "—" : "—"}
+                    </td>
+                  </tr>
+                ))}
+                {visiblePlays.length === 0 && (
+                  <EmptyFilterRow colSpan={6} noun="plays" filtered={Boolean(searchQ)} />
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <Modal open={detailPlay !== null} onClose={() => setDetailPlay(null)} title={detailPlay?.name ?? "Play"} wide>
+        {detailPlay && (() => {
+          const play = plays.find(item => item.playId === detailPlay.playId) ?? detailPlay;
+          const approver = profile?.displayName || profile?.email || "Operator";
+          return (
+          <div className="space-y-4 text-xs">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={cn(
+                "inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md",
+                play.origin === "proposed" && play.status !== "active"
+                  ? "oe-status-cond"
+                  : play.proven ? "oe-status-go" : "oe-status-cond"
+              )}>
+                {playStatusLabel(play)}
+              </span>
+              {play.origin === "proposed" && (
+                <span className="font-mono text-muted-foreground">Fit {play.assessment?.fit ?? 0}</span>
+              )}
+              <span className="text-muted-foreground">
+                {play.strength.experienceCount} experience · {play.strength.partnerCount} partner{play.strength.partnerCount === 1 ? "" : "s"}
+                {play.strength.solicitationsSeen > 0 ? ` · ${play.strength.solicitationsSeen} solicitation${play.strength.solicitationsSeen === 1 ? "" : "s"}` : ""}
+              </span>
+            </div>
+            {play.problem && (
+              <div>
+                <h4 className="text-xs font-semibold mb-1">Problem</h4>
+                <p className="text-muted-foreground">{play.problem}</p>
+              </div>
+            )}
+            {play.assessment?.transferable && (
+              <p className="text-muted-foreground">
+                Transferable experience is partial credit. The problem was delivered in another industry, so it is not a proven play for the target sector until a Partner Experience records that combination.
+              </p>
+            )}
+            <div>
+              <h4 className="text-xs font-semibold mb-1">Partners</h4>
+              <p className="text-muted-foreground">{playPartners(play).join(", ") || "—"}</p>
+            </div>
+            {play.targetOrganizations.sectors.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold mb-1">Target sectors</h4>
+                <p className="text-muted-foreground">{play.targetOrganizations.sectors.join(", ")}</p>
+              </div>
+            )}
+            {play.assessment && play.assessment.experienceCredits.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold mb-1">Experience credit</h4>
+                <ul className="space-y-2 text-muted-foreground">
+                  {play.assessment.experienceCredits.map(credit => (
+                    <li key={credit.recordId}>
+                      <span className="text-foreground">{credit.summary}</span>
+                      {" — "}{credit.partner}
+                      {credit.industry ? ` · ${credit.industry}` : ""}
+                      <div>{credit.reason}</div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {play.origin !== "proposed" && play.experiences.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold mb-1">Experience</h4>
+                <ul className="space-y-1 text-muted-foreground">
+                  {play.experiences.map((ref, index) => (
+                    <li key={`${ref.recordId}-${ref.partner}-${index}`}>{ref.summary} — {ref.partner}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {play.origin === "proposed" && (
+              <div>
+                <h4 className="text-xs font-semibold mb-1">Coverage gaps</h4>
+                {play.coverageGaps.length === 0 ? (
+                  <p className="text-muted-foreground">No coverage gaps. Partner records cover the proposed problem.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {play.coverageGaps.map(gap => (
+                      <li key={gap.service} className="rounded-md border border-border bg-muted/40 px-3 py-2">
+                        <div className="font-semibold text-foreground">{gap.service}</div>
+                        <div className="text-muted-foreground mt-0.5">{gap.evidence}</div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            {play.origin !== "proposed" && play.coverageGaps.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold mb-1">Coverage gaps</h4>
+                <ul className="space-y-2">
+                  {play.coverageGaps.map(gap => (
+                    <li key={gap.service} className="rounded-md border border-border bg-muted/40 px-3 py-2">
+                      <div className="font-semibold text-foreground">{gap.service}</div>
+                      <div className="text-muted-foreground mt-0.5">{gap.evidence}</div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {play.solicitations.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold mb-1">Solicitations</h4>
+                <ul className="space-y-1 text-muted-foreground">
+                  {play.solicitations.map(item => (
+                    <li key={item.solicitationId}>
+                      {item.type} · {item.issuer} · {item.outcome} · {item.date}
+                      {item.reason ? ` — ${item.reason}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {play.strength.notes && (
+              <p className="text-muted-foreground">{play.strength.notes}</p>
+            )}
+            {play.origin === "proposed" && play.status !== "active" && (
+              <div className="flex justify-end pt-1">
+                <PrimaryButton onClick={() => onApprovePlay(play.playId, approver)}>Approve play</PrimaryButton>
+              </div>
+            )}
+          </div>
+          );
+        })()}
+      </Modal>
+
+      <Modal open={proposeOpen} onClose={() => setProposeOpen(false)} title="Propose a play" wide>
+        <div className="space-y-4">
+          <FormField label="Play name" hint="The customer problem, not a technology.">
+            <TextInput value={proposeName} onChange={setProposeName} placeholder="e.g. Claims migration" />
+          </FormField>
+          <FormField label="Problem">
+            <TextArea value={proposeProblem} onChange={setProposeProblem} rows={4} placeholder="Who has this need, and what would the consortium deliver?" />
+          </FormField>
+          <FormField label="Target sector" hint="Leave blank if the play is not tied to one industry.">
+            <TextInput value={proposeSector} onChange={setProposeSector} placeholder="e.g. Public Transit" />
+          </FormField>
+          <FormField label="Organization type">
+            <TextInput value={proposeOrgType} onChange={setProposeOrgType} placeholder="e.g. transit or special district" />
+          </FormField>
+          <FormField label="Services the play needs" hint="Comma-separated. Uncovered services become coverage gaps.">
+            <TextInput value={proposeServices} onChange={setProposeServices} placeholder="e.g. Claims Migration, Fare adjudication" />
+          </FormField>
+          <div className="flex justify-end gap-2 pt-2">
+            <SecondaryButton onClick={() => setProposeOpen(false)}>Cancel</SecondaryButton>
+            <PrimaryButton onClick={submitProposal} disabled={!proposeName.trim() || !proposeProblem.trim()}>Score play</PrimaryButton>
+          </div>
+        </div>
+      </Modal>
 
       <Modal open={detailPartner !== null} onClose={() => setDetailPartnerId(null)} title={detailPartner?.name ?? "Partner Details"} wide>
         {detailPartner && (

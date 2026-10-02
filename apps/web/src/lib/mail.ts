@@ -111,6 +111,28 @@ export async function sendPasswordResetEmail(args: { to: string; token: string }
   await send({ to: args.to, subject, text, html, tag: "password-reset" });
 }
 
+export async function sendOrganizationInviteEmail(args: { to: string; token: string; organizationName: string }) {
+  const inviteUrl = `${appUrl()}/login/invite?token=${encodeURIComponent(args.token)}`;
+  const subject = `Join ${args.organizationName} on Opportunity Engine`;
+  const text = [
+    `${args.organizationName} invited ${args.to} to Opportunity Engine.`,
+    "",
+    `Open this link to set a password and join: ${inviteUrl}`,
+    "",
+    "This link expires in 7 days. If you were not expecting it, you can ignore this email.",
+  ].join("\n");
+  const html = layout({
+    preheader: `${args.organizationName} invited you to Opportunity Engine.`,
+    heading: `Join ${args.organizationName}`,
+    actionLabel: "Accept invite",
+    actionUrl: inviteUrl,
+    bodyHtml: `<p style="margin:16px 0 0 0; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#3D3F41;"><strong>${escapeHtml(args.organizationName)}</strong> invited <strong>${escapeHtml(args.to)}</strong> to its Opportunity Engine workspace. Set a password to join that organization.</p>
+      <p style="margin:16px 0 0 0; font-family:Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:#6B6E71;">This link expires in 7 days. If you were not expecting this invite, you can ignore this email.</p>
+      <p style="margin:20px 0 0 0; font-family:Arial, Helvetica, sans-serif; font-size:12px; line-height:18px; color:#6B6E71;">If the button does not work, copy and paste this URL:<br>${escapeHtml(inviteUrl)}</p>`,
+  });
+  await send({ to: args.to, subject, text, html, tag: "organization-invite" });
+}
+
 export async function sendPasswordUpdatedEmail(args: { to: string }) {
   const signInUrl = `${appUrl()}/login`;
   const subject = "Your Opportunity Engine password was updated";

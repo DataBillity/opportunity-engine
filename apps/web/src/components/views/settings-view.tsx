@@ -38,6 +38,13 @@ export function SettingsView() {
         return;
       }
       setProfile({
+        ...(profile ?? {
+          email: data.email ?? "",
+          organizationId: "",
+          organizationName: "",
+          role: "member",
+          memberships: [],
+        }),
         email: data.email ?? profile?.email ?? "",
         displayName: data.displayName ?? name,
         title: data.title ?? title.trim(),

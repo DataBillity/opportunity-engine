@@ -1,15 +1,10 @@
 /**
- * One workspace per tenant.
- * A new tenant is provisioned with demonstration records for Search & Discovery,
- * the pipeline, the Partner network, opportunities, capability sources, and the archive.
+ * One workspace row per organization.
+ * The id matches organization.id. Demonstration JSON is a private copy on that row,
+ * not a shared tenant record.
  */
+import { sql } from "drizzle-orm";
 import { pgTable, text, timestamp, jsonb, integer } from "drizzle-orm/pg-core";
-
-export const tenant = pgTable("tenant", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
 
 export const sharedWorkspace = pgTable("shared_workspace", {
   id: text("id").primaryKey(),
@@ -17,9 +12,9 @@ export const sharedWorkspace = pgTable("shared_workspace", {
   pursuits: jsonb("pursuits").notNull(),
   partners: jsonb("partners").notNull(),
   graph: jsonb("graph").notNull(),
-  plays: jsonb("plays").notNull().default([]),
-  leadImports: jsonb("lead_imports").notNull().default([]),
-  discovery: jsonb("discovery").notNull().default([]),
+  plays: jsonb("plays").notNull().default(sql`'[]'::jsonb`),
+  leadImports: jsonb("lead_imports").notNull().default(sql`'[]'::jsonb`),
+  discovery: jsonb("discovery").notNull().default(sql`'[]'::jsonb`),
   revision: integer("revision").default(1).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

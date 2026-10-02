@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 /**
  * Mechanism C — The Single Model Gateway (I6, AIG-11)
  *
@@ -106,8 +108,20 @@ function attemptTimeoutMs(input: GatewayCallInput): number {
   return Math.min(requested, remaining);
 }
 
+const anthropicKeyStore = new AsyncLocalStorage<string>();
+
+/**
+ * Run model calls with an organization Claude key. Nested callModel() reads
+ * this key instead of ANTHROPIC_API_KEY.
+ */
+export function runWithAnthropicKey<T>(apiKey: string, fn: () => Promise<T>): Promise<T> {
+  const key = apiKey.trim();
+  if (!key) return fn();
+  return anthropicKeyStore.run(key, fn);
+}
+
 export function getAnthropicApiKey(): string {
-  return (process.env.ANTHROPIC_API_KEY ?? "").trim();
+  return (anthropicKeyStore.getStore() ?? process.env.ANTHROPIC_API_KEY ?? "").trim();
 }
 
 export function getAvailableProviders(): { claude: boolean } {

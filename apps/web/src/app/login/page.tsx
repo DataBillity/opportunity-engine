@@ -17,7 +17,7 @@ export default function LoginPage() {
       <div className="mb-7">
         <h2 className="text-2xl font-bold tracking-tight text-foreground">Sign in</h2>
         <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
-          Use your Databillity email and password to continue.
+          Use your email and password to open your organization.
         </p>
       </div>
 
@@ -28,7 +28,7 @@ export default function LoginPage() {
       </div>
 
       <p className="mt-5 text-center text-[11px] text-muted-foreground">
-        Authorized Databillity operators only.
+        New company? <a href="/signup" className="font-semibold text-primary hover:underline">Create an organization</a>
       </p>
     </>
   );

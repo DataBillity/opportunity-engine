@@ -39,6 +39,8 @@ export interface PlaySolicitation {
   type: "RFI" | "RFP" | "SOW";
   date: string;
   outcome: "submitted" | "shortlisted" | "won" | "lost" | "no-bid" | "pending";
+  /** Why the team passed or lost, when the outcome records one. */
+  reason?: string;
 }
 
 export interface PlayCoverageGap {
@@ -55,9 +57,35 @@ export interface PlayStrength {
   notes: string;
 }
 
+export interface PlayExperienceCredit {
+  recordId: string;
+  summary: string;
+  partner: string;
+  industry: string;
+  closeness: ExperienceCloseness;
+  transferable: boolean;
+  reason: string;
+}
+
+export interface PlayAssessment {
+  fit: number;
+  closeness: ExperienceCloseness;
+  transferable: boolean;
+  experienceCredits: PlayExperienceCredit[];
+  notes: string[];
+}
+
+export interface PlayProposal {
+  sector: string;
+  orgType: string;
+  services: string[];
+}
+
 export interface Play {
   playId: string;
   status: "active" | "draft" | "retired";
+  /** Derived plays are rebuilt from Partner records. Proposed plays are scored drafts until approved. */
+  origin?: "derived" | "proposed";
   name: string;
   problem: string;
   targetOrganizations: PlayTargetOrganizations;
@@ -70,6 +98,9 @@ export interface Play {
   solicitations: PlaySolicitation[];
   coverageGaps: PlayCoverageGap[];
   strength: PlayStrength;
+  /** Set on proposed plays so a later Partner rebuild can score them again. */
+  proposal?: PlayProposal;
+  assessment?: PlayAssessment;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -197,6 +228,16 @@ function industriesOverlap(a: string, b: string): boolean {
   if (la.includes(lb) || lb.includes(la)) return true;
   const adj = INDUSTRY_ADJACENCY[la];
   return adj ? adj.some(x => lb.includes(x) || x.includes(lb)) : false;
+}
+
+/** Exact means the same industry string (or one contains the other). Adjacent uses the industry map. A blank value is none. */
+export function industryMatchKind(target: string, experienceIndustry: string): "exact" | "adjacent" | "none" {
+  const la = target.toLowerCase().trim();
+  const lb = experienceIndustry.toLowerCase().trim();
+  if (!la || !lb) return "none";
+  if (la === lb || la.includes(lb) || lb.includes(la)) return "exact";
+  if (industriesOverlap(la, lb)) return "adjacent";
+  return "none";
 }
 
 function servicesOverlap(a: string[], b: string[]): boolean {
@@ -379,6 +420,7 @@ export function buildPlaysFromPartners(input: PlayBuilderInput): Play[] {
     plays.push({
       playId: cluster.key,
       status: "draft",
+      origin: "derived",
       name: cluster.label,
       problem: `Organizations with ${cluster.label.toLowerCase()} needs that the consortium's experience and capabilities can address.`,
       targetOrganizations: {
@@ -490,6 +532,7 @@ export function scoreFitAgainstPlays(input: FitScoreInput): FitScoreBreakdown {
 
   for (const play of input.plays) {
     if (play.status === "retired") continue;
+    if (play.origin === "proposed" && play.status !== "active") continue;
     const closeness = experienceCloseness(play, input.sector, input.orgType, input.orgText);
     if (closeness === "none") continue;
 

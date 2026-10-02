@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { DATABILLITY_ORG_ID, resolveWorkspaceOrganizationId } from "@opportunity-engine/db";
 import { buildTenantSeed, describeTenantSeed } from "./tenant-seed";
+
+describe("workspace organization id", () => {
+  it("keeps the legacy operator id on the DataBillity organization", () => {
+    assert.equal(resolveWorkspaceOrganizationId(undefined), DATABILLITY_ORG_ID);
+    assert.equal(resolveWorkspaceOrganizationId(""), DATABILLITY_ORG_ID);
+    assert.equal(resolveWorkspaceOrganizationId(" operator "), DATABILLITY_ORG_ID);
+    assert.equal(resolveWorkspaceOrganizationId("northwind"), "northwind");
+  });
+});
 
 describe("new tenant demonstration data", () => {
   const seed = buildTenantSeed();
