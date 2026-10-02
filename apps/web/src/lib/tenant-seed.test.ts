@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { DATABILLITY_ORG_ID, resolveWorkspaceOrganizationId } from "@opportunity-engine/db";
-import { buildTenantSeed, describeTenantSeed } from "./tenant-seed";
+import { buildTenantSeed, describeTenantSeed, initialWorkspaceForOrganization } from "./tenant-seed";
 
 describe("workspace organization id", () => {
   it("keeps the legacy operator id on the DataBillity organization", () => {
@@ -9,6 +9,25 @@ describe("workspace organization id", () => {
     assert.equal(resolveWorkspaceOrganizationId(""), DATABILLITY_ORG_ID);
     assert.equal(resolveWorkspaceOrganizationId(" operator "), DATABILLITY_ORG_ID);
     assert.equal(resolveWorkspaceOrganizationId("northwind"), "northwind");
+  });
+});
+
+describe("who receives demonstration data", () => {
+  it("fills a new organization and leaves the platform owner empty", () => {
+    const owner = initialWorkspaceForOrganization(DATABILLITY_ORG_ID);
+    assert.equal(owner.organizations.length, 0);
+    assert.equal(Object.keys(owner.pursuits).length, 0);
+    assert.equal(owner.partners.length, 0);
+    assert.equal(owner.plays?.length, 0);
+    assert.equal(owner.discovery?.length, 0);
+    assert.equal(owner.leadImports?.length, 0);
+
+    const legacy = initialWorkspaceForOrganization("operator");
+    assert.equal(legacy.organizations.length, 0);
+
+    const created = initialWorkspaceForOrganization("org_newtenant");
+    assert.deepEqual(created, buildTenantSeed());
+    assert.ok(created.organizations.length > 0);
   });
 });
 

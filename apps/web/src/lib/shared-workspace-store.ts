@@ -4,7 +4,7 @@ import type { GraphData, Organization, Partner, Pursuit } from "@/lib/mock-data"
 import type { Play } from "@opportunity-engine/core";
 import type { DiscoveryCandidate } from "@/lib/search-candidates";
 import type { LeadImportBatch, SharedWorkspace, WorkspaceState } from "@/lib/shared-workspace";
-import { buildTenantSeed } from "@/lib/tenant-seed";
+import { initialWorkspaceForOrganization } from "@/lib/tenant-seed";
 
 type Sql = ReturnType<typeof createSql>;
 
@@ -145,20 +145,22 @@ async function insertWorkspace(sql: Sql, organizationId: string, state: Workspac
 }
 
 /**
- * Copy demonstration data into an organization's own workspace.
- * Used by sign-up and by `pnpm db:seed`. Does not read or write any other organization.
+ * Create this organization's workspace.
+ * A new organization receives demonstration data. DataBillity does not.
+ * Does not read or write any other organization, and does not replace an existing row.
  */
 export async function createOrganizationWorkspace(organizationId: string): Promise<void> {
   const sql = sqlClient();
   if (!sql) throw new Error("DATABASE_URL is not set");
   const id = assertOrganizationId(organizationId);
   await ensureWorkspaceReady();
-  await insertWorkspace(sql, id, buildTenantSeed());
+  await insertWorkspace(sql, id, initialWorkspaceForOrganization(id));
 }
 
 /**
- * Seed one organization with its own demonstration workspace.
- * `operator` is rewritten to the DataBillity organization id so the legacy env value
+ * Seed one new organization with its own demonstration workspace.
+ * DataBillity, the platform owner, gets an empty workspace if it has none.
+ * `operator` is rewritten to that organization id so the legacy env value
  * cannot create a second workspace the session will never read.
  * An existing workspace is left unchanged.
  */
@@ -178,7 +180,7 @@ export async function provisionTenant(input: TenantProvision): Promise<{ created
       await insertOrganization({ id, name, slug, usesPlatformKey: false });
     }
   }
-  const created = await insertWorkspace(sql, id, buildTenantSeed());
+  const created = await insertWorkspace(sql, id, initialWorkspaceForOrganization(id));
   return { created };
 }
 
@@ -190,9 +192,9 @@ export async function readSharedWorkspace(organizationId: string): Promise<Share
   await ensureWorkspaceReady();
   const rows = await selectWorkspace(sql, id);
   if (rows[0]) return rowToWorkspace(rows[0]);
-  // The house organization has no sign-up insert. Create its copy only when the row is missing.
+  // DataBillity is not created at sign-up. Open an empty workspace, with no demonstration records.
   if (id !== DATABILLITY_ORG_ID) return null;
-  await insertWorkspace(sql, id, buildTenantSeed());
+  await insertWorkspace(sql, id, initialWorkspaceForOrganization(id));
   const seeded = await selectWorkspace(sql, id);
   const row = seeded[0];
   if (!row) return null;

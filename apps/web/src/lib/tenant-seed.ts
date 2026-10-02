@@ -1,5 +1,6 @@
 /**
- * Demonstration workspace copied into one organization's workspace row.
+ * Demonstration workspace copied into a new organization's own row.
+ * The platform owner organization (DataBillity) does not receive this copy.
  * Search & Discovery, pipeline, the Partner network, opportunities,
  * capability sources, and the archive each receive sample records.
  * Callers insert the copy once; they do not share the row across organizations.
@@ -25,6 +26,7 @@ import {
 } from "./mock-data";
 import type { ImportedLead, ListSettings } from "./lead-import";
 import type { DiscoveryCandidate } from "./search-candidates";
+import { DATABILLITY_ORG_ID, resolveWorkspaceOrganizationId } from "@opportunity-engine/db";
 import type { LeadImportBatch, WorkspaceState } from "./shared-workspace";
 
 const SEEDED_AT = "2026-09-12T15:00:00.000Z";
@@ -489,6 +491,30 @@ function buildDiscovery(plays: Play[], pipeline: Organization[]): {
   }
 
   return { leads, candidates };
+}
+
+export function emptyWorkspace(): WorkspaceState {
+  return {
+    organizations: [],
+    pursuits: {},
+    partners: [],
+    graph: {
+      capabilities: [],
+      experience: [],
+      credentials: [],
+      people: [],
+    },
+    plays: [],
+    leadImports: [],
+    discovery: [],
+  };
+}
+
+/** Demonstration copy for a new organization. DataBillity, the platform owner, stays empty. */
+export function initialWorkspaceForOrganization(organizationId: string): WorkspaceState {
+  const id = resolveWorkspaceOrganizationId(organizationId);
+  if (id === DATABILLITY_ORG_ID) return emptyWorkspace();
+  return buildTenantSeed();
 }
 
 export function buildTenantSeed(): WorkspaceState {
