@@ -74,6 +74,7 @@ export function SearchView({
   const { toast } = useToast();
   const { profile } = useOperator();
   const operatorEmail = profile?.email ?? "";
+  const organizationId = profile?.organizationId ?? "";
 
   /* ---- Search state ---- */
   const [industry, setIndustry] = useState("all");
@@ -134,16 +135,16 @@ export function SearchView({
   const rowCount = useMemo(() => csvRowCount(bulkText), [bulkText]);
 
   const persistSession = useCallback((candidates: DiscoveryCandidate[], added: Set<string>) => {
-    if (!operatorEmail) return;
-    saveSearchCandidates(operatorEmail, {
+    if (!operatorEmail || !organizationId) return;
+    saveSearchCandidates(organizationId, operatorEmail, {
       candidates,
       addedIds: Array.from(added),
     });
-  }, [operatorEmail]);
+  }, [operatorEmail, organizationId]);
 
   useEffect(() => {
-    if (!operatorEmail) return;
-    const stored = loadSearchCandidates(operatorEmail);
+    if (!operatorEmail || !organizationId) return;
+    const stored = loadSearchCandidates(organizationId, operatorEmail);
     if (stored) {
       setResults(stored.candidates);
       setAddedIds(new Set(stored.addedIds));
@@ -153,7 +154,7 @@ export function SearchView({
       setAddedIds(new Set());
       setHasSearched(false);
     }
-  }, [operatorEmail]);
+  }, [operatorEmail, organizationId]);
 
   function replaceCandidates(next: DiscoveryCandidate[]) {
     setResults(next);

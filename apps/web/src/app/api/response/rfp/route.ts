@@ -3,13 +3,13 @@ import { z } from "zod";
 import { parseRfpProposalPart } from "@opportunity-engine/contracts";
 import {
   draftRfpProposalStep,
-  getAvailableProviders,
-  describeMissingKeys,
   ModelGatewayError,
+  runWithAnthropicKey,
   RFP_DRAFTING_PROMPT_VERSION,
   RFP_PROPOSAL_STEPS,
   type RfpProposalStep,
 } from "@opportunity-engine/ai";
+import { resolveModelAccess } from "@/lib/org-model";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -76,14 +76,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid proposal request", issues: parsed.error.flatten() }, { status: 400 });
   }
 
-  const providers = getAvailableProviders();
-  if (!providers.claude) {
-    return NextResponse.json({ error: describeMissingKeys() }, { status: 503 });
+  const resolved = await resolveModelAccess();
+  if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+  if (!resolved.access.apiKey) {
+    return NextResponse.json({ error: resolved.access.missingMessage }, { status: 503 });
   }
 
   const body = parsed.data;
   try {
-    const result = await draftRfpProposalStep({
+    const result = await runWithAnthropicKey(resolved.access.apiKey, () => draftRfpProposalStep({
       step: body.step,
       sources: body.sources,
       plan: body.plan === undefined ? undefined : parseRfpProposalPart(body.plan),
@@ -91,7 +92,7 @@ export async function POST(request: Request) {
       sectionIds: body.sectionIds,
       existingDrafts: body.existingDrafts,
       nextGapNumber: body.nextGapNumber,
-    });
+    }));
     return NextResponse.json({ ...result, promptVersion: RFP_DRAFTING_PROMPT_VERSION });
   } catch (err) {
     if (err instanceof ModelGatewayError) {

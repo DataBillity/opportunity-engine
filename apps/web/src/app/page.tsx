@@ -11,6 +11,8 @@ import { SearchView } from "@/components/views/search-view";
 import { SourcesView } from "@/components/views/sources-view";
 import { ResponseBuilderEmptyState, ResponseBuilderView } from "@/components/views/response-builder-view";
 import { SettingsView } from "@/components/views/settings-view";
+import { TeamView } from "@/components/views/team-view";
+import { IntegrationsView } from "@/components/views/integrations-view";
 import { DashboardView } from "@/components/views/dashboard-view";
 import { ArchiveView } from "@/components/views/archive-view";
 import { OperatorProvider } from "@/components/auth/operator-provider";
@@ -18,10 +20,6 @@ import { useToast } from "@/components/ui/toast";
 import { applyPartnerArchive, applyPartnerReinstate, computeSharedIds, setPartnerArchived } from "@/lib/partner-archive";
 import { mergeWorkspace, sameWorkspace, type SharedWorkspace, type WorkspaceState } from "@/lib/shared-workspace";
 import {
-  organizations as initialOrgs,
-  pursuits as initialPursuits,
-  partnerDirectory as initialPartners,
-  graphData as initialGraph,
   type Organization,
   type Pursuit,
   type Partner,
@@ -44,9 +42,16 @@ import {
 import { solicitationEventFromPursuit, solicitationOutcomeFor } from "@/lib/play-updates";
 import { ResponseJobsProvider } from "@/lib/response-jobs";
 
-export type ViewId = "dashboard" | "search" | "pipeline" | "org" | "decision" | "draft" | "sources" | "archive" | "settings";
+export type ViewId = "dashboard" | "search" | "pipeline" | "org" | "decision" | "draft" | "sources" | "archive" | "settings" | "team" | "integrations";
 
 const LEGACY_BROWSER_KEYS = ["oe_orgs", "oe_pursuits", "oe_partners", "oe_graph"];
+
+const emptyGraph = (): GraphData => ({
+  capabilities: [],
+  experience: [],
+  credentials: [],
+  people: [],
+});
 
 function workspaceFrom(
   organizations: Organization[],
@@ -80,32 +85,22 @@ function orgPursuitsFromState(org: Organization | undefined, allPursuits: Record
 export default function CommandCenter() {
   const { toast } = useToast();
   const [activeView, setActiveView] = useState<ViewId>("pipeline");
-  const [currentOrgId, setCurrentOrgId] = useState("ORG-01");
+  const [currentOrgId, setCurrentOrgId] = useState("");
   const [currentPursuitId, setCurrentPursuitId] = useState<string | null>(null);
   const [leadReturnView, setLeadReturnView] = useState<"pipeline" | "archive">("pipeline");
   const [laneFilter, setLaneFilter] = useState("all");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const [ready, setReady] = useState(false);
-  const [orgs, setOrgs] = useState<Organization[]>(() => [...initialOrgs]);
-  const [allPursuits, setAllPursuits] = useState<Record<string, Pursuit>>(() => ({ ...initialPursuits }));
-  const [partners, setPartners] = useState<Partner[]>(() => [...initialPartners]);
-  const [graph, setGraph] = useState<GraphData>(() => ({
-    capabilities: [...initialGraph.capabilities],
-    experience: [...initialGraph.experience],
-    credentials: [...initialGraph.credentials],
-    people: [...initialGraph.people],
-  }));
+  const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [allPursuits, setAllPursuits] = useState<Record<string, Pursuit>>({});
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [graph, setGraph] = useState<GraphData>(emptyGraph);
   const [storedPlays, setStoredPlays] = useState<Play[]>([]);
 
   const revisionRef = useRef(0);
   const baselineRef = useRef<WorkspaceState | null>(null);
-  const stateRef = useRef<WorkspaceState>(workspaceFrom(initialOrgs, initialPursuits, initialPartners, {
-    capabilities: [...initialGraph.capabilities],
-    experience: [...initialGraph.experience],
-    credentials: [...initialGraph.credentials],
-    people: [...initialGraph.people],
-  }));
+  const stateRef = useRef<WorkspaceState>(workspaceFrom([], {}, [], emptyGraph()));
   const saveGen = useRef(0);
   const saveWarned = useRef(false);
   const graphRef = useRef(graph);
@@ -126,6 +121,11 @@ export default function CommandCenter() {
     setPartners(next.partners);
     setGraph(next.graph);
     setStoredPlays(next.plays ?? []);
+    setCurrentOrgId(prev => {
+      if (next.organizations.some(org => org.id === prev)) return prev;
+      if (next.organizations.some(org => org.id === "ORG-01")) return "ORG-01";
+      return "";
+    });
   }
 
   useEffect(() => {
@@ -678,6 +678,8 @@ export default function CommandCenter() {
               />
             )}
             {activeView === "settings" && <SettingsView />}
+            {activeView === "team" && <TeamView />}
+            {activeView === "integrations" && <IntegrationsView />}
           </div>
         </main>
       </div>

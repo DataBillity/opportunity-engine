@@ -15,11 +15,11 @@ import {
 import {
   assessRfpGoNoGo,
   extractSolicitationWithModel,
-  getAvailableProviders,
-  describeMissingKeys,
   ModelGatewayError,
+  runWithAnthropicKey,
 } from "@opportunity-engine/ai";
 import { buildGoNoGoSources } from "@/lib/gonogo-sources";
+import { resolveModelAccess } from "@/lib/org-model";
 import {
   extractDocumentText,
   kindForLane,
@@ -55,12 +55,14 @@ function tooManyAttempts(key: string): boolean {
 }
 
 export async function GET() {
-  const providers = getAvailableProviders();
+  const resolved = await resolveModelAccess();
+  if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+  const ready = Boolean(resolved.access.apiKey);
   return NextResponse.json({
     ready: true,
-    modelExtraction: providers.claude,
-    providers,
-    hint: providers.claude ? undefined : describeMissingKeys(),
+    modelExtraction: ready,
+    providers: { claude: ready },
+    hint: ready ? undefined : resolved.access.missingMessage,
   });
 }
 
@@ -131,15 +133,20 @@ export async function POST(request: Request) {
   let goNoGo: RfpGoNoGoAssessment | undefined;
   let enforcedGoNoGo: ReturnType<typeof enforceGoNoGoRules> | undefined;
   let goNoGoModel: { provider: "claude" | "gemini"; modelVersion: string } | undefined;
-  const workspace = await readSharedWorkspace().catch(() => null);
+  const resolved = await resolveModelAccess();
+  if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+  if (!resolved.access.apiKey && !resolved.access.usesPlatformKey) {
+    return NextResponse.json({ error: resolved.access.missingMessage }, { status: 503 });
+  }
+  const workspace = await readSharedWorkspace(resolved.access.session.organizationId).catch(() => null);
 
   if (!capped.text) {
     warning = extracted.length
       ? "No extractable text (scanned PDF or unsupported type). Scoring is pending until a text document is attached."
       : "No document text was provided.";
   } else {
-    const providers = getAvailableProviders();
-    if (providers.claude) {
+    if (resolved.access.apiKey) {
+      const apiKey = resolved.access.apiKey;
       const documentNames = ordered.map(doc => doc.name);
       const goNoGoSources = projectType === "rfp"
         ? buildGoNoGoSources({
@@ -152,7 +159,7 @@ export async function POST(request: Request) {
           organizations: workspace?.organizations,
         })
         : null;
-      const [modelOutcome, goNoGoOutcome] = await Promise.all([
+      const [modelOutcome, goNoGoOutcome] = await runWithAnthropicKey(apiKey, () => Promise.all([
         extractSolicitationWithModel({
           filename: primaryName,
           lane,
@@ -173,7 +180,7 @@ export async function POST(request: Request) {
             err => ({ ok: false as const, err }),
           )
           : Promise.resolve(null),
-      ]);
+      ]));
       if (modelOutcome.ok) {
         const model = modelOutcome.model;
         extraction = mergeSolicitationExtractions(heuristic, model.extraction, {

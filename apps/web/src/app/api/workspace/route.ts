@@ -39,7 +39,7 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
 
   try {
-    const workspace = await readSharedWorkspace();
+    const workspace = await readSharedWorkspace(session.organizationId);
     if (!workspace) {
       return NextResponse.json({ error: "Shared workspace storage is not configured." }, { status: 503 });
     }
@@ -71,7 +71,7 @@ export async function PUT(request: Request) {
   };
 
   try {
-    const result = await writeSharedWorkspace(next, body.revision);
+    const result = await writeSharedWorkspace(session.organizationId, next, body.revision);
     if (!result) {
       return NextResponse.json({ error: "Shared workspace storage is not configured." }, { status: 503 });
     }

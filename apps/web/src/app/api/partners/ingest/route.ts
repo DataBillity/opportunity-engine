@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { callModel, getAvailableProviders, parseModelJson, ModelGatewayError } from "@opportunity-engine/ai";
+import { callModel, parseModelJson, ModelGatewayError, runWithAnthropicKey } from "@opportunity-engine/ai";
+import { resolveModelAccess } from "@/lib/org-model";
 import { extractDocumentText, MAX_FILE_BYTES, MAX_FILES } from "@/lib/extract-document";
 import {
   parsePartnerDocument,
@@ -76,20 +77,25 @@ function partnerPromptParts(full: string): { cachePrefix: string; prompt: string
   return { cachePrefix: full, prompt: "" };
 }
 
-async function enhanceWithModel(kind: PartnerIngestKind, text: string, filename: string, fallback: PartnerIngestResult): Promise<PartnerIngestResult> {
-  const providers = getAvailableProviders();
-  if (!providers.claude) {
+async function enhanceWithModel(
+  kind: PartnerIngestKind,
+  text: string,
+  filename: string,
+  fallback: PartnerIngestResult,
+  apiKey: string | null,
+): Promise<PartnerIngestResult> {
+  if (!apiKey) {
     return { ...fallback, warning: [fallback.warning, "No AI model key configured — used heuristic parser only."].filter(Boolean).join(" ") };
   }
   try {
-    const result = await callModel({
+    const result = await runWithAnthropicKey(apiKey, () => callModel({
       tier: "extraction",
       promptVersion: "partner-ingest-v2",
       classification: "internal",
       redactionProfile: "partner-document",
       systemPrompt: PARTNER_INGEST_SYSTEM_PROMPT,
       ...partnerPromptParts(buildPartnerIngestPrompt(kind, text, filename)),
-    });
+    }));
     const parsed = parseModelJson(result.content) as Partial<PartnerIngestResult>;
     return {
       kind,
@@ -133,6 +139,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Upload at most ${MAX_FILES} files` }, { status: 400 });
   }
 
+  const resolved = await resolveModelAccess();
+  if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+  if (!resolved.access.apiKey && !resolved.access.usesPlatformKey) {
+    return NextResponse.json({ error: resolved.access.missingMessage }, { status: 503 });
+  }
+
   const parts: PartnerIngestResult[] = [];
   for (const file of files) {
     if (file.size > MAX_FILE_BYTES) {
@@ -141,7 +153,7 @@ export async function POST(request: Request) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const extracted = await extractDocumentText({ name: file.name, mime: file.type, bytes });
     const heuristic = parsePartnerDocument(kind, extracted.text, file.name);
-    parts.push(await enhanceWithModel(kind, extracted.text, file.name, heuristic));
+    parts.push(await enhanceWithModel(kind, extracted.text, file.name, heuristic, resolved.access.apiKey));
   }
 
   return NextResponse.json(mergeResults(kind, parts));

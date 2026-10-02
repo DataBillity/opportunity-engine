@@ -5,10 +5,10 @@ import {
   generateCoverLetter,
   generateResponseDraft,
   generateRfiResponsePackage,
-  getAvailableProviders,
-  describeMissingKeys,
   ModelGatewayError,
+  runWithAnthropicKey,
 } from "@opportunity-engine/ai";
+import { resolveModelAccess } from "@/lib/org-model";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -41,11 +41,13 @@ function tooManyAttempts(key: string): boolean {
 }
 
 export async function GET() {
-  const providers = getAvailableProviders();
+  const resolved = await resolveModelAccess();
+  if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+  const ready = Boolean(resolved.access.apiKey);
   return NextResponse.json({
-    ready: providers.claude,
-    providers,
-    hint: providers.claude ? undefined : describeMissingKeys(),
+    ready,
+    providers: { claude: ready },
+    hint: ready ? undefined : resolved.access.missingMessage,
   });
 }
 
@@ -66,23 +68,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid response briefing", issues: parsed.error.flatten() }, { status: 400 });
   }
 
+  const resolved = await resolveModelAccess();
+  if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+  if (!resolved.access.apiKey) {
+    return NextResponse.json({ error: resolved.access.missingMessage, code: "keys_missing" }, { status: 503 });
+  }
+  const apiKey = resolved.access.apiKey;
+
   try {
     const briefing = parsed.data.briefing;
     if (briefing.mode === "package") {
-      const draft = await generateRfiResponsePackage(briefing);
+      const draft = await runWithAnthropicKey(apiKey, () => generateRfiResponsePackage(briefing));
       return NextResponse.json({ kind: "package", ...draft });
     }
     if (briefing.mode === "cover_letter") {
-      const letter = await generateCoverLetter(briefing);
+      const letter = await runWithAnthropicKey(apiKey, () => generateCoverLetter(briefing));
       return NextResponse.json({ kind: "cover_letter", ...letter });
     }
-    const draft = await generateResponseDraft(briefing);
+    const draft = await runWithAnthropicKey(apiKey, () => generateResponseDraft(briefing));
     return NextResponse.json({ kind: "section", ...draft });
   } catch (err) {
     if (err instanceof ModelGatewayError) {
       const status = err.code === "keys_missing" ? 503 : 502;
       return NextResponse.json(
-        { error: err.message, code: err.code, providers: getAvailableProviders() },
+        { error: err.message, code: err.code, providers: { claude: true } },
         { status },
       );
     }

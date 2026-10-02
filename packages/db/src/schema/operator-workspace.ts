@@ -1,8 +1,8 @@
 /**
- * Shared operator workspace.
- * Pipeline leads, pursuits, partners, and the capability graph are one record
- * every signed-in operator reads. Search candidates are not stored here.
+ * One workspace row per organization.
+ * The id matches organization.id. Search candidates are not stored here.
  */
+import { sql } from "drizzle-orm";
 import { pgTable, text, timestamp, jsonb, integer } from "drizzle-orm/pg-core";
 
 export const sharedWorkspace = pgTable("shared_workspace", {
@@ -11,6 +11,7 @@ export const sharedWorkspace = pgTable("shared_workspace", {
   pursuits: jsonb("pursuits").notNull(),
   partners: jsonb("partners").notNull(),
   graph: jsonb("graph").notNull(),
+  plays: jsonb("plays").notNull().default(sql`'[]'::jsonb`),
   revision: integer("revision").default(1).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

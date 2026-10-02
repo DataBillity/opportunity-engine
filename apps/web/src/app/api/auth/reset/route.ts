@@ -10,6 +10,7 @@ import { clientKey, tooManyAttempts } from "@/lib/auth-rate-limit";
 import { sendPasswordUpdatedEmail } from "@/lib/mail";
 import { consumePasswordResetToken, readPasswordResetToken } from "@/lib/operator-credentials";
 import { passwordPolicyError } from "@/lib/password";
+import { primaryOrganizationId } from "@/lib/tenant";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,7 +72,11 @@ export async function POST(request: Request) {
     // Password is already stored; do not fail the reset if the confirmation email cannot send.
   }
 
-  const session = await createSessionToken(consumed.email);
+  const organizationId = await primaryOrganizationId(consumed.email);
+  if (!organizationId) {
+    return NextResponse.json({ error: "That account is not a member of an organization." }, { status: 403 });
+  }
+  const session = await createSessionToken(consumed.email, organizationId);
   const response = NextResponse.json({ ok: true, redirectTo: "/" });
   response.cookies.set(COOKIE_NAME, session, sessionCookieOptions());
   return response;

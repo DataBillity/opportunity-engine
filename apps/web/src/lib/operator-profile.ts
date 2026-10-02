@@ -1,7 +1,17 @@
+export type OrganizationMembership = {
+  id: string;
+  name: string;
+  role: "owner" | "member";
+};
+
 export type OperatorProfile = {
   email: string;
   displayName: string;
   title: string;
+  organizationId: string;
+  organizationName: string;
+  role: "owner" | "member";
+  memberships: OrganizationMembership[];
 };
 
 export function fallbackDisplayName(email: string): string {

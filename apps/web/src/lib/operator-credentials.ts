@@ -1,6 +1,7 @@
 import { createSql } from "@opportunity-engine/db";
-import { credentialsMatch, getExpectedUsernames, isAllowedUsername } from "@/lib/auth";
+import { credentialsMatch, isAllowedUsername } from "@/lib/auth";
 import { hashPassword, randomToken, RESET_TOKEN_TTL_MS, sha256Base64Url, verifyPassword } from "@/lib/password";
+import { listActiveMemberships } from "@/lib/tenant";
 
 type Sql = ReturnType<typeof createSql>;
 
@@ -14,9 +15,19 @@ export function operatorStoreConfigured(): boolean {
   return Boolean(process.env.DATABASE_URL);
 }
 
+export async function emailMayAuthenticate(email: string): Promise<boolean> {
+  if (isAllowedUsername(email)) return true;
+  try {
+    const memberships = await listActiveMemberships(email);
+    return memberships.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function verifyLoginCredentials(username: string, password: string): Promise<boolean> {
   const email = username.trim().toLowerCase();
-  if (!email || !password || !isAllowedUsername(email)) return false;
+  if (!email || !password) return false;
 
   try {
     const sql = getSql();
@@ -28,13 +39,44 @@ export async function verifyLoginCredentials(username: string, password: string)
         LIMIT 1
       `) as { password_hash: string }[];
       const stored = rows[0]?.password_hash;
-      if (stored) return verifyPassword(password, stored);
+      if (stored) {
+        if (!verifyPassword(password, stored)) return false;
+        return emailMayAuthenticate(email);
+      }
     }
   } catch {
     // If Neon is unreachable, fall back to the shared env password so operators are not locked out.
   }
 
   return credentialsMatch(username, password);
+}
+
+export async function emailHasPassword(email: string): Promise<boolean> {
+  const sql = getSql();
+  if (!sql) return false;
+  const rows = (await sql`
+    SELECT 1 AS found
+    FROM operator_credential
+    WHERE email = ${email.trim().toLowerCase()}
+    LIMIT 1
+  `) as { found: number }[];
+  return rows.length > 0;
+}
+
+export async function upsertOperatorPassword(email: string, password: string): Promise<void> {
+  const sql = getSql();
+  if (!sql) throw new Error("DATABASE_URL is not set");
+  const passwordHash = await hashPassword(password);
+  const now = new Date().toISOString();
+  const normalized = email.trim().toLowerCase();
+  await sql`
+    INSERT INTO operator_credential (email, password_hash, password_updated_at, created_at, updated_at)
+    VALUES (${normalized}, ${passwordHash}, ${now}, ${now}, ${now})
+    ON CONFLICT (email) DO UPDATE SET
+      password_hash = excluded.password_hash,
+      password_updated_at = excluded.password_updated_at,
+      updated_at = excluded.updated_at
+  `;
 }
 
 export async function issuePasswordResetToken(email: string): Promise<{ token: string; expiresAt: Date } | null> {
@@ -71,7 +113,7 @@ export async function readPasswordResetToken(token: string): Promise<{ email: st
   const row = rows[0];
   if (!row || row.used_at) return null;
   if (new Date(row.expires_at).getTime() < Date.now()) return null;
-  if (!getExpectedUsernames().includes(row.email)) return null;
+  if (!(await emailMayAuthenticate(row.email))) return null;
   return { email: row.email };
 }
 
@@ -88,18 +130,9 @@ export async function consumePasswordResetToken(token: string, password: string)
     RETURNING email
   `) as { email: string }[];
   const email = claimed[0]?.email;
-  if (!email || !isAllowedUsername(email)) return null;
+  if (!email || !(await emailMayAuthenticate(email))) return null;
 
-  const passwordHash = await hashPassword(password);
-  const now = new Date().toISOString();
-  await sql`
-    INSERT INTO operator_credential (email, password_hash, password_updated_at, created_at, updated_at)
-    VALUES (${email}, ${passwordHash}, ${now}, ${now}, ${now})
-    ON CONFLICT (email) DO UPDATE SET
-      password_hash = excluded.password_hash,
-      password_updated_at = excluded.password_updated_at,
-      updated_at = excluded.updated_at
-  `;
+  await upsertOperatorPassword(email, password);
   return { email };
 }
 

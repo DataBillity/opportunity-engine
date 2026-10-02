@@ -3,6 +3,7 @@ export {
   getAvailableProviders,
   describeMissingKeys,
   getAnthropicApiKey,
+  runWithAnthropicKey,
   ModelGatewayError,
 } from "./gateway";
 export type { GatewayCallInput, GatewayCallOutput, ModelGatewayCode } from "./gateway";

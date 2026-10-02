@@ -1,4 +1,5 @@
-import { createSql } from "@opportunity-engine/db";
+import { createSql, DATABILLITY_ORG_ID } from "@opportunity-engine/db";
+import { ensureTenantReady } from "@/lib/tenant";
 import {
   graphData,
   organizations,
@@ -11,8 +12,6 @@ import {
 } from "@/lib/mock-data";
 import type { Play } from "@opportunity-engine/core";
 import type { SharedWorkspace, WorkspaceState } from "@/lib/shared-workspace";
-
-const WORKSPACE_ID = "operator";
 
 type Sql = ReturnType<typeof createSql>;
 
@@ -49,6 +48,22 @@ function seedState(): WorkspaceState {
     pursuits: pursuits,
     partners: partnerDirectory,
     graph: graphData,
+    plays: [],
+  };
+}
+
+function emptyState(): WorkspaceState {
+  return {
+    organizations: [],
+    pursuits: {},
+    partners: [],
+    graph: {
+      capabilities: [],
+      experience: [],
+      credentials: [],
+      people: [],
+    },
+    plays: [],
   };
 }
 
@@ -88,29 +103,44 @@ async function ensureTable(sql: Sql): Promise<void> {
   `;
 }
 
-export async function readSharedWorkspace(): Promise<SharedWorkspace | null> {
-  const sql = sqlClient();
-  if (!sql) return null;
-  await ensureTable(sql);
-  const seed = seedState();
+async function insertWorkspace(sql: Sql, organizationId: string, state: WorkspaceState): Promise<void> {
   await sql`
     INSERT INTO shared_workspace (id, organizations, pursuits, partners, graph, plays, revision, updated_at)
     VALUES (
-      ${WORKSPACE_ID},
-      ${JSON.stringify(seed.organizations)}::jsonb,
-      ${JSON.stringify(seed.pursuits)}::jsonb,
-      ${JSON.stringify(seed.partners)}::jsonb,
-      ${JSON.stringify(seed.graph)}::jsonb,
-      ${JSON.stringify(seed.plays ?? [])}::jsonb,
+      ${organizationId},
+      ${JSON.stringify(state.organizations)}::jsonb,
+      ${JSON.stringify(state.pursuits)}::jsonb,
+      ${JSON.stringify(state.partners)}::jsonb,
+      ${JSON.stringify(state.graph)}::jsonb,
+      ${JSON.stringify(state.plays ?? [])}::jsonb,
       1,
       now()
     )
     ON CONFLICT (id) DO NOTHING
   `;
+}
+
+/** Empty pipeline, partners, graph, and plays. Used for organizations created at signup. */
+export async function createOrganizationWorkspace(organizationId: string): Promise<void> {
+  const sql = sqlClient();
+  if (!sql) throw new Error("DATABASE_URL is not set");
+  await ensureTenantReady();
+  await ensureTable(sql);
+  await insertWorkspace(sql, organizationId, emptyState());
+}
+
+export async function readSharedWorkspace(organizationId: string): Promise<SharedWorkspace | null> {
+  const sql = sqlClient();
+  if (!sql) return null;
+  await ensureTenantReady();
+  await ensureTable(sql);
+  if (organizationId === DATABILLITY_ORG_ID) {
+    await insertWorkspace(sql, organizationId, seedState());
+  }
   const rows = (await sql`
     SELECT organizations, pursuits, partners, graph, plays, revision
     FROM shared_workspace
-    WHERE id = ${WORKSPACE_ID}
+    WHERE id = ${organizationId}
     LIMIT 1
   `) as WorkspaceRow[];
   const row = rows[0];
@@ -119,11 +149,13 @@ export async function readSharedWorkspace(): Promise<SharedWorkspace | null> {
 }
 
 export async function writeSharedWorkspace(
+  organizationId: string,
   next: WorkspaceState,
   expectedRevision: number,
 ): Promise<{ ok: true; workspace: SharedWorkspace } | { ok: false; conflict: SharedWorkspace } | null> {
   const sql = sqlClient();
   if (!sql) return null;
+  await ensureTenantReady();
   await ensureTable(sql);
 
   const updated = (await sql`
@@ -136,13 +168,13 @@ export async function writeSharedWorkspace(
       plays = ${JSON.stringify(next.plays ?? [])}::jsonb,
       revision = revision + 1,
       updated_at = now()
-    WHERE id = ${WORKSPACE_ID} AND revision = ${expectedRevision}
+    WHERE id = ${organizationId} AND revision = ${expectedRevision}
     RETURNING organizations, pursuits, partners, graph, plays, revision
   `) as WorkspaceRow[];
 
   if (updated[0]) return { ok: true, workspace: rowToWorkspace(updated[0]) };
 
-  const current = await readSharedWorkspace();
+  const current = await readSharedWorkspace(organizationId);
   if (!current) return null;
   return { ok: false, conflict: current };
 }
