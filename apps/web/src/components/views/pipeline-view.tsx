@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Organization, Pursuit } from "@/lib/mock-data";
 import { isDemonstrationOrg } from "@/lib/mock-data";
 import { Modal, FormField, TextArea, PrimaryButton, SecondaryButton } from "@/components/ui/modal";
@@ -79,7 +79,15 @@ export function PipelineView({
 
   const [sortCol, setSortCol] = useState<SortColumn>("score");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [hideDemonstration, setHideDemonstration] = useState(true);
+  const demonstrationTouched = useRef(false);
+  const [hideDemonstration, setHideDemonstration] = useState(() =>
+    orgs.some(org => !org.archived && !isDemonstrationOrg(org)),
+  );
+
+  useEffect(() => {
+    if (demonstrationTouched.current) return;
+    setHideDemonstration(orgs.some(org => !org.archived && !isDemonstrationOrg(org)));
+  }, [orgs]);
   const [overrideOrg, setOverrideOrg] = useState<Organization | null>(null);
   const [overrideScore, setOverrideScore] = useState("");
   const [overrideNote, setOverrideNote] = useState("");
@@ -264,7 +272,10 @@ export function PipelineView({
         {demonstrationCount > 0 && (
           <button
             type="button"
-            onClick={() => setHideDemonstration(value => !value)}
+            onClick={() => {
+              demonstrationTouched.current = true;
+              setHideDemonstration(value => !value);
+            }}
             className="text-[11px] font-medium text-muted-foreground hover:text-foreground cursor-pointer"
           >
             {hideDemonstration ? `Show ${demonstrationCount} demonstration account${demonstrationCount === 1 ? "" : "s"}` : "Hide demonstration accounts"}

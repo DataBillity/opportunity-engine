@@ -64,6 +64,8 @@ pnpm db:push
 pnpm db:seed
 ```
 
+`pnpm db:seed` provisions a tenant. A new tenant receives demonstration records for Search & Discovery (plays, a scored lead list, and candidates), Pipeline, the Partner network, opportunities (RFP, RFI, and SOW), capability sources, the archive, and Response Builder. Set `TENANT_ID` and `TENANT_NAME` to provision another tenant. An existing workspace is left as it is. The web app also provisions the current tenant on first load.
+
 ### Run locally
 
 From the repo root (Windows):
@@ -102,7 +104,7 @@ Open [http://localhost:3100](http://localhost:3100). Canonical local ports: fron
 | `pnpm db:generate` | Generate Drizzle migrations |
 | `pnpm db:migrate` | Apply migrations |
 | `pnpm db:push` | Push schema to Postgres |
-| `pnpm db:seed` | Seed the database |
+| `pnpm db:seed` | Provision a tenant with demonstration data for each core module |
 | `pnpm ingest:linkedin` | Evaluate a LinkedIn connections export |
 
 ## Environment
@@ -112,6 +114,7 @@ Copy `.env.example` to `.env.local`. The launcher will create `.env.local` from 
 | Variable | Required for | Notes |
 | --- | --- | --- |
 | `DATABASE_URL` | Web, worker, Drizzle | Neon connection string |
+| `TENANT_ID` / `TENANT_NAME` | Tenant workspace | Optional. Defaults to `operator` / `DataBillity`. A new id is seeded with demonstration data for every core module |
 | `REDIS_URL` | Worker | Local default `redis://localhost:6379` |
 | `ANTHROPIC_API_KEY` | AI outreach, extraction, and drafting | Claude Sonnet 5.5 |
 | `AUTH_USERNAME` / `AUTH_PASSWORD` / `AUTH_SECRET` | `/login` | Shared operator gate |

@@ -6,6 +6,10 @@ import type { GraphData, Organization, Partner, Pursuit } from "@/lib/mock-data"
 import { readSharedWorkspace, writeSharedWorkspace } from "@/lib/shared-workspace-store";
 import type { WorkspaceState } from "@/lib/shared-workspace";
 
+function optionalArray(value: unknown): boolean {
+  return value === undefined || Array.isArray(value);
+}
+
 type WorkspacePut = WorkspaceState & { revision: number };
 
 export const runtime = "nodejs";
@@ -28,6 +32,9 @@ function isWorkspacePut(value: unknown): value is WorkspacePut {
     && Array.isArray(graph.experience)
     && Array.isArray(graph.credentials)
     && Array.isArray(graph.people)
+    && optionalArray(body.plays)
+    && optionalArray(body.leadImports)
+    && optionalArray(body.discovery)
     && typeof body.revision === "number"
     && Number.isInteger(body.revision);
 }
@@ -65,6 +72,9 @@ export async function PUT(request: Request) {
     pursuits: body.pursuits as Record<string, Pursuit>,
     partners: body.partners as Partner[],
     graph: body.graph as GraphData,
+    plays: body.plays,
+    leadImports: body.leadImports,
+    discovery: body.discovery,
   };
 
   try {

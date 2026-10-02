@@ -16,12 +16,11 @@ import { ArchiveView } from "@/components/views/archive-view";
 import { OperatorProvider } from "@/components/auth/operator-provider";
 import { useToast } from "@/components/ui/toast";
 import { applyPartnerArchive, applyPartnerReinstate, computeSharedIds, setPartnerArchived } from "@/lib/partner-archive";
-import { mergeWorkspace, sameWorkspace, type SharedWorkspace, type WorkspaceState } from "@/lib/shared-workspace";
+import { mergeWorkspace, sameWorkspace, type LeadImportBatch, type SharedWorkspace, type WorkspaceState } from "@/lib/shared-workspace";
+import { buildTenantSeed } from "@/lib/tenant-seed";
+import type { Play } from "@opportunity-engine/core";
+import type { DiscoveryCandidate } from "@/lib/search-candidates";
 import {
-  organizations as initialOrgs,
-  pursuits as initialPursuits,
-  partnerDirectory as initialPartners,
-  graphData as initialGraph,
   type Organization,
   type Pursuit,
   type Partner,
@@ -36,13 +35,18 @@ export type ViewId = "dashboard" | "search" | "pipeline" | "org" | "decision" | 
 
 const LEGACY_BROWSER_KEYS = ["oe_orgs", "oe_pursuits", "oe_partners", "oe_graph"];
 
-function workspaceFrom(
-  organizations: Organization[],
-  pursuits: Record<string, Pursuit>,
-  partners: Partner[],
-  graph: GraphData,
-): WorkspaceState {
-  return { organizations, pursuits, partners, graph };
+const initialWorkspace = buildTenantSeed();
+
+function workspaceFrom(state: WorkspaceState): WorkspaceState {
+  return {
+    organizations: state.organizations,
+    pursuits: state.pursuits,
+    partners: state.partners,
+    graph: state.graph,
+    plays: state.plays ?? [],
+    leadImports: state.leadImports ?? [],
+    discovery: state.discovery ?? [],
+  };
 }
 
 function getOrgPursuitsFromState(org: Organization, allPursuits: Record<string, Pursuit>): Pursuit[] {
@@ -64,24 +68,17 @@ export default function CommandCenter() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const [ready, setReady] = useState(false);
-  const [orgs, setOrgs] = useState<Organization[]>(() => [...initialOrgs]);
-  const [allPursuits, setAllPursuits] = useState<Record<string, Pursuit>>(() => ({ ...initialPursuits }));
-  const [partners, setPartners] = useState<Partner[]>(() => [...initialPartners]);
-  const [graph, setGraph] = useState<GraphData>(() => ({
-    capabilities: [...initialGraph.capabilities],
-    experience: [...initialGraph.experience],
-    credentials: [...initialGraph.credentials],
-    people: [...initialGraph.people],
-  }));
+  const [orgs, setOrgs] = useState<Organization[]>(() => initialWorkspace.organizations);
+  const [allPursuits, setAllPursuits] = useState<Record<string, Pursuit>>(() => initialWorkspace.pursuits);
+  const [partners, setPartners] = useState<Partner[]>(() => initialWorkspace.partners);
+  const [graph, setGraph] = useState<GraphData>(() => initialWorkspace.graph);
+  const [plays, setPlays] = useState<Play[]>(() => initialWorkspace.plays ?? []);
+  const [leadImports, setLeadImports] = useState<LeadImportBatch[]>(() => initialWorkspace.leadImports ?? []);
+  const [discovery, setDiscovery] = useState<DiscoveryCandidate[]>(() => initialWorkspace.discovery ?? []);
 
   const revisionRef = useRef(0);
   const baselineRef = useRef<WorkspaceState | null>(null);
-  const stateRef = useRef<WorkspaceState>(workspaceFrom(initialOrgs, initialPursuits, initialPartners, {
-    capabilities: [...initialGraph.capabilities],
-    experience: [...initialGraph.experience],
-    credentials: [...initialGraph.credentials],
-    people: [...initialGraph.people],
-  }));
+  const stateRef = useRef<WorkspaceState>(initialWorkspace);
   const saveGen = useRef(0);
   const saveWarned = useRef(false);
   const graphRef = useRef(graph);
@@ -97,6 +94,9 @@ export default function CommandCenter() {
     setAllPursuits(next.pursuits);
     setPartners(next.partners);
     setGraph(next.graph);
+    setPlays(next.plays ?? []);
+    setLeadImports(next.leadImports ?? []);
+    setDiscovery(next.discovery ?? []);
   }
 
   useEffect(() => {
@@ -108,7 +108,7 @@ export default function CommandCenter() {
       })
       .then((data) => {
         if (cancelled) return;
-        const loaded = workspaceFrom(data.organizations, data.pursuits, data.partners, data.graph);
+        const loaded = workspaceFrom(data);
         applyWorkspace(loaded, data.revision, loaded);
         setReady(true);
         try {
@@ -127,7 +127,15 @@ export default function CommandCenter() {
   }, [toast]);
 
   useEffect(() => {
-    const current = workspaceFrom(orgs, allPursuits, partners, graph);
+    const current = workspaceFrom({
+      organizations: orgs,
+      pursuits: allPursuits,
+      partners,
+      graph,
+      plays,
+      leadImports,
+      discovery,
+    });
     stateRef.current = current;
     if (!ready) return;
     if (baselineRef.current && sameWorkspace(current, baselineRef.current)) return;
@@ -137,7 +145,7 @@ export default function CommandCenter() {
       void flushWorkspace(gen);
     }, 500);
     return () => clearTimeout(timer);
-  }, [ready, orgs, allPursuits, partners, graph]);
+  }, [ready, orgs, allPursuits, partners, graph, plays, leadImports, discovery]);
 
   async function flushWorkspace(gen: number, isRetry = false) {
     const sent = stateRef.current;
@@ -159,7 +167,7 @@ export default function CommandCenter() {
 
     if (res.status === 409 && !isRetry) {
       const server = await res.json() as SharedWorkspace;
-      const serverState = workspaceFrom(server.organizations, server.pursuits, server.partners, server.graph);
+      const serverState = workspaceFrom(server);
       const merged = mergeWorkspace(sent, baselineRef.current ?? sent, serverState);
       revisionRef.current = server.revision;
       baselineRef.current = serverState;
@@ -470,6 +478,8 @@ export default function CommandCenter() {
                 graph={graph}
                 pipelineOrgs={orgs}
                 partners={partners}
+                seededPlays={plays}
+                seededDiscovery={discovery}
               />
             )}
             {activeView === "pipeline" && (

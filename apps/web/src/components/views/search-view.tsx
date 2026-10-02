@@ -62,11 +62,15 @@ export function SearchView({
   graph,
   pipelineOrgs,
   partners,
+  seededPlays,
+  seededDiscovery,
 }: {
   onAddOrg: (org: Organization) => void;
   graph: GraphData;
   pipelineOrgs: Organization[];
   partners?: Partner[];
+  seededPlays?: Play[];
+  seededDiscovery?: DiscoveryCandidate[];
   onAddOrgs?: (orgs: Organization[]) => void;
   onImportedLeads?: () => void;
 }) {
@@ -83,10 +87,10 @@ export function SearchView({
   const [activeSources, setActiveSources] = useState<Set<string>>(new Set(SOURCE_OPTIONS));
   const [searching, setSearching] = useState(false);
   const [searchNotes, setSearchNotes] = useState<string[]>([]);
-  const [results, setResults] = useState<DiscoveryCandidate[]>([]);
+  const [results, setResults] = useState<DiscoveryCandidate[]>(() => seededDiscovery ?? []);
   const [refreshing, setRefreshing] = useState<Set<string>>(new Set());
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
-  const [hasSearched, setHasSearched] = useState(false);
+  const [hasSearched, setHasSearched] = useState(() => (seededDiscovery?.length ?? 0) > 0);
 
   /* ---- Bulk import state ---- */
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -117,8 +121,7 @@ export function SearchView({
   const [expandedLead, setExpandedLead] = useState<string | null>(null);
 
   /* ---- Plays ---- */
-  const [plays, setPlays] = useState<Play[]>([]);
-  const [playsBuilt, setPlaysBuilt] = useState(false);
+  const [plays, setPlays] = useState<Play[]>(() => seededPlays ?? []);
 
   /* ---- Inbound state ---- */
   const [inboundOpen, setInboundOpen] = useState(false);
@@ -129,21 +132,25 @@ export function SearchView({
   const [inboundSummary, setInboundSummary] = useState("");
   const [inboundFlags, setInboundFlags] = useState<string[]>([]);
 
-  /* ---- Build plays from Partner data ---- */
+  /* ---- Plays: use the tenant seed, otherwise build from Partner data ---- */
   useEffect(() => {
-    if (playsBuilt) return;
+    if (seededPlays && seededPlays.length > 0) {
+      setPlays(seededPlays);
+      return;
+    }
     const partnerList = partners ?? [];
-    if (!graph.capabilities.length && !graph.experience.length) return;
-    const built = buildPlaysFromPartners({
+    if (!graph.capabilities.length && !graph.experience.length) {
+      setPlays([]);
+      return;
+    }
+    setPlays(buildPlaysFromPartners({
       partners: partnerList.map(p => ({ id: p.id, name: p.name, type: p.type })),
       capabilities: graph.capabilities,
       experiences: graph.experience,
       credentials: graph.credentials,
       people: graph.people,
-    });
-    setPlays(built);
-    setPlaysBuilt(true);
-  }, [graph, partners, playsBuilt]);
+    }));
+  }, [graph, partners, seededPlays]);
 
   const csvHeaders = useMemo(() => {
     if (!bulkText.trim()) return [];
@@ -167,12 +174,18 @@ export function SearchView({
       setResults(stored.candidates);
       setAddedIds(new Set(stored.addedIds));
       setHasSearched(true);
-    } else {
-      setResults([]);
-      setAddedIds(new Set());
-      setHasSearched(false);
+      return;
     }
-  }, [operatorEmail]);
+    if (seededDiscovery && seededDiscovery.length > 0) {
+      setResults(seededDiscovery);
+      setAddedIds(new Set());
+      setHasSearched(true);
+      return;
+    }
+    setResults([]);
+    setAddedIds(new Set());
+    setHasSearched(false);
+  }, [operatorEmail, seededDiscovery]);
 
   function replaceCandidates(next: DiscoveryCandidate[]) {
     setResults(next);
@@ -767,7 +780,7 @@ export function SearchView({
                     </div>
                   </td>
                   <td className="px-3 lg:px-4 py-3 hidden xl:table-cell">
-                    <span className="font-mono text-muted-foreground">—</span>
+                    <span className="font-mono text-muted-foreground">{r.opportunityScore ?? "—"}</span>
                   </td>
                   <td className="px-3 lg:px-4 py-3 text-[11px] text-muted-foreground hidden xl:table-cell">{r.updated}</td>
                   <td className="px-3 lg:px-4 py-3">

@@ -8,7 +8,8 @@
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "push": "drizzle-kit push",
-    "seed": "tsx src/seed/index.ts",
+    "seed": "tsx --tsconfig ../../apps/web/tsconfig.json ../../apps/web/src/lib/seed-cli.ts",
+    "test": "tsx --tsconfig ../../apps/web/tsconfig.json --test ../../apps/web/src/lib/tenant-seed.test.ts",
     "studio": "drizzle-kit studio"
   },
   "dependencies": {

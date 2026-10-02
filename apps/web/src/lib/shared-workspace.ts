@@ -1,6 +1,7 @@
 import type { Play } from "@opportunity-engine/core";
 import type { GraphData, Organization, Partner, Pursuit } from "@/lib/mock-data";
 import type { ImportedLead, ListSettings } from "@/lib/lead-import";
+import type { DiscoveryCandidate } from "@/lib/search-candidates";
 
 /** Leads, their opportunities, partners, and the graph those partners contribute to. */
 export type WorkspaceState = {
@@ -10,6 +11,8 @@ export type WorkspaceState = {
   graph: GraphData;
   plays?: Play[];
   leadImports?: LeadImportBatch[];
+  /** Search & Discovery candidates seeded for a new tenant, until an operator replaces them. */
+  discovery?: DiscoveryCandidate[];
 };
 
 export interface LeadImportBatch {
@@ -132,11 +135,16 @@ export function mergeWorkspace(local: WorkspaceState, baseline: WorkspaceState, 
       credentials: mergeById(local.graph.credentials, baseline.graph.credentials, server.graph.credentials),
       people: mergeById(local.graph.people, baseline.graph.people, server.graph.people),
     },
-    plays: mergedPlays.length ? mergedPlays : undefined,
+    plays: mergedPlays,
     leadImports: mergeById(
       local.leadImports ?? [],
       baseline.leadImports ?? [],
       server.leadImports ?? [],
+    ),
+    discovery: mergeById(
+      local.discovery ?? [],
+      baseline.discovery ?? [],
+      server.discovery ?? [],
     ),
   };
 }

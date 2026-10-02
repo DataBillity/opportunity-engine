@@ -2,6 +2,8 @@ import type { Organization, SearchResult } from "@/lib/mock-data";
 
 export type DiscoveryCandidate = SearchResult & {
   leadDraft?: Organization;
+  /** Opportunity score after enrichment. Fit stays on `score`. */
+  opportunityScore?: number;
 };
 
 export type StoredSearchSession = {
