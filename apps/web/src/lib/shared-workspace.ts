@@ -132,7 +132,7 @@ export function mergeWorkspace(local: WorkspaceState, baseline: WorkspaceState, 
       credentials: mergeById(local.graph.credentials, baseline.graph.credentials, server.graph.credentials),
       people: mergeById(local.graph.people, baseline.graph.people, server.graph.people),
     },
-    plays: mergedPlays.length ? mergedPlays : undefined,
+    plays: mergedPlays,
     leadImports: mergeById(
       local.leadImports ?? [],
       baseline.leadImports ?? [],

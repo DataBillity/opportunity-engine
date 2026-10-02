@@ -7,7 +7,6 @@ import {
   matchExistingAccount,
   scoreDiscoveredAccount,
   screenInboundLead,
-  buildPlaysFromPartners,
   scoreFitAgainstPlays,
   type DiscoveryAssessment,
   type DiscoveryField,
@@ -62,11 +61,13 @@ export function SearchView({
   graph,
   pipelineOrgs,
   partners,
+  plays,
 }: {
   onAddOrg: (org: Organization) => void;
   graph: GraphData;
   pipelineOrgs: Organization[];
   partners?: Partner[];
+  plays: Play[];
   onAddOrgs?: (orgs: Organization[]) => void;
   onImportedLeads?: () => void;
 }) {
@@ -116,10 +117,6 @@ export function SearchView({
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
   const [expandedLead, setExpandedLead] = useState<string | null>(null);
 
-  /* ---- Plays ---- */
-  const [plays, setPlays] = useState<Play[]>([]);
-  const [playsBuilt, setPlaysBuilt] = useState(false);
-
   /* ---- Inbound state ---- */
   const [inboundOpen, setInboundOpen] = useState(false);
   const [inboundName, setInboundName] = useState("");
@@ -128,22 +125,6 @@ export function SearchView({
   const [inboundChannel, setInboundChannel] = useState("Inbound");
   const [inboundSummary, setInboundSummary] = useState("");
   const [inboundFlags, setInboundFlags] = useState<string[]>([]);
-
-  /* ---- Build plays from Partner data ---- */
-  useEffect(() => {
-    if (playsBuilt) return;
-    const partnerList = partners ?? [];
-    if (!graph.capabilities.length && !graph.experience.length) return;
-    const built = buildPlaysFromPartners({
-      partners: partnerList.map(p => ({ id: p.id, name: p.name, type: p.type })),
-      capabilities: graph.capabilities,
-      experiences: graph.experience,
-      credentials: graph.credentials,
-      people: graph.people,
-    });
-    setPlays(built);
-    setPlaysBuilt(true);
-  }, [graph, partners, playsBuilt]);
 
   const csvHeaders = useMemo(() => {
     if (!bulkText.trim()) return [];

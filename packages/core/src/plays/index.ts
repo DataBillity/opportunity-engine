@@ -2,7 +2,19 @@ export {
   buildPlaysFromPartners,
   scoreFitAgainstPlays,
   computeOpportunityScore,
+  industryMatchKind,
 } from "./play-builder";
+export {
+  assessProposedPlay,
+  composeConsortiumPlays,
+  applySolicitationUpdate,
+  storeUpdatedPlay,
+  approveProposedPlay,
+} from "./play-lifecycle";
+export type {
+  PlayProposalInput,
+  SolicitationPlayEvent,
+} from "./play-lifecycle";
 export type {
   Play,
   PlaySignal,
@@ -20,4 +32,7 @@ export type {
   RelationshipLevel,
   ExperienceCloseness,
   PartnerSummary,
+  PlayExperienceCredit,
+  PlayAssessment,
+  PlayProposal,
 } from "./play-builder";

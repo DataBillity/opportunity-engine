@@ -9,6 +9,7 @@ import {
   type Partner,
   type Pursuit,
 } from "@/lib/mock-data";
+import type { Play } from "@opportunity-engine/core";
 import type { SharedWorkspace, WorkspaceState } from "@/lib/shared-workspace";
 
 const WORKSPACE_ID = "operator";
@@ -20,6 +21,7 @@ type WorkspaceRow = {
   pursuits: unknown;
   partners: unknown;
   graph: unknown;
+  plays?: unknown;
   revision: number;
 };
 
@@ -63,6 +65,7 @@ function rowToWorkspace(row: WorkspaceRow): SharedWorkspace {
       credentials: graph.credentials ?? seed.graph.credentials,
       people: graph.people ?? seed.graph.people,
     },
+    plays: asJson<Play[]>(row.plays, []),
     revision: Number(row.revision) || 1,
   };
 }
@@ -79,6 +82,10 @@ async function ensureTable(sql: Sql): Promise<void> {
       updated_at timestamptz NOT NULL DEFAULT now()
     )
   `;
+  await sql`
+    ALTER TABLE shared_workspace
+    ADD COLUMN IF NOT EXISTS plays jsonb NOT NULL DEFAULT '[]'::jsonb
+  `;
 }
 
 export async function readSharedWorkspace(): Promise<SharedWorkspace | null> {
@@ -87,20 +94,21 @@ export async function readSharedWorkspace(): Promise<SharedWorkspace | null> {
   await ensureTable(sql);
   const seed = seedState();
   await sql`
-    INSERT INTO shared_workspace (id, organizations, pursuits, partners, graph, revision, updated_at)
+    INSERT INTO shared_workspace (id, organizations, pursuits, partners, graph, plays, revision, updated_at)
     VALUES (
       ${WORKSPACE_ID},
       ${JSON.stringify(seed.organizations)}::jsonb,
       ${JSON.stringify(seed.pursuits)}::jsonb,
       ${JSON.stringify(seed.partners)}::jsonb,
       ${JSON.stringify(seed.graph)}::jsonb,
+      ${JSON.stringify(seed.plays ?? [])}::jsonb,
       1,
       now()
     )
     ON CONFLICT (id) DO NOTHING
   `;
   const rows = (await sql`
-    SELECT organizations, pursuits, partners, graph, revision
+    SELECT organizations, pursuits, partners, graph, plays, revision
     FROM shared_workspace
     WHERE id = ${WORKSPACE_ID}
     LIMIT 1
@@ -125,10 +133,11 @@ export async function writeSharedWorkspace(
       pursuits = ${JSON.stringify(next.pursuits)}::jsonb,
       partners = ${JSON.stringify(next.partners)}::jsonb,
       graph = ${JSON.stringify(next.graph)}::jsonb,
+      plays = ${JSON.stringify(next.plays ?? [])}::jsonb,
       revision = revision + 1,
       updated_at = now()
     WHERE id = ${WORKSPACE_ID} AND revision = ${expectedRevision}
-    RETURNING organizations, pursuits, partners, graph, revision
+    RETURNING organizations, pursuits, partners, graph, plays, revision
   `) as WorkspaceRow[];
 
   if (updated[0]) return { ok: true, workspace: rowToWorkspace(updated[0]) };

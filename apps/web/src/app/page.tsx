@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { TopBar } from "@/components/layout/top-bar";
 import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
@@ -30,6 +30,18 @@ import {
 import { mergeLeadOrganizations, mergePipelineLeads } from "@/lib/create-lead";
 import { rescorePipeline } from "@/lib/discovery-score";
 import { applyDecision } from "@/lib/pursuit-assessment";
+import {
+  applySolicitationUpdate,
+  approveProposedPlay,
+  assessProposedPlay,
+  composeConsortiumPlays,
+  storeUpdatedPlay,
+  type Play,
+  type PlayBuilderInput,
+  type PlayProposalInput,
+  type SolicitationPlayEvent,
+} from "@opportunity-engine/core";
+import { solicitationEventFromPursuit, solicitationOutcomeFor } from "@/lib/play-updates";
 import { ResponseJobsProvider } from "@/lib/response-jobs";
 
 export type ViewId = "dashboard" | "search" | "pipeline" | "org" | "decision" | "draft" | "sources" | "archive" | "settings";
@@ -41,8 +53,19 @@ function workspaceFrom(
   pursuits: Record<string, Pursuit>,
   partners: Partner[],
   graph: GraphData,
+  plays: Play[] = [],
 ): WorkspaceState {
-  return { organizations, pursuits, partners, graph };
+  return { organizations, pursuits, partners, graph, plays };
+}
+
+function playBuilderInput(partners: Partner[], graph: GraphData): PlayBuilderInput {
+  return {
+    partners: partners.map(partner => ({ id: partner.id, name: partner.name, type: partner.type })),
+    capabilities: graph.capabilities,
+    experiences: graph.experience,
+    credentials: graph.credentials,
+    people: graph.people,
+  };
 }
 
 function getOrgPursuitsFromState(org: Organization, allPursuits: Record<string, Pursuit>): Pursuit[] {
@@ -73,6 +96,7 @@ export default function CommandCenter() {
     credentials: [...initialGraph.credentials],
     people: [...initialGraph.people],
   }));
+  const [storedPlays, setStoredPlays] = useState<Play[]>([]);
 
   const revisionRef = useRef(0);
   const baselineRef = useRef<WorkspaceState | null>(null);
@@ -88,6 +112,10 @@ export default function CommandCenter() {
   graphRef.current = graph;
   const partnersRef = useRef(partners);
   partnersRef.current = partners;
+  const orgsRef = useRef(orgs);
+  orgsRef.current = orgs;
+  const playsRef = useRef(storedPlays);
+  playsRef.current = storedPlays;
 
   function applyWorkspace(next: WorkspaceState, revision: number, baseline: WorkspaceState) {
     revisionRef.current = revision;
@@ -97,6 +125,7 @@ export default function CommandCenter() {
     setAllPursuits(next.pursuits);
     setPartners(next.partners);
     setGraph(next.graph);
+    setStoredPlays(next.plays ?? []);
   }
 
   useEffect(() => {
@@ -108,7 +137,7 @@ export default function CommandCenter() {
       })
       .then((data) => {
         if (cancelled) return;
-        const loaded = workspaceFrom(data.organizations, data.pursuits, data.partners, data.graph);
+        const loaded = workspaceFrom(data.organizations, data.pursuits, data.partners, data.graph, data.plays ?? []);
         applyWorkspace(loaded, data.revision, loaded);
         setReady(true);
         try {
@@ -127,7 +156,7 @@ export default function CommandCenter() {
   }, [toast]);
 
   useEffect(() => {
-    const current = workspaceFrom(orgs, allPursuits, partners, graph);
+    const current = workspaceFrom(orgs, allPursuits, partners, graph, storedPlays);
     stateRef.current = current;
     if (!ready) return;
     if (baselineRef.current && sameWorkspace(current, baselineRef.current)) return;
@@ -137,7 +166,7 @@ export default function CommandCenter() {
       void flushWorkspace(gen);
     }, 500);
     return () => clearTimeout(timer);
-  }, [ready, orgs, allPursuits, partners, graph]);
+  }, [ready, orgs, allPursuits, partners, graph, storedPlays]);
 
   async function flushWorkspace(gen: number, isRetry = false) {
     const sent = stateRef.current;
@@ -159,7 +188,7 @@ export default function CommandCenter() {
 
     if (res.status === 409 && !isRetry) {
       const server = await res.json() as SharedWorkspace;
-      const serverState = workspaceFrom(server.organizations, server.pursuits, server.partners, server.graph);
+      const serverState = workspaceFrom(server.organizations, server.pursuits, server.partners, server.graph, server.plays ?? []);
       const merged = mergeWorkspace(sent, baselineRef.current ?? sent, serverState);
       revisionRef.current = server.revision;
       baselineRef.current = serverState;
@@ -220,6 +249,33 @@ export default function CommandCenter() {
   const singlePursuitId = orgPursuits.length === 1 ? orgPursuits[0]!.id : null;
   const pursuitNavEnabled =
     orgPursuits.length === 1 || (orgPursuits.length > 1 && !!selectedPursuit);
+  const consortiumPlays = useMemo(
+    () => composeConsortiumPlays(playBuilderInput(partners, graph), storedPlays),
+    [partners, graph, storedPlays],
+  );
+
+  const handleProposePlay = useCallback((input: PlayProposalInput) => {
+    const assessed = assessProposedPlay(input, playBuilderInput(partnersRef.current, graphRef.current));
+    setStoredPlays(prev => {
+      let playId = assessed.playId;
+      let n = 2;
+      while (prev.some(play => play.playId === playId)) {
+        playId = `${assessed.playId}-${n}`;
+        n += 1;
+      }
+      return [...prev, { ...assessed, playId }];
+    });
+    const gapCount = assessed.coverageGaps.length;
+    toast(
+      `Proposed "${assessed.name}" — fit ${assessed.assessment?.fit ?? 0}${gapCount ? `, ${gapCount} coverage gap${gapCount === 1 ? "" : "s"}` : ""}.`,
+      "success",
+    );
+  }, [toast]);
+
+  const handleApprovePlay = useCallback((playId: string, approvedBy: string) => {
+    setStoredPlays(prev => approveProposedPlay(prev, playId, approvedBy));
+    toast("Play approved. It stays on the list when Partner records are rebuilt.", "success");
+  }, [toast]);
 
   useEffect(() => {
     if (singlePursuitId && currentPursuitId !== singlePursuitId) {
@@ -251,15 +307,44 @@ export default function CommandCenter() {
 
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
 
+  const recordSolicitation = useCallback((
+    pursuit: Pursuit,
+    outcome: SolicitationPlayEvent["outcome"],
+    reason?: string,
+  ) => {
+    const org = orgsRef.current.find(item => item.id === pursuit.orgId);
+    const event = solicitationEventFromPursuit(pursuit, org, outcome, reason);
+    const composed = composeConsortiumPlays(
+      playBuilderInput(partnersRef.current, graphRef.current),
+      playsRef.current,
+    );
+    const result = applySolicitationUpdate(composed, event);
+    if (!result.matchedPlayId) {
+      toast(`No consortium play matched "${pursuit.name}". The Plays list was left unchanged.`, "warning");
+      return;
+    }
+    const matched = result.plays.find(play => play.playId === result.matchedPlayId);
+    if (!matched) return;
+    setStoredPlays(prev => storeUpdatedPlay(prev, matched));
+    toast(`Updated play "${matched.name}" from ${pursuit.typeLabel} "${pursuit.name}" (${outcome}).`, "success");
+  }, [toast]);
+
   const handleConfirmDecision = useCallback(
     (pursuitId: string, decision: "go" | "nogo", meta: { reason: string; reviewer: string }) => {
+      const captured: { pursuit: Pursuit | null } = { pursuit: null };
       setAllPursuits(prev => {
         const p = prev[pursuitId];
         if (!p) return prev;
-        return { ...prev, [pursuitId]: { ...p, ...applyDecision(p, decision, meta) } };
+        const next = { ...p, ...applyDecision(p, decision, meta) };
+        captured.pursuit = next;
+        return { ...prev, [pursuitId]: next };
       });
+      const pursuit = captured.pursuit;
+      if (pursuit && decision === "nogo" && pursuit.draftStatus !== "Submitted" && !pursuit.outcome) {
+        recordSolicitation(pursuit, "no-bid", meta.reason);
+      }
     },
-    []
+    [recordSolicitation]
   );
 
   const handleAddPursuit = useCallback(
@@ -317,13 +402,21 @@ export default function CommandCenter() {
 
   const handleUpdatePursuit = useCallback(
     (pursuitId: string, updates: Partial<Pursuit>) => {
+      const captured: { pursuit: Pursuit | null; outcome: SolicitationPlayEvent["outcome"] | null } = {
+        pursuit: null,
+        outcome: null,
+      };
       setAllPursuits(prev => {
         const p = prev[pursuitId];
         if (!p) return prev;
-        return { ...prev, [pursuitId]: { ...p, ...updates } };
+        const next = { ...p, ...updates };
+        captured.pursuit = next;
+        captured.outcome = solicitationOutcomeFor(p, updates);
+        return { ...prev, [pursuitId]: next };
       });
+      if (captured.pursuit && captured.outcome) recordSolicitation(captured.pursuit, captured.outcome);
     },
-    []
+    [recordSolicitation]
   );
 
   const handleApplyToPursuit = useCallback(
@@ -470,6 +563,7 @@ export default function CommandCenter() {
                 graph={graph}
                 pipelineOrgs={orgs}
                 partners={partners}
+                plays={consortiumPlays}
               />
             )}
             {activeView === "pipeline" && (
@@ -562,9 +656,12 @@ export default function CommandCenter() {
                 partners={partners}
                 graph={graph}
                 allPursuits={allPursuits}
+                plays={consortiumPlays}
                 onUpdatePartners={setPartners}
                 onUpdateGraph={setGraph}
                 onUpdatePursuit={handleUpdatePursuit}
+                onProposePlay={handleProposePlay}
+                onApprovePlay={handleApprovePlay}
                 onArchivePartner={handleArchivePartner}
                 onReinstatePartner={handleReinstatePartner}
               />
