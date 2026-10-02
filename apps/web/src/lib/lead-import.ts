@@ -146,6 +146,8 @@ export interface ImportedLead {
 export type MappableColumn =
   | "organization"
   | "contact_name"
+  | "contact_first_name"
+  | "contact_last_name"
   | "contact_title"
   | "website"
   | "email"
@@ -162,6 +164,8 @@ export interface ColumnMapping {
 export const MAPPABLE_COLUMNS: { value: MappableColumn; label: string; required: boolean }[] = [
   { value: "organization", label: "Organization name", required: true },
   { value: "contact_name", label: "Contact name", required: false },
+  { value: "contact_first_name", label: "Contact first name", required: false },
+  { value: "contact_last_name", label: "Contact last name", required: false },
   { value: "contact_title", label: "Contact title", required: false },
   { value: "website", label: "Website", required: false },
   { value: "email", label: "Email", required: false },
@@ -224,6 +228,8 @@ export function parseLeadListCsv(
     const values: Record<MappableColumn, string> = {
       organization: "",
       contact_name: "",
+      contact_first_name: "",
+      contact_last_name: "",
       contact_title: "",
       website: "",
       email: "",
@@ -241,8 +247,9 @@ export function parseLeadListCsv(
     }
 
     const rawName = values.organization;
+    const contactName = joinContactName(values.contact_name, values.contact_first_name, values.contact_last_name);
     if (!rawName || isNonOrganization(rawName)) {
-      if (values.contact_name && rawName) {
+      if (contactName && rawName) {
         warnings.push(`Row ${i + 2}: "${rawName}" is not an organization — contact kept.`);
       }
       continue;
@@ -252,9 +259,9 @@ export function parseLeadListCsv(
     const key = cleaned.toLowerCase();
 
     const contact: LeadContact | null =
-      values.contact_name || values.email
+      contactName || values.email
         ? {
-            name: values.contact_name,
+            name: contactName,
             title: values.contact_title,
             email: values.email,
             profileUrl: values.profile_url || undefined,
@@ -322,19 +329,34 @@ export function parseLeadListCsv(
 /*  Auto-detect column mappings from headers                           */
 /* ------------------------------------------------------------------ */
 
+const ORG_HEADERS = new Set([
+  "organization",
+  "org",
+  "company",
+  "company name",
+  "organization name",
+  "account",
+  "lead",
+]);
+
 const HEADER_HINTS: Record<string, MappableColumn> = {
   organization: "organization",
   org: "organization",
   company: "organization",
   "company name": "organization",
   "organization name": "organization",
-  name: "organization",
   account: "organization",
   lead: "organization",
   contact: "contact_name",
   "contact name": "contact_name",
-  "first name": "contact_name",
   "full name": "contact_name",
+  "first name": "contact_first_name",
+  firstname: "contact_first_name",
+  "given name": "contact_first_name",
+  "last name": "contact_last_name",
+  lastname: "contact_last_name",
+  surname: "contact_last_name",
+  "family name": "contact_last_name",
   title: "contact_title",
   position: "contact_title",
   "job title": "contact_title",
@@ -359,17 +381,27 @@ const HEADER_HINTS: Record<string, MappableColumn> = {
   "connected on": "date_of_last_contact",
 };
 
+/** A single Name column is the contact when the file also has an organization column. Otherwise it is the organization. */
 export function autoDetectMappings(headers: string[]): ColumnMapping[] {
+  const hasOrganization = headers.some(header => ORG_HEADERS.has(header.trim().toLowerCase()));
   const used = new Set<MappableColumn>();
   return headers.map(h => {
     const key = h.trim().toLowerCase();
-    const match = HEADER_HINTS[key];
+    const match = key === "name"
+      ? (hasOrganization ? "contact_name" : "organization")
+      : HEADER_HINTS[key];
     if (match && !used.has(match)) {
       used.add(match);
       return { headerName: h, mappedTo: match };
     }
     return { headerName: h, mappedTo: "skip" as MappableColumn };
   });
+}
+
+function joinContactName(full: string, first: string, last: string): string {
+  const named = full.trim();
+  if (named) return named;
+  return [first, last].map(part => part.trim()).filter(Boolean).join(" ");
 }
 
 /* ------------------------------------------------------------------ */

@@ -782,7 +782,7 @@ export function SearchView({
         {importStep === "upload" && (
           <div className="space-y-4">
             <p className="text-xs text-muted-foreground">
-              Upload a CSV lead list or paste it directly. The list needs at least an organization name column. Optional columns: contact name, title, website, email, profile URL, notes, and date of last contact.
+              Upload a CSV lead list or paste it directly. The list needs at least an organization name column. A contact can be one Name column, or separate First Name and Last Name columns. Other optional columns: title, website, email, profile URL, notes, and date of last contact.
             </p>
             <div
               onDragOver={e => { e.preventDefault(); setBulkDragOver(true); }}
