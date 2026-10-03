@@ -1,11 +1,11 @@
 # Platform COGS: Tenant One and bring-your-own-Claude tenants
 
-This is the cost of goods sold for the platform owner (Balfour) running Opportunity Engine.
+This is the cost of goods sold for the platform owner running Opportunity Engine.
 
 Two bills are separate:
 
-1. **Tenant One** is the owner workspace. In this codebase that is the DataBillity organization (`databillity`). It is created with `uses_platform_key = true` and no customer key, so every Claude call uses `ANTHROPIC_API_KEY`. Anthropic invoices Balfour.
-2. **New tenants** sign up with their own Claude key. Signup sets `uses_platform_key = false` and stores that key on the organization. `runWithAnthropicKey` sends their calls to their Anthropic account. Balfour's COGS for those tenants is the shared stack only.
+1. **Tenant One** is the owner workspace. In this codebase that is the DataBillity organization (`databillity`). It is created with `uses_platform_key = true` and no customer key, so every Claude call uses `ANTHROPIC_API_KEY`. Anthropic invoices the platform owner.
+2. **New tenants** sign up with their own Claude key. Signup sets `uses_platform_key = false` and stores that key on the organization. `runWithAnthropicKey` sends their calls to their Anthropic account. The platform owner's COGS for those tenants is the shared stack only.
 
 A stored customer key wins over the platform key. Leave `uses_platform_key` off for paying tenants unless a platform-key credit pack is actually being sold.
 
@@ -53,7 +53,7 @@ The RFP draft is the step that uses the cache well: one write, then about seven 
 
 ## Tenant One monthly Claude bill
 
-These are Balfour's Anthropic invoices for operating Tenant One. Add the 1.35× allowance when granting credits.
+These are the platform owner's Anthropic invoices for operating Tenant One. Add the 1.35× allowance when granting credits.
 
 | Month | What Tenant One did | Modeled Claude | Allowance (1.35×) |
 | --- | --- | ---: | ---: |
@@ -76,7 +76,7 @@ Define **1 credit = $0.10 of platform Claude cost** (the `costUsd` the gateway a
 
 A standing **150-credit** grant covers an active capture month. A proposal-heavy month needs the **600-credit** grant, or the standing grant plus five top-up packs. One standard RFP is about **21 credits** after the allowance ($1.54 × 1.35). One heavy RFP is about **49 credits**. One max-size RFP is about **110 credits**.
 
-Sell a platform-key credit to a future tenant at **$0.15 or more** if the goal is only to cover Claude, and higher once support and card fees are included. At $0.10 the pack matches Anthropic and leaves Balfour with no margin on tokens.
+Sell a platform-key credit to a future tenant at **$0.15 or more** if the goal is only to cover Claude, and higher once support and card fees are included. At $0.10 the pack matches Anthropic and leaves the platform owner with no margin on tokens.
 
 ## The rest of the stack
 
@@ -97,9 +97,9 @@ At roughly 200 active workspaces, Vercel overage and a larger Neon compute can l
 
 ## Pricing new tenants who bring their own Claude account
 
-Their Anthropic invoice is theirs. A platform fee priced to "include Claude credits" double-charges them and does not match any cost Balfour pays.
+Their Anthropic invoice is theirs. A platform fee priced to "include Claude credits" double-charges them and does not match any cost the platform owner pays.
 
-Balfour's COGS to host one of these tenants:
+The platform owner's COGS to host one of these tenants:
 
 | Tenants on the platform besides the fixed stack | Incremental COGS | Fully loaded, sharing the $50–80 floor |
 | --- | ---: | ---: |
@@ -109,9 +109,9 @@ Balfour's COGS to host one of these tenants:
 
 A single public price that covers cost from the first paying tenant is **$40 per workspace per month**. Two tenants at that price cover the $80 stack ceiling. Incremental cost is covered from the first tenant. There is no Claude credit in this package.
 
-| Package | Who pays Claude | What to include | Price that covers Balfour's cost |
+| Package | Who pays Claude | What to include | Price that covers the platform owner's cost |
 | --- | --- | --- | --- |
-| Tenant One, internal | Balfour | 150 credits/month standing, 100-credit top-ups, 600 credits in a heavy month | Budget **$15** Claude in an ordinary month and **$60** in a heavy month, plus the shared **$50–80** stack |
+| Tenant One, internal | Platform owner | 150 credits/month standing, 100-credit top-ups, 600 credits in a heavy month | Budget **$15** Claude in an ordinary month and **$60** in a heavy month, plus the shared **$50–80** stack |
 | Workspace, bring your own Claude | The tenant, on their Anthropic account | App, database, worker, auth email. No model credits. | **$40 / workspace / month** while the tenant count is small |
 
 Raise the workspace fee only when a tenant's storage or support load shows up in Neon or Vercel, not when their proposals get longer. Longer proposals raise their Claude bill, which they already pay.

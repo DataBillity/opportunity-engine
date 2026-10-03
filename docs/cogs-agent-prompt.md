@@ -6,16 +6,16 @@ Copy everything below the line into the next agent.
 
 You are working in the Opportunity Engine repo (DataBillity). Your job is to apply an already completed cost-of-goods-sold analysis. Treat the numbers and packaging rules below as settled. Recompute them only if `packages/ai/src/gateway.ts` or the Claude call sites have changed since this prompt was written.
 
-The platform owner is Balfour. This analysis covers two things at once:
+This analysis is for the platform owner. It covers two things at once:
 
-1. What it costs Balfour to run **Tenant One** on the platform Claude key.
+1. What it costs the platform owner to run **Tenant One** on the platform Claude key.
 2. How to price **new tenants who bring their own Claude account**.
 
 ## Identity of the two bills
 
-Tenant One is the owner workspace. In code that is the DataBillity organization, id `databillity` (`DATABILLITY_ORG_ID` in `packages/db/src/organization.ts`). It is inserted with `uses_platform_key = true` and no customer secret, so every Claude call uses `ANTHROPIC_API_KEY`. Anthropic invoices Balfour.
+Tenant One is the owner workspace. In code that is the DataBillity organization, id `databillity` (`DATABILLITY_ORG_ID` in `packages/db/src/organization.ts`). It is inserted with `uses_platform_key = true` and no customer secret, so every Claude call uses `ANTHROPIC_API_KEY`. Anthropic invoices the platform owner.
 
-New tenants are created in `apps/web/src/app/api/auth/signup/route.ts` with `usesPlatformKey: false`. Signup requires their own `sk-ant-…` key, stored encrypted on the organization. Model routes wrap work in `runWithAnthropicKey` (`packages/ai/src/gateway.ts`, `apps/web/src/lib/org-model.ts`). Those calls bill the tenant's Anthropic account. Balfour's cost for that tenant is the shared stack only.
+New tenants are created in `apps/web/src/app/api/auth/signup/route.ts` with `usesPlatformKey: false`. Signup requires their own `sk-ant-…` key, stored encrypted on the organization. Model routes wrap work in `runWithAnthropicKey` (`packages/ai/src/gateway.ts`, `apps/web/src/lib/org-model.ts`). Those calls bill the tenant's Anthropic account. The platform owner's cost for that tenant is the shared stack only.
 
 Resolution order in `resolveModelAccess`: a stored customer key wins; the platform key is used only when `usesPlatformKey` is true and no customer key is stored. Leave `uses_platform_key` off for paying tenants unless a platform-key credit pack is actually being sold. Do not add Claude credits to a bring-your-own-key package. That would charge them for tokens Anthropic already bills them for.
 
@@ -88,7 +88,7 @@ Credit equivalents after the 1.35 allowance, at $0.10 per credit:
 
 ## Tenant One monthly budget
 
-These are Balfour's Anthropic invoices for operating Tenant One.
+These are the platform owner's Anthropic invoices for operating Tenant One.
 
 | Month | Activity | Modeled Claude | Allowance (1.35×) |
 | --- | --- | ---: | ---: |
@@ -113,7 +113,7 @@ Use 150 credits as the standing monthly grant. A proposal-heavy month needs 600 
 
 If a future tenant is ever put on the platform key, sell the credit at $0.15 or more so the token cost is covered. At $0.10 the pack matches Anthropic and leaves no margin for support or card fees. Do not sell those credits to a tenant who brings their own key.
 
-## Shared stack (Balfour pays this for Tenant One and every other tenant)
+## Shared stack (the platform owner pays this for Tenant One and every other tenant)
 
 | Service | Role | Monthly COGS |
 | --- | --- | --- |
@@ -142,7 +142,7 @@ The single public price that covers cost from the first paying tenant is **$40 p
 
 | Package | Who pays Claude | Include | Cost it covers |
 | --- | --- | --- | --- |
-| Tenant One, internal | Balfour | 150 credits/month standing, 100-credit top-ups, 600 credits in a heavy month | $15 Claude in an ordinary month, $60 in a heavy month, plus the shared $50–80 stack |
+| Tenant One, internal | Platform owner | 150 credits/month standing, 100-credit top-ups, 600 credits in a heavy month | $15 Claude in an ordinary month, $60 in a heavy month, plus the shared $50–80 stack |
 | Workspace, bring your own Claude | The tenant | App, database, worker, auth email. No credits. | $40 / workspace / month while the tenant count is small |
 
 ## Rules for whatever you build or recommend next
